@@ -1,0 +1,21 @@
+# Decisions
+
+Newest first. Each entry: what, why, and where it applies.
+
+## 2026-09-23 — Project scope and stack
+
+- **Django app in its own repo** (`analisis_ejecutivos_FAR`), separate from the Wansoft ETL repo and from ControlPresupuestos_AP. Neither of those repos is touched by this project.
+- **Roles are Django Groups**, plus `PerfilUsuario` for branch scope. Why: "configurable profiles" is satisfied by editing Group permissions in the admin without code, instead of hardcoding roles.
+- **Port 8040**, prefix `/analisis_ejecutivos/`. 8020 was rejected: ControlPresupuestos_AP already uses it in production on the same app machine.
+- **No `core` package; `.env` at `config/.env`.** The standalone scripts import the Wansoft repo's `core`; a second package with the same name would collide.
+- **No fallback SECRET_KEY.** Unlike a dev convenience default, production must never be able to boot with a key committed to git; the app fails at startup if `DJANGO_SECRET_KEY` is missing.
+- **Own database on the database server**, separate from report data. Report data is read from Odoo or the productive Wansoft MySQL (read-only).
+- **Copilot integration deferred to the last phase.** Feasibility of calling a paid Copilot seat from a custom app is unverified; the analysis layer will be designed as interchangeable.
+- **PDF library: reportlab** (already used by the proven generator) instead of ControlPresupuestos_AP's xhtml2pdf. Revisit only if the financial-report template proves easier in HTML/CSS.
+- **Generated report files are not versioned** (`docs/Mensuales/**/*.pdf` gitignored): they are regenerable output. Revisit if report history must be auditable via git.
+
+## Open questions
+
+- Definition of the weekly commercial report for managers.
+- Exact P&L sources for the investor and partner reports (budget from ControlPresupuestos_AP and Odoo; actuals from Odoo) — to be mapped in Phase 2/3.
+- Dev database name and credentials for this app (must be created by the owner).

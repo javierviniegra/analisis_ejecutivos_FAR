@@ -11,8 +11,18 @@ from reportlab.lib.utils import ImageReader
 from datetime import date
 
 MESES_ES = {
-    1: "enero", 2: "febrero", 3: "marzo", 4: "abril", 5: "mayo", 6: "junio",
-    7: "julio", 8: "agosto", 9: "septiembre", 10: "octubre", 11: "noviembre", 12: "diciembre",
+    1: "enero",
+    2: "febrero",
+    3: "marzo",
+    4: "abril",
+    5: "mayo",
+    6: "junio",
+    7: "julio",
+    8: "agosto",
+    9: "septiembre",
+    10: "octubre",
+    11: "noviembre",
+    12: "diciembre",
 }
 
 
@@ -42,10 +52,14 @@ def draw_background(c):
 def draw_header(c, page_title):
     c.setFont("Times-Roman", 9)
     c.setFillColor(DARK_TEXT)
-    c.drawRightString(PAGE_W - MARGIN_R, PAGE_H - 55, "Fonda Argentina -- Business Intelligence")
+    c.drawRightString(
+        PAGE_W - MARGIN_R, PAGE_H - 55, "Fonda Argentina -- Business Intelligence"
+    )
     c.drawRightString(PAGE_W - MARGIN_R, PAGE_H - 68, page_title)
     c.setFillColor(GREY_TEXT)
-    c.drawRightString(PAGE_W - MARGIN_R, PAGE_H - 81, f"Generado el {fecha_es(date.today())}")
+    c.drawRightString(
+        PAGE_W - MARGIN_R, PAGE_H - 81, f"Generado el {fecha_es(date.today())}"
+    )
     c.drawRightString(PAGE_W - MARGIN_R, PAGE_H - 94, "Rev. 1.0")
 
 
@@ -156,7 +170,9 @@ def draw_kpi_table(c, x, y, title, rows, col_widths, header=None):
         y -= row_h
 
     c.setStrokeColor(LIGHT_LINE)
-    c.rect(x, y + 4, total_w, (len(rows) + (1 if header else 0)) * row_h, fill=0, stroke=1)
+    c.rect(
+        x, y + 4, total_w, (len(rows) + (1 if header else 0)) * row_h, fill=0, stroke=1
+    )
     return y
 
 
@@ -174,7 +190,11 @@ def build():
     y -= 16
     c.setFont("Times-Italic", 9.5)
     c.setFillColor(GREY_TEXT)
-    c.drawString(MARGIN_L, y, "Sucursal nueva (arranque operativo 2026-06) -- sin comparación contra año anterior")
+    c.drawString(
+        MARGIN_L,
+        y,
+        "Sucursal nueva (arranque operativo 2026-06) -- sin comparación contra año anterior",
+    )
     y -= 26
 
     c.setFont("Times-Bold", 12.5)
@@ -183,21 +203,31 @@ def build():
     y -= 18
 
     bullets = [
-        ("Venta sólida en el arranque: ",
-         "Puebla facturó $3,724,753.95 en agosto (venta neta sin IVA: $3,210,994.63), con 4,553 clientes "
-         "atendidos en 1,633 tickets -- ticket promedio de $2,280.93 y cheque promedio de $818.09 por cliente."),
-        ("El costo real de materia prima está en 38.65% de la venta neta: ",
-         "según contabilidad de Odoo (cuenta 501), el costo total del mes fue de $1,241,074.08. Carnes concentra "
-         "más de la mitad de ese costo ($643,084.62, 52%), seguido por bebidas con y sin alcohol."),
-        ("El mix de venta está dominado por Alimentos: ",
-         "74.76% de la venta vino de alimentos contra 25.24% de bebidas -- consistente con una operación de "
-         "cocina fuerte más que de barra."),
-        ("Cancelaciones y Cortesías bajo control: ",
-         "sumaron $35,779.00 combinadas (cancelaciones $10,135.00 + cortesías $25,644.00), menos del 1% de la "
-         "venta total -- sin señales de descontrol operativo en el primer mes cerrado."),
-        ("Productividad por mesero: ",
-         "con 30 meseros distintos activos en el mes, la venta promedio por mesero fue de $124,158.47 y 151.8 "
-         "clientes atendidos por mesero."),
+        (
+            "Venta sólida en el arranque: ",
+            "Puebla facturó $3,724,753.95 en agosto (venta neta sin IVA: $3,210,994.63), con 4,553 clientes "
+            "atendidos en 1,633 tickets -- ticket promedio de $2,280.93 y cheque promedio de $818.09 por cliente.",
+        ),
+        (
+            "El costo real de materia prima está en 38.65% de la venta neta: ",
+            "según contabilidad de Odoo (cuenta 501), el costo total del mes fue de $1,241,074.08. Carnes concentra "
+            "más de la mitad de ese costo ($643,084.62, 52%), seguido por bebidas con y sin alcohol.",
+        ),
+        (
+            "El mix de venta está dominado por Alimentos: ",
+            "74.76% de la venta vino de alimentos contra 25.24% de bebidas -- consistente con una operación de "
+            "cocina fuerte más que de barra.",
+        ),
+        (
+            "Cancelaciones y Cortesías bajo control: ",
+            "sumaron $35,779.00 combinadas (cancelaciones $10,135.00 + cortesías $25,644.00), menos del 1% de la "
+            "venta total -- sin señales de descontrol operativo en el primer mes cerrado.",
+        ),
+        (
+            "Productividad por mesero: ",
+            "con 30 meseros distintos activos en el mes, la venta promedio por mesero fue de $124,158.47 y 151.8 "
+            "clientes atendidos por mesero.",
+        ),
     ]
     max_w = CONTENT_W
     for lead, rest in bullets:
@@ -209,7 +239,10 @@ def build():
     # ---- Tabla Ventas ----
     col_w_ventas = [190, 130]
     y = draw_kpi_table(
-        c, MARGIN_L, y, "Ventas -- Agosto 2026",
+        c,
+        MARGIN_L,
+        y,
+        "Ventas -- Agosto 2026",
         rows=[
             ("Ventas totales (bruta, con IVA)", "$3,724,753.95"),
             ("Venta Neta (sin IVA)", "$3,210,994.63"),
@@ -232,10 +265,17 @@ def build():
 
     col_w_costos = [230, 90, 70]
     y = draw_kpi_table(
-        c, MARGIN_L, y, "Costos -- Agosto 2026 (Odoo, cuenta contable 501, real)",
+        c,
+        MARGIN_L,
+        y,
+        "Costos -- Agosto 2026 (Odoo, cuenta contable 501, real)",
         header=("Concepto", "Monto", "% s/venta neta"),
         rows=[
-            ("Costo de Productos Vendidos (Alimentos/Bebidas)", "$1,170,105.92", "36.44%"),
+            (
+                "Costo de Productos Vendidos (Alimentos/Bebidas)",
+                "$1,170,105.92",
+                "36.44%",
+            ),
             ("Variaciones de Inventario", "$62,846.33", "1.96%"),
             ("Costo por Merma", "$8,121.83", "0.25%"),
             ("COGS TOTAL / Costo Operativo Teórico", "$1,241,074.08", "38.65%"),
@@ -243,9 +283,12 @@ def build():
         col_widths=col_w_costos,
     )
 
-    draw_footer(c, 1,
+    draw_footer(
+        c,
+        1,
         "Fuentes: Ventas y Cancelaciones/Cortesías -- Wansoft (cierre diario). Costos -- Odoo en vivo, cuenta contable 501, datos reales. "
-        "Ver notas y fuentes detalladas en la página 2.")
+        "Ver notas y fuentes detalladas en la página 2.",
+    )
     c.showPage()
 
     # ---------------- PAGE 2 ----------------
@@ -260,8 +303,15 @@ def build():
 
     chart_w = CONTENT_W
     chart_h = chart_w * (3.4 / 7.2)
-    c.drawImage("cost_breakdown_chart.png", MARGIN_L, y - chart_h, width=chart_w, height=chart_h,
-                preserveAspectRatio=True, mask='auto')
+    c.drawImage(
+        "cost_breakdown_chart.png",
+        MARGIN_L,
+        y - chart_h,
+        width=chart_w,
+        height=chart_h,
+        preserveAspectRatio=True,
+        mask="auto",
+    )
     y -= chart_h + 26
 
     c.setFont("Times-Bold", 12.5)
@@ -294,7 +344,11 @@ def build():
             y -= 11.5
         y -= 4
 
-    draw_footer(c, 2, "Reporte generado automáticamente a partir de datos en vivo de Wansoft y Odoo.")
+    draw_footer(
+        c,
+        2,
+        "Reporte generado automáticamente a partir de datos en vivo de Wansoft y Odoo.",
+    )
     c.showPage()
 
     c.save()

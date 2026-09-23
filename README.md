@@ -1,20 +1,71 @@
 # Analisis Ejecutivos
 
-Branded executive branch reports (Ventas + Costos) for Grupo Fonda Argentina, generated from the Wansoft/Odoo analytical layer built in the sibling `Wansoft` project.
+Web application (Django) for Grupo Fonda Argentina that will:
+
+1. **Show** report information to authorized users.
+2. **Generate** reports as Excel, PDF or both.
+3. **Send** reports by email to configurable recipients, in a configurable format, on a configurable schedule (daily, weekly, monthly, semiannual, annual).
+
+Report data comes from Odoo and the productive Wansoft MySQL. Executive reports use the standard Fonda Argentina branded template (see `scripts/`).
 
 ## Status
 
-Report generator (PDF, all 19 branches) is built and validated for August 2026 — see `scripts/`. A Django web app (scheduled email delivery, in-browser dashboard, week/month/year on-demand generation, period-over-period comparisons) is planned as the next step; not started yet.
+| Phase | What | State |
+|---|---|---|
+| 1 | Django skeleton, users, roles (Director, Administrador general, Gerente, Usuario), login | **In progress** (skeleton, models, login page done; database not created yet) |
+| 2 | Report catalog (definition per report) | Not started |
+| 3 | Generation engine (PDF + Excel), standard and financial-report templates | Not started (PDF generator exists as standalone scripts) |
+| 4 | Report viewing in the web app | Not started |
+| 5 | Scheduled email delivery (subscriptions + dispatcher) | Not started |
+| 6 | Analysis with Copilot (paid account) | Deferred to last, feasibility unverified |
+| 7 | Production deployment | Not started |
+
+Initial reports planned: weekly commercial report for managers (not yet defined), monthly short investor report, monthly Financial & Operational report for partners (PDF), the two weekly purchase-order Excel reports (Bodegón / Empanadas: modifications and by-hour), and more later.
 
 ## Structure
 
-- `scripts/` — standalone report-generation scripts (no Django yet). `build_executive_pdf_all.py` is the current standard generator (19 branches); `build_executive_pdf.py` and `build_executive_pdf_multi.py` are kept as historical/reference versions.
-- `docs/Mensuales/<year>/<Spanish month name>/` — generated monthly PDF reports (gitignored — regenerated, not source).
+- `config/` — Django project (settings, urls, wsgi). Settings are env-driven; see `config/.env.example`.
+- `cuentas/` — users: `Sucursal`, `PerfilUsuario` (branch scope per user), role bootstrap command.
+- `templates/` — shared templates (`base.html`, login).
+- `scripts/` — standalone report generators (pre-Django). `build_executive_pdf_all.py` is the current standard (19 branches); `build_executive_pdf.py` and `build_executive_pdf_multi.py` are historical.
+- `docs/` — documentation (`docs/PRODUCTION_SETUP.md`, `docs/DECISIONS.md`), example reports (`docs/Ejemplos/`) and generated monthly PDFs (`docs/Mensuales/<year>/<Month>/`, gitignored).
 
-## Cross-repo dependency (temporary)
+## Conventions (mirrors ControlPresupuestos_AP)
 
-`scripts/*.py` import `core.database.*` / `core.config.*` from the sibling `Wansoft` repo via a hardcoded absolute path (`WANSOFT_REPO_ROOT` near the top of each script). This only works because both repos live as sibling folders on this machine — not portable elsewhere. Meant to be resolved when the Django app is built (own connection module, or a proper shared package) rather than assumed permanent.
+- Django `>=4.2,<5.0` (the dev/prod MariaDB is 10.4.32; Django 5 needs 10.5+).
+- `.env` driven, with a `_DEV` suffix for the dev database variables. **One deliberate difference:** the `.env` lives at `config/.env`, not `core/config/.env`, because this repo has no `core` package (the scripts import the Wansoft repo's own `core`; two packages with that name would collide).
+- Production: Waitress + WhiteNoise on the app machine, behind the Apache reverse proxy under the URL prefix `/analisis_ejecutivos/`.
+- **Port 8040** (dev and production). Do not use 8000 (XAMPP), 8010/8020 (ControlPresupuestos_AP).
+- The app's own database (users, profiles, subscriptions, send log) lives on the **separate database server**, not on the app machine.
 
-## Running the generator
+## Roles and permissions
 
-Requires the Wansoft repo's local dev MySQL to be running (see that repo's own docs) and its `core/config/.env` populated. From `scripts/`, set `ANIO`/`MES_NUM` at the top of `build_executive_pdf_all.py` and run it — it creates `docs/Mensuales/<year>/<month>/` if needed and writes one PDF per branch there.
+A user's role is a Django **Group**; what each role may do is editable from the admin (Groups) without code changes. Custom permissions: `ver_reportes`, `generar_reportes`, `gestionar_envios`, `gestionar_usuarios`. `PerfilUsuario` adds branch scope (a manager only sees their branches unless `todas_las_sucursales`).
+
+Create the four base roles (idempotent, never overwrites admin edits to existing groups):
+
+```
+python manage.py crear_perfiles
+```
+
+## Local setup (dev)
+
+```
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+copy config\.env.example config\.env      # then fill it in (secret key, dev DB)
+.venv\Scripts\python.exe manage.py migrate
+.venv\Scripts\python.exe manage.py crear_perfiles
+.venv\Scripts\python.exe manage.py createsuperuser
+.venv\Scripts\python.exe manage.py runserver 8040
+```
+
+The dev database must exist first (empty, utf8mb4) and its credentials go in the `EJECUTIVOS_DB_*_DEV` variables.
+
+## Report generator (standalone scripts)
+
+`scripts/*.py` import `core.database.*` / `core.config.*` from the sibling `Wansoft` repo via a hardcoded absolute path (`WANSOFT_REPO_ROOT`). This works only because both repos are sibling folders on this machine and is **temporary**: it will be replaced by this app's own data-access layer. To run: set `ANIO`/`MES_NUM` at the top of `build_executive_pdf_all.py` and run it (needs the Wansoft dev MySQL running); it creates `docs/Mensuales/<year>/<Month>/` if missing.
+
+## Documentation rule
+
+Every change that alters behavior, structure, setup or a decision must update this README and/or `docs/` in the same commit. Commit messages and docs are written in English.

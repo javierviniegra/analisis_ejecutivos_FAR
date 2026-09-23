@@ -1,6 +1,11 @@
 # Security and Environment
 .env
 
+# Django
+db.sqlite3
+staticfiles/
+media/
+
 # Python
 __pycache__/
 *.pyc
@@ -30,3 +35,7 @@ scripts/*.xlsx
 # Logs
 *.log
 logs/
+
+# Real financial examples provided by the owner -- sensitive, never pushed
+docs/Ejemplos/
+docs/Especiales/
