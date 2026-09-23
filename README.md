@@ -28,7 +28,8 @@ Initial reports planned: weekly commercial report for managers (not yet defined)
 
 - `config/` — Django project (settings, urls, wsgi). Settings are env-driven; see `config/.env.example`.
 - `cuentas/` — users: `Sucursal`, `PerfilUsuario` (branch scope per user), role bootstrap command.
-- `templates/` — shared templates (`base.html`, login).
+- `templates/` — shared templates (`base.html`, login, admin branding). Same look as ControlPresupuestos_AP: brand green `#035953`, dark green `#023f3b`, cream `#f0e9d8`, gradient login card, Fonda Argentina logo.
+- `static/ejecutivos/` — logo and admin theme CSS (copied from ControlPresupuestos_AP so both apps stay visually consistent).
 - `scripts/` — standalone report generators (pre-Django). `build_executive_pdf_all.py` is the current standard (19 branches); `build_executive_pdf.py` and `build_executive_pdf_multi.py` are historical.
 - `docs/` — documentation (`docs/PRODUCTION_SETUP.md`, `docs/DECISIONS.md`), example reports (`docs/Ejemplos/`) and generated monthly PDFs (`docs/Mensuales/<year>/<Month>/`, gitignored).
 

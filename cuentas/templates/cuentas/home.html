@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Bienvenido</h1>
+<span class="badge">Inicio</span>
+<h1>Bienvenido{% if user.first_name %}, {{ user.first_name }}{% endif %}</h1>
 <div class="card">
-  <p>Sucursales a las que tienes acceso:</p>
+  <p class="muted">Sucursales a las que tienes acceso:</p>
   <ul>{% for s in sucursales %}<li>{{ s.nombre }}</li>{% empty %}<li>Ninguna asignada todavía. Pide a un administrador que te asigne sucursales.</li>{% endfor %}</ul>
 </div>
-<p style="color:#555">Los reportes, la generación y los envíos programados se agregarán en las siguientes fases.</p>
+<p class="muted">Los reportes, la generación y los envíos programados se agregarán en las siguientes fases.</p>
 {% endblock %}
