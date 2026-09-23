@@ -12,7 +12,7 @@ Report data comes from Odoo and the productive Wansoft MySQL. Executive reports 
 
 | Phase | What | State |
 |---|---|---|
-| 1 | Django skeleton, users, roles (Director, Administrador general, Gerente, Usuario), login | **In progress** (skeleton, models, login page done; database not created yet) |
+| 1 | Django skeleton, users, roles (Director, Administrador general, Gerente, Usuario), login | **Done in dev** (skeleton, models, roles, login; local database created and migrated, server verified on :8040). Pending: create the owner's superuser and assign branches |
 | 2 | Report catalog (definition per report) | Not started |
 | 3 | Generation engine (PDF + Excel), standard and financial-report templates | Not started (PDF generator exists as standalone scripts) |
 | 4 | Report viewing in the web app | Not started |
@@ -70,7 +70,7 @@ The dev database must exist first. Fill in `config/.env` (`EJECUTIVOS_DB_PASSWOR
 .venv\Scripts\python.exe scripts\setup_dev_db.py
 ```
 
-It creates `analisis_ejecutivos_dev` (utf8mb4) and the restricted user `ejecutivos_dev` from those variables. It refuses to run unless `ENV=dev` and the host is local, and is safe to re-run (re-applies the app user's password, so it also rotates it). After that the admin variables are no longer needed and can be removed from `config/.env`.
+It creates `analisis_ejecutivos_dev` (utf8mb4) and, if `EJECUTIVOS_DB_USER_DEV` differs from the admin user, the restricted user from those variables. (Dev-only exception: setting `EJECUTIVOS_DB_USER_DEV=root` makes the app use the local root account; the script then only creates the database. Never do this in production.) It refuses to run unless `ENV=dev` and the host is local, and is safe to re-run (re-applies the app user's password, so it also rotates it). After that the admin variables are no longer needed and can be removed from `config/.env`.
 
 ## Report generator (standalone scripts)
 

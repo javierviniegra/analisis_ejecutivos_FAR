@@ -30,9 +30,7 @@ REQUIRED = [
     "EJECUTIVOS_DB_HOST_DEV",
     "EJECUTIVOS_DB_NAME_DEV",
     "EJECUTIVOS_DB_USER_DEV",
-    "EJECUTIVOS_DB_PASSWORD_DEV",
     "EJECUTIVOS_DB_ADMIN_USER_DEV",
-    "EJECUTIVOS_DB_ADMIN_PASSWORD_DEV",
 ]
 IDENT = re.compile(r"^[A-Za-z0-9_]{1,64}$")
 
@@ -48,23 +46,36 @@ def main():
     port = int(os.getenv("EJECUTIVOS_DB_PORT_DEV", "3306"))
     db = os.environ["EJECUTIVOS_DB_NAME_DEV"]
     user = os.environ["EJECUTIVOS_DB_USER_DEV"]
-    password = os.environ["EJECUTIVOS_DB_PASSWORD_DEV"]
+    password = os.getenv("EJECUTIVOS_DB_PASSWORD_DEV", "")
+    admin_user = os.environ["EJECUTIVOS_DB_ADMIN_USER_DEV"]
     for label, value in (("database name", db), ("user name", user)):
         if not IDENT.match(value):
             sys.exit(f"Invalid {label}: only letters, digits and _ are allowed.")
     if host not in ("localhost", "127.0.0.1"):
         sys.exit("Refusing to run: this script only prepares a LOCAL dev database.")
 
+    # An empty admin password is accepted (a stock local XAMPP root has none);
+    # that is only reachable because the host check above forces local.
     conn = MySQLdb.connect(
         host=host,
         port=port,
-        user=os.environ["EJECUTIVOS_DB_ADMIN_USER_DEV"],
-        passwd=os.environ["EJECUTIVOS_DB_ADMIN_PASSWORD_DEV"],
+        user=admin_user,
+        passwd=os.getenv("EJECUTIVOS_DB_ADMIN_PASSWORD_DEV", ""),
     )
     cur = conn.cursor()
     cur.execute(
         f"CREATE DATABASE IF NOT EXISTS `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
     )
+    if user == admin_user:
+        # Dev-only exception: the app connects with the same account that
+        # already exists (e.g. local root). Nothing to create or re-grant,
+        # and its password is deliberately NOT touched.
+        conn.close()
+        print(f"OK: database `{db}` ready on {host}:{port} (app uses existing account `{user}`).")
+        return
+    if not password:
+        conn.close()
+        sys.exit("EJECUTIVOS_DB_PASSWORD_DEV is required when the app user differs from the admin user.")
     # Identifiers are validated above; the password goes through parameter binding.
     cur.execute(f"CREATE USER IF NOT EXISTS '{user}'@'localhost' IDENTIFIED BY %s", (password,))
     cur.execute(f"ALTER USER '{user}'@'localhost' IDENTIFIED BY %s", (password,))
