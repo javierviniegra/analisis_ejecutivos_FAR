@@ -30,8 +30,9 @@ CATALOGO = [
         "mix alimentos/bebidas y por canal; cancelaciones, cortesias y descuentos; venta por dia de la semana. Cada indicador "
         "se compara contra la semana anterior, la misma semana del anio anterior y el presupuesto semanal, con columna de flechas.",
         categoria=C.COMERCIAL, periodicidad=P.SEMANAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
-        alcance=A.POR_SUCURSAL, admite_pdf=True, estado=E.PENDIENTE,
-        notas="Definido 2026-09-23 (contenido, comparativos y destinatarios: cada gerente recibe solo su sucursal). Abiertas: (1) ventana de la semana: lunes a domingo (regla general) o lunes a viernes como se menciono para la comparacion; (2) de donde sale el presupuesto semanal; (3) fuente del canal (salon/llevar/plataformas); (4) referencia visual del scorecard semanal de otras sucursales.",
+        alcance=A.POR_SUCURSAL, admite_pdf=True, estado=E.DEFINIDO,
+        notas="Definido 2026-09-23. Semana lunes-domingo; canal = tipo de orden de Wansoft; sin meta de venta por ahora (llegara de un KPI por definir); "
+        "bloque extra de Costo de Ventas real vs presupuesto de Presupuestos AP prorrateado por dias. Fuentes: Wansoft y Presupuestos AP (solo lectura).",
     ),
     dict(
         clave="inversionistas-corto-mensual",
