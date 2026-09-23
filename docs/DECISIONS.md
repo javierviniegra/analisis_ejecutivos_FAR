@@ -7,7 +7,7 @@ Newest first. Each entry: what, why, and where it applies.
 - **A report is data, not code:** `Reporte` rows describe category, periodicity, template, source, scope (per branch / consolidated), formats and state. The generator (Phase 3) and the sender (Phase 5) hang off this definition.
 - **Deny by default:** a report with no profiles assigned is invisible to everyone except staff; a non-visible report answers 404 (not 403) so its existence is not disclosed. Access is granted explicitly per profile (Django Group) from the admin.
 - **Seed command never overwrites:** `cargar_catalogo` only creates missing keys, so admin edits (profiles, notes, state) survive re-runs and deploys.
-- Seeded reports: executive summary per branch, weekly commercial (undefined), short investor report, financial and operational report for partners (needs new template), the two Bodegon/Empanadas purchase-order Excel reports, weekly operating indicators (needs Power BI table + semaforo rules).
+- Seeded reports: executive summary per branch, weekly commercial (undefined), short investor report, financial and operational report for partners (needs new template), the two Bodegon/Empanadas purchase-order Excel reports, weekly operating indicators (needs Power BI table + semaforo rules), monthly profitability by delivery platform (Uber, Didi, etc.; added 2026-09-23, definition pending: platform list, sales source, commissions/costs source, per-branch vs consolidated, profitability formula).
 
 ## 2026-09-23 — Rollout plan and additional requirements
 

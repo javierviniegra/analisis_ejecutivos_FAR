@@ -20,7 +20,7 @@ Report data comes from Odoo and the productive Wansoft MySQL. Executive reports 
 | 6 | Analysis with Copilot (paid account) | Deferred to last, feasibility unverified |
 | 7 | Production deployment | Not started |
 
-Initial reports planned: weekly commercial report for managers (not yet defined), monthly short investor report, monthly Financial & Operational report for partners (PDF), the two weekly purchase-order Excel reports (Bodegón / Empanadas: modifications and by-hour), the weekly Operating Indicators report (Carlos's Power BI table, with traffic-light rules), and more later.
+Initial reports planned: weekly commercial report for managers (not yet defined), monthly short investor report, monthly Financial & Operational report for partners (PDF), the two weekly purchase-order Excel reports (Bodegón / Empanadas: modifications and by-hour), the weekly Operating Indicators report (Carlos's Power BI table, with traffic-light rules), the monthly profitability-by-delivery-platform report (Uber, Didi, etc.), and more later.
 
 **Rollout:** everything is built and tested locally first (owner's PC, local database). Production comes once a few reports are validated; there it will run a scheduled script that updates the code daily and restarts the app. Users get their own report view and can generate reports by hand. See `docs/DECISIONS.md`.
 

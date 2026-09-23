@@ -66,6 +66,17 @@ CATALOGO = [
         notas="Ejemplo generado en el repo Wansoft (reports/ordenes_compra_proveedores_internos).",
     ),
     dict(
+        clave="rentabilidad-plataformas-mensual",
+        nombre="Rentabilidad por plataforma (Uber, Didi y demas)",
+        descripcion="Reporte mensual para saber si cada plataforma de reparto (Uber, Didi y las demas) es rentable "
+        "despues de comisiones y costos.",
+        categoria=C.COMERCIAL, periodicidad=P.MENSUAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
+        alcance=A.CONSOLIDADO, admite_pdf=True, admite_excel=True, estado=E.PENDIENTE,
+        notas="Por definir: lista de plataformas; de donde salen ventas por plataforma (Wansoft: canal de la orden) y "
+        "comisiones/costos (Odoo); si se calcula por sucursal o consolidado; formula de rentabilidad (comisiones, "
+        "empaque, costo de producto, descuentos/promociones).",
+    ),
+    dict(
         clave="indicadores-operativos-semanal",
         nombre="Indicadores operativos semanal",
         descripcion="Tabla semanal de indicadores operativos (tabla de Carlos en Power BI) con semaforos.",
