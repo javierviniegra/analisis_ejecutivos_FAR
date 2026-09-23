@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Reportes{% endblock %}
+{% block content %}
+<span class="badge">Catálogo</span>
+<h1>Reportes disponibles</h1>
+{% for r in reportes %}
+  <div class="card">
+    <h2 style="margin:0 0 6px;font-size:18px;color:var(--verde-oscuro)"><a href="{% url 'reporte_detalle' r.clave %}" style="color:inherit;text-decoration:none">{{ r.nombre }}</a></h2>
+    <p class="muted" style="margin:0 0 8px">{{ r.descripcion }}</p>
+    <span class="badge">{{ r.get_categoria_display }}</span>
+    <span class="badge">{{ r.get_periodicidad_display }}</span>
+    {% for f in r.formatos %}<span class="badge">{{ f }}</span>{% endfor %}
+    <span class="badge">{{ r.get_estado_display }}</span>
+  </div>
+{% empty %}
+  <div class="card"><p class="muted">No tienes reportes asignados todavía. Pide a un administrador que asigne reportes a tu perfil.</p></div>
+{% endfor %}
+{% endblock %}

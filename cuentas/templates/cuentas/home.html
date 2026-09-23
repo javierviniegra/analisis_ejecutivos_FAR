@@ -6,5 +6,6 @@
   <p class="muted">Sucursales a las que tienes acceso:</p>
   <ul>{% for s in sucursales %}<li>{{ s.nombre }}</li>{% empty %}<li>Ninguna asignada todavía. Pide a un administrador que te asigne sucursales.</li>{% endfor %}</ul>
 </div>
+<p><a class="btn" href="{% url 'catalogo' %}">Ver reportes</a></p>
 <p class="muted">Los reportes, la generación y los envíos programados se agregarán en las siguientes fases.</p>
 {% endblock %}

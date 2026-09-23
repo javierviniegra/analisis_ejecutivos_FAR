@@ -13,7 +13,7 @@ Report data comes from Odoo and the productive Wansoft MySQL. Executive reports 
 | Phase | What | State |
 |---|---|---|
 | 1 | Django skeleton, users, roles (Director, Administrador general, Gerente, Usuario), login | **Done in dev** (skeleton, models, roles, login; local database created and migrated, server verified on :8040). Pending: create the owner's superuser and assign branches |
-| 2 | Report catalog (definition per report) | Not started |
+| 2 | Report catalog (definition per report) | **Done in dev** (`reportes` app: model, admin, seed command, catalog/detail pages, 7 tests). Pending: assign profiles to each report in the admin |
 | 3 | Generation engine (PDF + Excel), standard and financial-report templates | Not started (PDF generator exists as standalone scripts) |
 | 4 | Report viewing in the web app | Not started |
 | 5 | Scheduled email delivery (subscriptions + dispatcher) | Not started |
@@ -28,6 +28,7 @@ Initial reports planned: weekly commercial report for managers (not yet defined)
 
 - `config/` — Django project (settings, urls, wsgi). Settings are env-driven; see `config/.env.example`.
 - `cuentas/` — users: `Sucursal`, `PerfilUsuario` (branch scope per user), role bootstrap command.
+- `reportes/` — report catalog: `Reporte` model (category, periodicity, template, data source, scope, formats, state, allowed profiles), `cargar_catalogo` seed command, catalog/detail pages.
 - `templates/` — shared templates (`base.html`, login, admin branding). Same look as ControlPresupuestos_AP: brand green `#035953`, dark green `#023f3b`, cream `#f0e9d8`, gradient login card, Fonda Argentina logo.
 - `static/ejecutivos/` — logo and admin theme CSS (copied from ControlPresupuestos_AP so both apps stay visually consistent).
 - `scripts/` — standalone report generators (pre-Django). `build_executive_pdf_all.py` is the current standard (19 branches); `build_executive_pdf.py` and `build_executive_pdf_multi.py` are historical.
@@ -50,6 +51,16 @@ Create the four base roles (idempotent, never overwrites admin edits to existing
 ```
 python manage.py crear_perfiles
 ```
+
+## Report catalog
+
+Each report is a `Reporte` row (admin: *Reportes*). **Access rule:** a report is visible only to users whose group (profile) is assigned to it in the report's `perfiles`; a report with no profiles is visible to nobody except staff, and a report you may not see returns 404. Load the initial reports (idempotent, never overwrites admin edits; new ones start with no profiles assigned):
+
+```
+python manage.py cargar_catalogo
+```
+
+Run the tests with `python manage.py test` (needs the local MariaDB; Django creates and drops its own `test_` database).
 
 ## Local setup (dev)
 
