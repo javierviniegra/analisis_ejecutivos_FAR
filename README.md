@@ -20,7 +20,9 @@ Report data comes from Odoo and the productive Wansoft MySQL. Executive reports 
 | 6 | Analysis with Copilot (paid account) | Deferred to last, feasibility unverified |
 | 7 | Production deployment | Not started |
 
-Initial reports planned: weekly commercial report for managers (not yet defined), monthly short investor report, monthly Financial & Operational report for partners (PDF), the two weekly purchase-order Excel reports (Bodegón / Empanadas: modifications and by-hour), and more later.
+Initial reports planned: weekly commercial report for managers (not yet defined), monthly short investor report, monthly Financial & Operational report for partners (PDF), the two weekly purchase-order Excel reports (Bodegón / Empanadas: modifications and by-hour), the weekly Operating Indicators report (Carlos's Power BI table, with traffic-light rules), and more later.
+
+**Rollout:** everything is built and tested locally first (owner's PC, local database). Production comes once a few reports are validated; there it will run a scheduled script that updates the code daily and restarts the app. Users get their own report view and can generate reports by hand. See `docs/DECISIONS.md`.
 
 ## Structure
 
@@ -60,7 +62,13 @@ copy config\.env.example config\.env      # then fill it in (secret key, dev DB)
 .venv\Scripts\python.exe manage.py runserver 8040
 ```
 
-The dev database must exist first (empty, utf8mb4) and its credentials go in the `EJECUTIVOS_DB_*_DEV` variables.
+The dev database must exist first: run `sql/dev_setup.sql` once as root (after changing the password inside it):
+
+```
+C:\xampp\mysql\bin\mysql.exe -u root -p < sql\dev_setup.sql
+```
+
+Then put the same credentials in the `EJECUTIVOS_DB_*_DEV` variables of `config/.env` (`analisis_ejecutivos_dev` / `ejecutivos_dev`).
 
 ## Report generator (standalone scripts)
 

@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-23 — Rollout plan and additional requirements
+
+- **Everything starts in test mode on the owner's PC with the local database** (`sql/dev_setup.sql`). Production comes only after a few reports are implemented and validated locally.
+- **Production auto-update:** production will run a scheduled script that updates the code daily (pull from GitHub) and restarts the app, so production always runs the latest version with the latest reports. To be built in Phase 7 (analogous to ControlPresupuestos_AP's `deploy/update.ps1`, plus a Scheduled Task).
+- **Per-user report views and manual generation:** each user sees the reports allowed to their role/branches, and authorized users can generate any report by hand from the web.
+- **New initial report: weekly Operating Indicators** (Carlos's Power BI table) with Power BI traffic-light (semáforo) rules. Needs the table structure, the metrics and the semáforo thresholds/colors from the Power BI file before it can be built — to be gathered at the start of its phase.
+
 ## 2026-09-23 — Project scope and stack
 
 - **Django app in its own repo** (`analisis_ejecutivos_FAR`), separate from the Wansoft ETL repo and from ControlPresupuestos_AP. Neither of those repos is touched by this project.
