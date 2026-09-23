@@ -62,13 +62,15 @@ copy config\.env.example config\.env      # then fill it in (secret key, dev DB)
 .venv\Scripts\python.exe manage.py runserver 8040
 ```
 
-The dev database must exist first: run `sql/dev_setup.sql` once as root (after changing the password inside it):
+**All credentials live in `config/.env`** (gitignored); `config/.env.example` documents every variable with blank placeholders. Never put a secret in code, SQL, docs or git.
+
+The dev database must exist first. Fill in `config/.env` (`EJECUTIVOS_DB_PASSWORD_DEV`, and the local admin account `EJECUTIVOS_DB_ADMIN_USER_DEV` / `EJECUTIVOS_DB_ADMIN_PASSWORD_DEV`, e.g. XAMPP's root), then run once:
 
 ```
-C:\xampp\mysql\bin\mysql.exe -u root -p < sql\dev_setup.sql
+.venv\Scripts\python.exe scripts\setup_dev_db.py
 ```
 
-Then put the same credentials in the `EJECUTIVOS_DB_*_DEV` variables of `config/.env` (`analisis_ejecutivos_dev` / `ejecutivos_dev`).
+It creates `analisis_ejecutivos_dev` (utf8mb4) and the restricted user `ejecutivos_dev` from those variables. It refuses to run unless `ENV=dev` and the host is local, and is safe to re-run (re-applies the app user's password, so it also rotates it). After that the admin variables are no longer needed and can be removed from `config/.env`.
 
 ## Report generator (standalone scripts)
 
