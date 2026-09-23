@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-23 — Weekly commercial report for managers: definition
+
+- **Content (all of it):** sales (gross and net), tickets, guests, average check and ticket; food/beverage mix and channel mix; cancellations, courtesies and discounts; sales by day of the week.
+- **Comparisons:** previous week, same numeric week of the previous year, and weekly budget, each with an arrows column. Year-over-year is shown only for branches that have history.
+- **Audience:** each manager receives only their own branch (one PDF per branch).
+- **Open:** week window (Monday-Sunday general rule vs. the Monday-Friday mentioned for the comparison), source of the weekly budget, channel source, and the visual reference scorecard.
+
 ## 2026-09-23 — Phase 2: report catalog
 
 - **A report is data, not code:** `Reporte` rows describe category, periodicity, template, source, scope (per branch / consolidated), formats and state. The generator (Phase 3) and the sender (Phase 5) hang off this definition.

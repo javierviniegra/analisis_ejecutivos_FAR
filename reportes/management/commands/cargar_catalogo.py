@@ -26,10 +26,12 @@ CATALOGO = [
     dict(
         clave="comercial-semanal-gerentes",
         nombre="Reporte comercial semanal para gerentes",
-        descripcion="Reporte comercial semanal dirigido a gerentes.",
+        descripcion="Reporte comercial semanal por sucursal para su gerente: ventas (bruta y neta), tickets, clientes, cheque y ticket promedio; "
+        "mix alimentos/bebidas y por canal; cancelaciones, cortesias y descuentos; venta por dia de la semana. Cada indicador "
+        "se compara contra la semana anterior, la misma semana del anio anterior y el presupuesto semanal, con columna de flechas.",
         categoria=C.COMERCIAL, periodicidad=P.SEMANAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
         alcance=A.POR_SUCURSAL, admite_pdf=True, estado=E.PENDIENTE,
-        notas="Contenido y metricas aun no definidos.",
+        notas="Definido 2026-09-23 (contenido, comparativos y destinatarios: cada gerente recibe solo su sucursal). Abiertas: (1) ventana de la semana: lunes a domingo (regla general) o lunes a viernes como se menciono para la comparacion; (2) de donde sale el presupuesto semanal; (3) fuente del canal (salon/llevar/plataformas); (4) referencia visual del scorecard semanal de otras sucursales.",
     ),
     dict(
         clave="inversionistas-corto-mensual",
