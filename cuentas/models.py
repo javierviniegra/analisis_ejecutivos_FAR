@@ -10,6 +10,18 @@ class Sucursal(models.Model):
     nombre = models.CharField(max_length=120)
     activa = models.BooleanField(default=True)
 
+    # Identifiers of the same branch in each source system. None of the
+    # names match across systems, so queries go by these stable keys.
+    wansoft_subsidiary_id = models.IntegerField(
+        null=True, blank=True, unique=True, help_text="getglobalcashclosing.subsidiary_id (Wansoft)."
+    )
+    wansoft_ticket_nombre = models.CharField(
+        max_length=120, blank=True, help_text="Sucursal name in getallordenesbyday_* (blank = no ticket detail)."
+    )
+    odoo_company_id = models.IntegerField(
+        null=True, blank=True, unique=True, help_text="Odoo res.company id (also ControlPresupuestos_AP's key)."
+    )
+
     class Meta:
         ordering = ["nombre"]
         verbose_name_plural = "sucursales"

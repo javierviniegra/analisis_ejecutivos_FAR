@@ -2,6 +2,17 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-23 — Data layer for the weekly commercial report (findings and rules)
+
+- **Operating day of a cash closing:** `getglobalcashclosing.fecha_corte` is when the closing was done. A closing before 14:00 belongs to the PREVIOUS operating day (validated: 30/30 days of a full month match the ticket detail to the cent; unshifted only 8/30).
+- **Duplicate closings exist in the source.** The same closing can be stored several times (same operating day, identical totals; e.g. three identical rows 13 s apart, or the previous night's closing re-issued the next noon). The engine counts one row per identical (day, totals). **Impact on the August 2026 executive PDFs already delivered:** they summed the table without deduplicating; 4 duplicate rows in 3 branches (San Jeronimo $152,228, Viaducto $110,188, Tepeyac $74,270; about $337k of $67.5M, 0.5%). Puebla not affected. Decision pending: regenerate those 3 PDFs with the deduplicated numbers.
+- **Branch mapping across systems:** `Sucursal` now carries `wansoft_subsidiary_id`, `wansoft_ticket_nombre` and `odoo_company_id` (loaded by `cargar_sucursales`); no name matches across systems, so queries use these keys, never names.
+- **Ticket detail coverage is partial for some branches** (added late, or none: Metepec, Versalles). Coverage (days with data out of 7) is returned so reports can flag partial data.
+- **Presupuestos AP** is only active for the 7 Odoo-migrated branches; other branches have no budget block (None, never zero). Its "everything else" spread logic is reproduced (and tested) so numbers agree with its dashboard.
+- **Read-only by construction:** every source connection runs `SET SESSION TRANSACTION READ ONLY`; production accounts must also be SELECT-only.
+- **RISK before production use:** `getallordenesbyday_new_venta` is large and unindexed on (Sucursal, Fecha); on 2026-09-15 an ad-hoc query against the production copy hung for over an hour. Channel and mix queries filter on exactly those columns. Before pointing at production: check row count and indexes, run off-peak, and decide with the owner whether to request an index. Fine on the local dev copy.
+- `manage.py probar_semana <branch> [date]` prints every input of the week from the sources, for verification.
+
 ## 2026-09-23 — Weekly commercial report for managers: definition
 
 - **Content (all of it):** sales (gross and net), tickets, guests, average check and ticket; food/beverage mix and channel mix; cancellations, courtesies and discounts; sales by day of the week.
