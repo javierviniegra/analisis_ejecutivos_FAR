@@ -7,7 +7,11 @@ Newest first. Each entry: what, why, and where it applies.
 - **Content (all of it):** sales (gross and net), tickets, guests, average check and ticket; food/beverage mix and channel mix; cancellations, courtesies and discounts; sales by day of the week.
 - **Comparisons:** previous week, same numeric week of the previous year, and weekly budget, each with an arrows column. Year-over-year is shown only for branches that have history.
 - **Audience:** each manager receives only their own branch (one PDF per branch).
-- **Open:** week window (Monday-Sunday general rule vs. the Monday-Friday mentioned for the comparison), source of the weekly budget, channel source, and the visual reference scorecard.
+- **Resolved 2026-09-23:** week = Monday to Sunday. Weekly sales target comes from the Odoo budgets (monthly, prorated by days), NOT from ControlPresupuestos_AP (its budgets are monthly *expense* budgets by expense type, no sales target; it can still feed an optional spend-vs-budget row). Channel comes from the Wansoft order type (`Restaurant`, `Para llevar`, `eCommerce`). Format approved: one page, standard Fonda template, a "Lectura de la semana" box, an indicators table (week / previous week / var / same week last year / var / target / % target) with arrow columns, and two charts (sales by day vs previous week; weekly sales vs same week last year).
+- **Arrows:** up-green if better, down-red if worse, grey `=` when the change is within +-1%. For cancellations, courtesies and discounts an increase is bad (inverted).
+- **"Lectura de la semana" starts rule-based** (observations computed from the real numbers, nothing invented); the AI analyst (Copilot, last phase) will later rewrite the same box without changing the rest of the report.
+- **Same week last year = same ISO week number of the previous ISO year.** If that year has no such week (week 53) there is no comparison ("sin comparativo"), never a substitute week.
+- **Open:** where the Odoo weekly-target source lives (which budget object/accounts) — to be discovered against Odoo when the data layer is built.
 
 ## 2026-09-23 — Phase 2: report catalog
 

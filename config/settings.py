@@ -91,7 +91,11 @@ DATABASES = {
         "USER": os.getenv(f"EJECUTIVOS_DB_USER{_DB_SUFFIX}"),
         "PASSWORD": os.getenv(f"EJECUTIVOS_DB_PASSWORD{_DB_SUFFIX}"),
         "NAME": os.getenv(f"EJECUTIVOS_DB_NAME{_DB_SUFFIX}"),
-        "OPTIONS": {"charset": "utf8mb4"},
+        "OPTIONS": {
+            "charset": "utf8mb4",
+            # Strict mode: reject data truncation instead of silently cutting it.
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
     }
 }
 
