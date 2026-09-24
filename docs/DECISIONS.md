@@ -2,6 +2,14 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — On-demand generation in the web
+
+- **Screen `/reportes/<clave>/generar/`** (button "Generar reporte" on the report's page): branches as checkboxes with "mark all", period kind + any date inside it (or a free range, max 366 days), and per branch / consolidated as the report's `alcance` allows. The answer is the PDF download (one page per branch in one file, or the consolidated page).
+- **Access:** the report must be visible to the user (404 otherwise, as in the catalog), have a generator registered in `central/generadores.py` (404 otherwise) and the user needs `cuentas.generar_reportes` or superuser (403). Branches are validated on the server against the user's own (`sucursales_de`: superusers/staff all active branches; others their profile's; none without a profile), never just hidden in the page. A period that has not started is rejected.
+- A generation failure (source down, query over the 120 s cap) is shown as a plain message and logged with details.
+- **The commercial report's scope is now `ambos`** (per branch or consolidated, chosen by the user) and its state `implementado`; applied to the dev database and to the seed definition (the seed still never overwrites existing rows).
+- Synchronous generation is acceptable in dev (2 branches x week ~9 s; 19 branches consolidated month ~40 s); long periods (semester/year consolidated, minutes) will need the monthly summary table or background generation before production.
+
 ## 2026-09-24 — PDF of the commercial report
 
 - **One letter page per report** (`central/salidas/pdf_comercial.py`, reportlab): title with branch and period (and what it is compared with), the Lectura box (a coloured dot per observation: green good, red bad, amber warning, grey neutral), the indicators table (arrows drawn as coloured triangles, values in text colour), the two charts side by side, and the footnotes. If the footnotes do not fit they continue on a second page with the same template (not needed in the tested cases: branch week, branch month, 19-branch consolidated month).

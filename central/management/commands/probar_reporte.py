@@ -88,6 +88,6 @@ class Command(BaseCommand):
             if pdf:
                 carpeta = Path(pdf)
                 carpeta.mkdir(parents=True, exist_ok=True)
-                archivo = carpeta / pdf_comercial.nombre_archivo(r)
+                archivo = carpeta / pdf_comercial.nombre_archivo([r])
                 archivo.write_bytes(pdf_comercial.generar([r]))
                 self.stdout.write(f"    pdf: {archivo}")

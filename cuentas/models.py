@@ -58,3 +58,16 @@ class PerfilUsuario(models.Model):
         if self.todas_las_sucursales:
             return Sucursal.objects.filter(activa=True)
         return self.sucursales.filter(activa=True)
+
+
+def sucursales_de(user):
+    """Active branches a user may run reports on: superusers and staff see
+    all; everyone else what their profile allows (none without a profile)."""
+    if user.is_superuser or user.is_staff:
+        return Sucursal.objects.filter(activa=True)
+    perfil = getattr(user, "perfil", None)
+    return perfil.sucursales_visibles() if perfil else Sucursal.objects.none()
+
+
+def puede_generar(user) -> bool:
+    return user.is_superuser or user.has_perm("cuentas.generar_reportes")

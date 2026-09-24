@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Generar · {{ reporte.nombre }}{% endblock %}
+{% block content %}
+<style>
+  .campo { margin-bottom:20px; }
+  .campo > label, .campo legend { display:block; font-weight:600; color:var(--verde-oscuro); margin-bottom:8px; font-size:15px; }
+  fieldset { border:0; padding:0; margin:0; }
+  .sucursales { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:6px 16px; }
+  .sucursales label { font-size:14px; display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .sucursales ul, .opciones ul { list-style:none; padding:0; margin:0; }
+  .sucursales ul { display:contents; }
+  .opciones ul { display:flex; gap:22px; flex-wrap:wrap; }
+  .opciones label { font-size:14px; display:flex; align-items:center; gap:8px; cursor:pointer; }
+  select, input[type=date] { font:inherit; font-size:14px; padding:7px 10px; border:1px solid #ccc; border-radius:8px; background:#fff; }
+  .fila { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; }
+  .fila label { font-size:13px; color:#555; display:block; margin-bottom:4px; }
+  .enlace { background:none; border:0; color:var(--verde); font-size:13px; cursor:pointer; padding:0; text-decoration:underline; }
+  .errores { background:#fdecea; color:#8a1c14; border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:14px; }
+  .errorlist { color:#8a1c14; font-size:13px; margin:6px 0 0; padding-left:18px; }
+  .aviso { display:none; margin-left:14px; }
+  .btn[disabled] { opacity:.6; cursor:wait; }
+</style>
+
+<p><a href="{% url 'reporte_detalle' reporte.clave %}" class="muted">&larr; {{ reporte.nombre }}</a></p>
+<h1>Generar reporte</h1>
+
+<form method="post" class="card" id="generar">
+  {% csrf_token %}
+  {% if error %}<div class="errores">{{ error }}</div>{% endif %}
+  {% if form.non_field_errors %}<div class="errores">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+
+  <fieldset class="campo">
+    <legend>Sucursales</legend>
+    {% if form.fields.sucursales.queryset %}
+      <p style="margin:0 0 8px"><button type="button" class="enlace" id="todas">Marcar todas</button>
+         &nbsp;·&nbsp; <button type="button" class="enlace" id="ninguna">Quitar todas</button></p>
+      <div class="sucursales">{{ form.sucursales }}</div>
+      {{ form.sucursales.errors }}
+    {% else %}
+      <p class="muted">Tu perfil no tiene sucursales asignadas. Pide a un administrador que te las asigne.</p>
+    {% endif %}
+  </fieldset>
+
+  <div class="campo">
+    <label for="{{ form.tipo.id_for_label }}">Periodo</label>
+    <div class="fila">
+      <div>{{ form.tipo }}</div>
+      <div id="con-fecha"><label for="{{ form.fecha.id_for_label }}">Cualquier día del periodo</label>{{ form.fecha }}</div>
+      <div id="con-rango-1"><label for="{{ form.desde.id_for_label }}">Desde</label>{{ form.desde }}</div>
+      <div id="con-rango-2"><label for="{{ form.hasta.id_for_label }}">Hasta</label>{{ form.hasta }}</div>
+    </div>
+    <p class="muted" style="margin:8px 0 0">Se compara contra el periodo anterior y el mismo periodo del año anterior.</p>
+  </div>
+
+  <fieldset class="campo opciones">
+    <legend>Presentación</legend>
+    {{ form.modo }}
+  </fieldset>
+
+  <button class="btn" id="enviar" {% if not form.fields.sucursales.queryset %}disabled{% endif %}>Generar PDF</button>
+  <span class="muted aviso" id="aviso">Generando… puede tardar hasta un minuto con muchas sucursales o periodos largos.</span>
+</form>
+
+<script>
+  (function () {
+    var tipo = document.getElementById("{{ form.tipo.id_for_label }}");
+    function mostrar() {
+      var rango = tipo.value === "rango";
+      document.getElementById("con-fecha").style.display = rango ? "none" : "";
+      document.getElementById("con-rango-1").style.display = rango ? "" : "none";
+      document.getElementById("con-rango-2").style.display = rango ? "" : "none";
+    }
+    tipo.addEventListener("change", mostrar);
+    mostrar();
+
+    function marcar(valor) {
+      document.querySelectorAll(".sucursales input[type=checkbox]").forEach(function (c) { c.checked = valor; });
+    }
+    var todas = document.getElementById("todas"), ninguna = document.getElementById("ninguna");
+    if (todas) { todas.onclick = function () { marcar(true); }; ninguna.onclick = function () { marcar(false); }; }
+
+    // The answer is a file download, so the page stays: show that it is working
+    // and re-enable the button after a while so another report can be generated.
+    document.getElementById("generar").addEventListener("submit", function () {
+      var boton = document.getElementById("enviar"), aviso = document.getElementById("aviso");
+      setTimeout(function () { boton.disabled = true; }, 0);
+      aviso.style.display = "inline";
+      setTimeout(function () { boton.disabled = false; aviso.style.display = "none"; }, 20000);
+    });
+  })();
+</script>
+{% endblock %}

@@ -259,7 +259,13 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
     return salida.getvalue()
 
 
-def nombre_archivo(r: ReporteComercial) -> str:
-    base = f"Reporte_Comercial_{r.nombre}_{r.periodo.etiqueta()}"
+def _limpio(base: str) -> str:
     limpio = "".join(ch if ch.isalnum() else "_" for ch in base)
     return "_".join(p for p in limpio.split("_") if p) + ".pdf"
+
+
+def nombre_archivo(reportes: list[ReporteComercial]) -> str:
+    """File name: the branch (or "Consolidado"), or how many branches when
+    the PDF holds one page per branch; then the period."""
+    quien = reportes[0].nombre if len(reportes) == 1 else f"{len(reportes)} sucursales"
+    return _limpio(f"Reporte_Comercial_{quien}_{reportes[0].periodo.etiqueta()}")

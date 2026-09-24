@@ -35,5 +35,7 @@ class PdfTests(SimpleTestCase):
         self.assertIn("Ventas", {f.indicador.seccion for f in visibles})
 
     def test_nombre_de_archivo(self):
-        self.assertEqual(pdf_comercial.nombre_archivo(self._reporte("La Esquina Coyoacán")),
+        self.assertEqual(pdf_comercial.nombre_archivo([self._reporte("La Esquina Coyoacán")]),
                          "Reporte_Comercial_La_Esquina_Coyoacán_Semana_38_14_sep_20_sep_2026.pdf")
+        self.assertEqual(pdf_comercial.nombre_archivo([self._reporte(), self._reporte("Acoxpa")]),
+                         "Reporte_Comercial_2_sucursales_Semana_38_14_sep_20_sep_2026.pdf")

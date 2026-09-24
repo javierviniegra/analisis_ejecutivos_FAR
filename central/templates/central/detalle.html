@@ -16,5 +16,9 @@
   </table>
   {% if reporte.notas %}<p class="muted"><strong>Notas:</strong> {{ reporte.notas }}</p>{% endif %}
 </div>
-<p class="muted">La generación y el envío de este reporte se habilitan en las siguientes fases.</p>
+{% if generable %}
+<p><a class="btn" href="{% url 'reporte_generar' reporte.clave %}">Generar reporte</a></p>
+{% else %}
+<p class="muted">La generación de este reporte se habilita en las siguientes fases.</p>
+{% endif %}
 {% endblock %}

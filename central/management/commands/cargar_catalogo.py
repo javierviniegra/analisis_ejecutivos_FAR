@@ -26,11 +26,12 @@ CATALOGO = [
     dict(
         clave="comercial-semanal-gerentes",
         nombre="Reporte comercial semanal para gerentes",
-        descripcion="Reporte comercial semanal por sucursal para su gerente: ventas (bruta y neta), tickets, clientes, cheque y ticket promedio; "
-        "mix alimentos/bebidas y por canal; cancelaciones, cortesias y descuentos; venta por dia de la semana. Cada indicador "
-        "se compara contra la semana anterior, la misma semana del anio anterior y el presupuesto semanal, con columna de flechas.",
+        descripcion="Reporte comercial para cualquier periodo (semana, mes, bimestre, trimestre, semestre, anio o rango), por sucursal "
+        "o consolidado: ventas (bruta y neta), tickets, clientes, cheque y ticket promedio; mix alimentos/bebidas y por canal; "
+        "cancelaciones, cortesias y descuentos; Costo de Ventas real vs presupuesto; lectura por reglas y dos graficas. Cada indicador "
+        "se compara contra el periodo anterior y el mismo periodo del anio anterior (sucursales comparables), con columna de flechas.",
         categoria=C.COMERCIAL, periodicidad=P.SEMANAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
-        alcance=A.POR_SUCURSAL, admite_pdf=True, estado=E.DEFINIDO,
+        alcance=A.AMBOS, admite_pdf=True, estado=E.IMPLEMENTADO,
         notas="Definido 2026-09-23. Semana lunes-domingo; canal = tipo de orden de Wansoft; sin meta de venta por ahora (llegara de un KPI por definir); "
         "bloque extra de Costo de Ventas real vs presupuesto de Presupuestos AP prorrateado por dias. Fuentes: Wansoft y Presupuestos AP (solo lectura).",
     ),
