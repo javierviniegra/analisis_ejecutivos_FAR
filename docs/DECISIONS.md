@@ -2,6 +2,12 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — Sales targets: found, but no 2026 data (pending task)
+
+- **Source found:** the owner's SharePoint folder *Directores > Documentos compartidos > General > BI_Fonda* (synced locally under `OneDrive - GRUPO FONDA ARGENTINA\General - Directores Fonda Argentina\BI_Fonda`) holds scorecard Excel files with **monthly targets per branch in four levels: Mínimo, Meta chica, Meta grande, Máximo**, for sales (`scorecard_ventas.xlsx`, gross sales con IVA: e.g. Acoxpa Jan 2025 meta chica $6.28M vs $6.20M real gross), guests (`scorecard_comensales.xlsx`), average check (`socrecard_cheque.xlsx`) and average ticket (`socrecard_ticket.xlsx`). The `*_semana.xlsx` files are partial copies of the monthly ones (empty week column).
+- **Coverage:** 2025 only (sales, guests, check: Jan-Dec 2025; ticket: Jan-Jun 2025), 16 branches (missing the new Puebla, CentroMyJ, La Esquina Coyoacán); names differ from this app's (Isabel, Vallejo, TFA Express Exhibimex, Cancun, Napoles, Oceania) and need a mapping.
+- **Decision (owner):** without 2026 targets it is of no use now, so the commercial report stays **without targets**. **PENDING TASK:** once 2026 targets exist, build `importar_metas` (read-only import of the Excel files into a table of this app; path in `config/.env`), prorate sales/guests targets by days for weeks and ranges (check/ticket are averages: month target as is), add a Meta column and a four-level traffic light to the table plus a Lectura sentence; confirm with the owner the meaning of each level (proposal: red < Mínimo, amber < Meta chica, light green < Meta grande, green >= Meta grande; is Máximo a cap or a chart scale?) and the name mapping.
+
 ## 2026-09-24 — On-demand generation in the web
 
 - **Screen `/reportes/<clave>/generar/`** (button "Generar reporte" on the report's page): branches as checkboxes with "mark all", period kind + any date inside it (or a free range, max 366 days), and per branch / consolidated as the report's `alcance` allows. The answer is the PDF download (one page per branch in one file, or the consolidated page).
