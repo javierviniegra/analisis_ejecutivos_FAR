@@ -13,7 +13,7 @@ from decimal import Decimal
 from . import lectura
 from .comparativos import UMBRAL_COBERTURA_FIABLE, UMBRAL_IGUAL, cobertura_fiable
 from .fuentes.wansoft import HORA_CORTE_DIA
-from .metricas import Metricas
+from .metricas import Comparacion, Metricas, como_comparacion
 from .periodo import Periodo, TipoPeriodo
 
 
@@ -29,8 +29,12 @@ def _pp(v: Decimal) -> str:
     return f"{_num(v)} pp"
 
 
-def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Metricas | None,
-                    anio_anterior: Metricas | None) -> list[str]:
+def _lista(nombres: list[str]) -> str:
+    return nombres[0] if len(nombres) == 1 else ", ".join(nombres[:-1]) + " y " + nombres[-1]
+
+
+def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,
+                    anio_anterior: Comparacion | Metricas | None) -> list[str]:
     notas = []
     esperados = actual.dias_esperados
     if actual.dias_con_cierre < esperados:
@@ -42,10 +46,16 @@ def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Metricas | Non
         extra = "" if cobertura_fiable(actual.dias_con_detalle, esperados) else " y sus comparativos s/cf"
         notas.append(f"El detalle de tickets cubre {actual.dias_con_detalle} de {esperados} días: "
                      f"mezcla y canal son parciales{extra}.")
-    comparaciones = [(anterior, lectura.vs_anterior(periodo))]
+    comparaciones = [(como_comparacion(actual, anterior), lectura.vs_anterior(periodo))]
     if periodo.tipo != TipoPeriodo.ANIO:  # for a year both comparisons are the same period
-        comparaciones.append((anio_anterior, lectura.vs_anio(periodo)))
-    for m, nombre in comparaciones:
+        comparaciones.append((como_comparacion(actual, anio_anterior), lectura.vs_anio(periodo)))
+    for comp, nombre in comparaciones:
+        if comp.excluidas:
+            verbo = "se excluye" if len(comp.excluidas) == 1 else "se excluyen"
+            notas.append(f"Comparativo contra {nombre} solo con sucursales comparables: {verbo} "
+                         f"{_lista(comp.excluidas)} por no tener datos completos en ese periodo "
+                         "(sucursal nueva o sin operación).")
+        m = comp.base
         if m is None or m.dias_con_cierre == 0:
             continue  # no data at all: plain "s/c", nothing to explain
         if not cobertura_fiable(m.dias_con_cierre, m.dias_esperados):
@@ -64,6 +74,9 @@ def notas_reglas() -> list[str]:
         "Mezcla, canal y presupuesto se muestran siempre en gris.",
         f"s/c: sin comparativo (no hay datos). s/cf: sin comparativo fiable, cuando alguno de los periodos "
         f"tiene datos en menos del {_pct(UMBRAL_COBERTURA_FIABLE)} de los días esperados.",
+        f"Sucursales comparables: una sucursal sin datos en al menos el {_pct(UMBRAL_COBERTURA_FIABLE)} de los "
+        "días del periodo de comparación (nueva o sin operación) se excluye de ambos lados de esa comparación; "
+        "la columna del periodo muestra siempre el total de todas las sucursales elegidas.",
         f"Día operativo: un cierre de caja hecho antes de las {HORA_CORTE_DIA}:00 cuenta para el día anterior; "
         "los cierres duplicados (mismo día y mismos totales) se cuentan una sola vez.",
         "Semana de lunes a domingo; el mismo periodo del año anterior de una semana es la misma semana ISO "
@@ -74,6 +87,6 @@ def notas_reglas() -> list[str]:
     ]
 
 
-def notas_pie(periodo: Periodo, actual: Metricas, anterior: Metricas | None,
-              anio_anterior: Metricas | None) -> list[str]:
+def notas_pie(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,
+              anio_anterior: Comparacion | Metricas | None) -> list[str]:
     return notas_cobertura(periodo, actual, anterior, anio_anterior) + notas_reglas()

@@ -1,7 +1,14 @@
-"""Weekly queries against the Wansoft warehouse (read-only).
+"""Queries against the Wansoft warehouse (read-only), for any period.
 
 Every function takes an open cursor (see conexiones.abrir_wansoft) so the
 caller controls the connection and can run several queries on one.
+
+**Batched by branch:** each function reads ALL requested branches of one
+period in a single query (`IN (...)`, grouped by branch). The ticket table
+(`getallordenesbyday_new_venta`, 1.2 M rows in production) has no index on
+(Sucursal, Fecha), so every query scans it fully; one scan per period for
+all branches instead of one per branch took 19 branches x 3 periods from
+~6 min 40 s down (see docs/DECISIONS.md).
 
 Business rules baked in here (found by validating against real data):
 
@@ -40,17 +47,24 @@ def _limites_cierre(desde: date, hasta: date) -> tuple[datetime, datetime]:
     return inicio, fin
 
 
-def cierres_por_dia(cur, subsidiary_id: int, desde: date, hasta: date) -> dict[date, dict]:
-    """Daily totals from the cash closing, per operating day, deduplicated.
+def _marcadores(valores) -> str:
+    return ", ".join(["%s"] * len(valores))
+
+
+def cierres_por_dia(cur, subsidiary_ids: list[int], desde: date, hasta: date) -> dict[int, dict[date, dict]]:
+    """Daily totals from the cash closing, per branch and operating day,
+    deduplicated: {subsidiary_id: {day: totals}}.
 
     Amounts are as recorded by the POS: `venta_bruta` includes IVA,
     `venta_neta` does not; cortesias / cancelaciones / anulaciones /
     descuentos are valued at sale price (not ingredient cost).
     """
+    if not subsidiary_ids:
+        return {}
     inicio, fin = _limites_cierre(desde, hasta)
     cur.execute(
-        """
-        SELECT dia,
+        f"""
+        SELECT subsidiary_id, dia,
                SUM(total_ventas), SUM(subtotal), SUM(no_ordenes), SUM(total_personas), SUM(total_mesas_atendidas),
                SUM(cortesias_en_cuentas + cortesias_en_platillos),
                SUM(cancelaciones_en_cuentas + cancelaciones_en_platillos),
@@ -59,19 +73,22 @@ def cierres_por_dia(cur, subsidiary_id: int, desde: date, hasta: date) -> dict[d
         FROM (
             SELECT g.*, DATE(fecha_corte - INTERVAL %s HOUR) AS dia,
                    ROW_NUMBER() OVER (
-                       PARTITION BY DATE(fecha_corte - INTERVAL %s HOUR),
+                       PARTITION BY subsidiary_id, DATE(fecha_corte - INTERVAL %s HOUR),
                                     total_ventas, subtotal, no_ordenes, total_personas
                        ORDER BY fecha_corte, id) AS rn
             FROM getglobalcashclosing g
-            WHERE subsidiary_id = %s AND fecha_corte >= %s AND fecha_corte < %s
+            WHERE subsidiary_id IN ({_marcadores(subsidiary_ids)}) AND fecha_corte >= %s AND fecha_corte < %s
         ) x
         WHERE rn = 1
-        GROUP BY dia
+        GROUP BY subsidiary_id, dia
         """,
-        (HORA_CORTE_DIA, HORA_CORTE_DIA, subsidiary_id, inicio, fin),
+        (HORA_CORTE_DIA, HORA_CORTE_DIA, *subsidiary_ids, inicio, fin),
     )
     claves = ("venta_bruta", "venta_neta", "tickets", "clientes", "mesas", "cortesias", "cancelaciones", "anulaciones", "descuentos")
-    return {fila[0]: dict(zip(claves, (Decimal(v or 0) for v in fila[1:]))) for fila in cur.fetchall()}
+    resultado: dict[int, dict[date, dict]] = {}
+    for fila in cur.fetchall():
+        resultado.setdefault(fila[0], {})[fila[1]] = dict(zip(claves, (Decimal(v or 0) for v in fila[2:])))
+    return resultado
 
 
 def _rango_fecha_texto(desde: date, hasta: date) -> tuple[str, str]:
@@ -80,52 +97,52 @@ def _rango_fecha_texto(desde: date, hasta: date) -> tuple[str, str]:
     return desde.isoformat(), (hasta + timedelta(days=1)).isoformat()
 
 
-def dias_con_detalle(cur, ticket_nombre: str, desde: date, hasta: date) -> int:
-    """How many distinct days of the range have order detail for the branch."""
-    if not ticket_nombre:
-        return 0
-    a, b = _rango_fecha_texto(desde, hasta)
-    cur.execute(
-        "SELECT COUNT(DISTINCT LEFT(Fecha, 10)) FROM getallordenesbyday_new_venta "
-        "WHERE Sucursal = %s AND Fecha >= %s AND Fecha < %s",
-        (ticket_nombre, a, b),
-    )
-    return int(cur.fetchone()[0] or 0)
-
-
-def venta_por_canal(cur, ticket_nombre: str, desde: date, hasta: date) -> dict[str, Decimal]:
-    """Gross sales by channel (salon / llevar / plataformas / otros) from the
-    order type of each ticket. Empty dict when the branch has no detail."""
-    if not ticket_nombre:
+def detalle_por_sucursal(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, tuple[int, dict[str, Decimal]]]:
+    """From the ticket detail, per branch (ticket-table name): how many
+    distinct days of the range have data, and gross sales by channel
+    (salon / llevar / plataformas / otros, from the order type). One scan for
+    both. Branches with no detail are absent from the result."""
+    nombres = [n for n in nombres if n]
+    if not nombres:
         return {}
     a, b = _rango_fecha_texto(desde, hasta)
     cur.execute(
-        "SELECT TipoOrden, SUM(CAST(Total AS DECIMAL(14,2))) FROM getallordenesbyday_new_venta "
-        "WHERE Sucursal = %s AND Fecha >= %s AND Fecha < %s GROUP BY TipoOrden",
-        (ticket_nombre, a, b),
+        f"SELECT Sucursal, LEFT(Fecha, 10), TipoOrden, SUM(CAST(Total AS DECIMAL(14,2))) "
+        f"FROM getallordenesbyday_new_venta "
+        f"WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s "
+        f"GROUP BY Sucursal, LEFT(Fecha, 10), TipoOrden",
+        (*nombres, a, b),
     )
-    canales: dict[str, Decimal] = {}
-    for tipo, total in cur.fetchall():
+    dias: dict[str, set] = {}
+    canales: dict[str, dict[str, Decimal]] = {}
+    for sucursal, dia, tipo, total in cur.fetchall():
+        dias.setdefault(sucursal, set()).add(dia)
         canal = CANALES.get(tipo, CANAL_OTROS)
-        canales[canal] = canales.get(canal, Decimal("0")) + Decimal(total or 0)
-    return canales
+        por_canal = canales.setdefault(sucursal, {})
+        por_canal[canal] = por_canal.get(canal, Decimal("0")) + Decimal(total or 0)
+    return {s: (len(dias[s]), canales[s]) for s in dias}
 
 
-def mix_alimentos_bebidas(cur, ticket_nombre: str, desde: date, hasta: date) -> dict[str, Decimal]:
-    """Gross sales of Alimentos and Bebidas from the order lines. Empty dict
-    when the branch has no detail."""
-    if not ticket_nombre:
+def mix_alimentos_bebidas(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, Decimal]]:
+    """Gross sales of Alimentos and Bebidas from the order lines, per branch
+    (ticket-table name). Branches with no detail are absent."""
+    nombres = [n for n in nombres if n]
+    if not nombres:
         return {}
     a, b = _rango_fecha_texto(desde, hasta)
     cur.execute(
-        """
-        SELECT d.TipoGrupo, SUM(CAST(d.Total AS DECIMAL(14,2)))
+        f"""
+        SELECT v.Sucursal, d.TipoGrupo, SUM(CAST(d.Total AS DECIMAL(14,2)))
         FROM getallordenesbyday_new_venta v
         JOIN getallordenesbyday_new_detalleventa d
           ON d.Movimiento_Id = v.Movimento AND d.Sucursal = v.Sucursal
-        WHERE v.Sucursal = %s AND v.Fecha >= %s AND v.Fecha < %s
-        GROUP BY d.TipoGrupo
+        WHERE v.Sucursal IN ({_marcadores(nombres)}) AND v.Fecha >= %s AND v.Fecha < %s
+        GROUP BY v.Sucursal, d.TipoGrupo
         """,
-        (ticket_nombre, a, b),
+        (*nombres, a, b),
     )
-    return {grupo: Decimal(total or 0) for grupo, total in cur.fetchall() if grupo in ("Alimentos", "Bebidas")}
+    resultado: dict[str, dict[str, Decimal]] = {}
+    for sucursal, grupo, total in cur.fetchall():
+        if grupo in ("Alimentos", "Bebidas"):
+            resultado.setdefault(sucursal, {})[grupo] = Decimal(total or 0)
+    return resultado

@@ -22,7 +22,7 @@ from decimal import Decimal
 
 from . import formato
 from .comparativos import BAJA, NO_FIABLE, SUBE
-from .metricas import Metricas
+from .metricas import Comparacion, Metricas, como_comparacion
 from .periodo import Periodo, TipoPeriodo
 from .tabla_comercial import Fila, construir_tabla
 
@@ -95,22 +95,27 @@ def _sin_comparativo(var) -> str:
 
 
 # -- rules ----------------------------------------------------------------
-def _venta(periodo, filas) -> Observacion | None:
+def _comparables(comp: Comparacion) -> str:
+    return " en sucursales comparables" if comp.excluidas else ""
+
+
+def _venta(periodo, filas, ant: Comparacion, anio: Comparacion) -> Observacion | None:
     f = _fila(filas, "venta_neta")
     if f.actual is None:
         return None
     if f.var_anterior.porcentaje is None:
         vs_ant = f"{_sin_comparativo(f.var_anterior)} contra {vs_anterior(periodo)}"
     else:
-        dif = f.actual - f.anterior
-        vs_ant = f"{_var(f)} ({'+' if dif >= 0 else '-'}{_pesos(abs(dif))}) vs {vs_anterior(periodo)}"
+        dif = ant.actual.venta_neta - ant.base.venta_neta  # comparable branches only
+        vs_ant = (f"{_var(f)} ({'+' if dif >= 0 else '-'}{_pesos(abs(dif))}) vs {vs_anterior(periodo)}"
+                  f"{_comparables(ant)}")
     texto = f"La venta neta fue de {_pesos(f.actual)}, {vs_ant}"
     # For a year the previous period IS the same period last year: say it once.
     if periodo.tipo != TipoPeriodo.ANIO:
         if f.var_anio.porcentaje is None:
             texto += f" y {_sin_comparativo(f.var_anio)} contra {vs_anio(periodo)}"
         else:
-            texto += f" y {_var(f, 'var_anio')} vs {vs_anio(periodo)}"
+            texto += f" y {_var(f, 'var_anio')} vs {vs_anio(periodo)}{_comparables(anio)}"
     return Observacion(texto + ".", _tono(f.var_anterior))
 
 
@@ -172,11 +177,12 @@ def _costo_ventas(actual: Metricas) -> Observacion | None:
     return Observacion(texto + ".", NEGATIVO)
 
 
-def construir_lectura(periodo: Periodo, actual: Metricas, anterior: Metricas | None,
-                      anio_anterior: Metricas | None) -> Lectura:
-    filas = construir_tabla(actual, anterior, anio_anterior)
+def construir_lectura(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,
+                      anio_anterior: Comparacion | Metricas | None) -> Lectura:
+    ant, anio = como_comparacion(actual, anterior), como_comparacion(actual, anio_anterior)
+    filas = construir_tabla(actual, ant, anio)
     candidatas = [
-        _venta(periodo, filas),
+        _venta(periodo, filas, ant, anio),
         _causa(periodo, filas),
         _controles(periodo, filas),
         _mezcla(periodo, filas),

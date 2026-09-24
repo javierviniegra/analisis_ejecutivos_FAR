@@ -1,7 +1,8 @@
 """Metrics of a period for one branch or several (consolidated).
 
-`recolectar` reads the sources (read-only) for ONE branch and ONE period;
-`consolidar` adds several branches together. Everything else here is pure.
+`recolectar` reads the sources (read-only) for several branches and ONE
+period, one batched query per source table; `consolidar` adds several
+branches together. Everything else here is pure.
 
 Coverage is tracked explicitly (days with cash closing / with ticket detail
 out of the days expected) so reports can flag partial data instead of
@@ -12,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
+from .comparativos import cobertura_fiable
 from .fuentes import presupuestos, wansoft
 from .periodo import Periodo
 
@@ -73,36 +75,46 @@ class Metricas:
         return _razon(self.costo_ventas_real_con_ppto, self.costo_ventas_ppto)
 
 
-def recolectar(cur_wansoft, cur_presupuestos, sucursal, periodo: Periodo) -> Metricas:
-    """Read every metric of `periodo` for one branch (`cuentas.Sucursal`)."""
-    m = Metricas(periodo=periodo)
-    dias = wansoft.cierres_por_dia(cur_wansoft, sucursal.wansoft_subsidiary_id, periodo.desde, periodo.hasta)
-    for d in dias.values():
-        m.venta_bruta += d["venta_bruta"]
-        m.venta_neta += d["venta_neta"]
-        m.tickets += d["tickets"]
-        m.clientes += d["clientes"]
-        m.mesas += d["mesas"]
-        m.cortesias += d["cortesias"]
-        m.cancelaciones += d["cancelaciones"]
-        m.anulaciones += d["anulaciones"]
-        m.descuentos += d["descuentos"]
-    m.venta_por_dia = {dia: d["venta_bruta"] for dia, d in dias.items()}
-    m.dias_con_cierre = len(dias)
+def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo) -> list[Metricas]:
+    """Read every metric of `periodo` for each branch (`cuentas.Sucursal`),
+    in the same order as `sucursales`."""
+    d, h = periodo.desde, periodo.hasta
+    cierres = wansoft.cierres_por_dia(
+        cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None], d, h)
+    nombres = [s.wansoft_ticket_nombre for s in sucursales]
+    detalle = wansoft.detalle_por_sucursal(cur_wansoft, nombres, d, h)
+    mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h)
 
-    nombre = sucursal.wansoft_ticket_nombre
-    m.dias_con_detalle = wansoft.dias_con_detalle(cur_wansoft, nombre, periodo.desde, periodo.hasta)
-    if m.dias_con_detalle:
-        m.canal = wansoft.venta_por_canal(cur_wansoft, nombre, periodo.desde, periodo.hasta)
-        m.mix = wansoft.mix_alimentos_bebidas(cur_wansoft, nombre, periodo.desde, periodo.hasta)
+    resultado = []
+    for sucursal in sucursales:
+        m = Metricas(periodo=periodo)
+        dias = cierres.get(sucursal.wansoft_subsidiary_id, {})
+        for t in dias.values():
+            m.venta_bruta += t["venta_bruta"]
+            m.venta_neta += t["venta_neta"]
+            m.tickets += t["tickets"]
+            m.clientes += t["clientes"]
+            m.mesas += t["mesas"]
+            m.cortesias += t["cortesias"]
+            m.cancelaciones += t["cancelaciones"]
+            m.anulaciones += t["anulaciones"]
+            m.descuentos += t["descuentos"]
+        m.venta_por_dia = {dia: t["venta_bruta"] for dia, t in dias.items()}
+        m.dias_con_cierre = len(dias)
 
-    if sucursal.odoo_company_id is not None:
-        real = presupuestos.gasto_real_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, periodo.desde, periodo.hasta)
-        ppto = presupuestos.presupuesto_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, periodo.desde, periodo.hasta)
-        m.costo_ventas_real = real
-        if real is not None and ppto is not None:
-            m.costo_ventas_ppto, m.costo_ventas_real_con_ppto, m.n_con_presupuesto = ppto, real, 1
-    return m
+        nombre = sucursal.wansoft_ticket_nombre
+        if nombre in detalle:
+            m.dias_con_detalle, m.canal = detalle[nombre]
+            m.mix = mix.get(nombre, {})
+
+        if sucursal.odoo_company_id is not None:
+            real = presupuestos.gasto_real_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
+            ppto = presupuestos.presupuesto_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
+            m.costo_ventas_real = real
+            if real is not None and ppto is not None:
+                m.costo_ventas_ppto, m.costo_ventas_real_con_ppto, m.n_con_presupuesto = ppto, real, 1
+        resultado.append(m)
+    return resultado
 
 
 def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
@@ -128,3 +140,38 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
             total.costo_ventas_real_con_ppto = (total.costo_ventas_real_con_ppto or CERO) + (m.costo_ventas_real_con_ppto or CERO)
             total.n_con_presupuesto += 1
     return total
+
+
+@dataclass
+class Comparacion:
+    """One comparison column of a report (previous period or same period last
+    year) under the comparable-branches rule: `actual` is the current period
+    restricted to the branches being compared, `base` the comparison period
+    for those same branches (None when there is nothing to compare), and
+    `excluidas` the branches left out."""
+
+    actual: Metricas
+    base: Metricas | None
+    excluidas: list[str] = field(default_factory=list)
+
+
+def como_comparacion(actual: Metricas, x: "Comparacion | Metricas | None") -> Comparacion:
+    """Accept a plain Metricas (no branch excluded) where a Comparacion is expected."""
+    return x if isinstance(x, Comparacion) else Comparacion(actual, x)
+
+
+def comparables(nombres: list[str], actuales: list[Metricas], bases: list[Metricas] | None,
+                periodo: Periodo, periodo_base: Periodo | None) -> Comparacion:
+    """Business rule (owner, 2026-09-24): a branch that did not operate the
+    comparison period fully (new branch, or no data: cash closings on less
+    than UMBRAL_COBERTURA_FIABLE of its days) is left out of BOTH sides of
+    that comparison, so new branches never inflate the change. Only values
+    that exist are compared; the report lists the branches left out."""
+    if bases is None or periodo_base is None:
+        return Comparacion(consolidar(actuales, periodo), None)
+    dentro = [i for i, b in enumerate(bases) if cobertura_fiable(b.dias_con_cierre, b.dias_esperados)]
+    excluidas = [nombres[i] for i in range(len(nombres)) if i not in dentro]
+    if not dentro:
+        return Comparacion(consolidar(actuales, periodo), None, excluidas)
+    return Comparacion(consolidar([actuales[i] for i in dentro], periodo),
+                       consolidar([bases[i] for i in dentro], periodo_base), excluidas)

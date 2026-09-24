@@ -59,17 +59,21 @@ class Command(BaseCommand):
 
         with conexiones.abrir_wansoft() as cw, conexiones.abrir_presupuestos() as cp:
             def leer(p):
-                return [metricas.recolectar(cw, cp, s, p) for s in elegidas] if p else None
+                return metricas.recolectar(cw, cp, elegidas, p) if p else None
 
             ma, mp, my = leer(periodo), leer(anterior), leer(anio_ant)
 
         if consolidado:
-            juntos = [("CONSOLIDADO (" + ", ".join(s.nombre for s in elegidas) + ")",
+            nombres = [s.nombre for s in elegidas]
+            juntos = [("CONSOLIDADO (" + ", ".join(nombres) + ")",
                        metricas.consolidar(ma, periodo),
-                       metricas.consolidar(mp, anterior),
-                       metricas.consolidar(my, anio_ant) if my else None)]
+                       metricas.comparables(nombres, ma, mp, periodo, anterior),
+                       metricas.comparables(nombres, ma, my, periodo, anio_ant))]
         else:
-            juntos = [(s.nombre, ma[i], mp[i], my[i] if my else None) for i, s in enumerate(elegidas)]
+            juntos = [(s.nombre, ma[i],
+                       metricas.comparables([s.nombre], [ma[i]], [mp[i]], periodo, anterior),
+                       metricas.comparables([s.nombre], [ma[i]], [my[i]] if my else None, periodo, anio_ant))
+                      for i, s in enumerate(elegidas)]
 
         for nombre, a, p, y in juntos:
             self.stdout.write(f"\n=== {nombre}")

@@ -13,6 +13,10 @@ A comparison is "s/cf" (sin comparativo fiable) when either period has data
 on less than UMBRAL_COBERTURA_FIABLE of its expected days: cash closings for
 sales rows, ticket detail for mix/channel rows. Budget rows do not depend on
 the cash closings and are exempt. The values are still shown.
+
+Comparable branches: each comparison may be a `Comparacion` (see metricas);
+the "actual" column always shows the whole selection, while each variation
+compares only the branches present in both periods.
 """
 
 from dataclasses import dataclass, replace
@@ -20,7 +24,7 @@ from decimal import Decimal
 from typing import Callable
 
 from .comparativos import GRIS, IGUAL, cobertura_fiable, no_fiable, SIMBOLOS, SIN_DATO, SUBE, BAJA, VERDE, ROJO, UMBRAL_IGUAL, Variacion, variacion
-from .metricas import Metricas
+from .metricas import Comparacion, Metricas, como_comparacion
 
 MONEDA, ENTERO, PORCENTAJE = "moneda", "entero", "porcentaje"
 
@@ -120,11 +124,20 @@ def _comparar(ind: Indicador, actual, base, fiables: bool = True) -> Variacion:
     return replace(v, color=GRIS) if ind.mejor_si_sube is None else v
 
 
-def construir_tabla(actual: Metricas, anterior: Metricas | None, anio_anterior: Metricas | None) -> list[Fila]:
+def _columna(ind: Indicador, comp: Comparacion) -> tuple[Decimal | None, Variacion]:
+    """Value of the comparison period and the variation, both over the
+    comparable branches only."""
+    a, b = _valor(ind, comp.actual), _valor(ind, comp.base)
+    ok = fiable(ind, comp.actual) and fiable(ind, comp.base)
+    return b, _comparar(ind, a, b, ok)
+
+
+def construir_tabla(actual: Metricas, anterior: Comparacion | Metricas | None,
+                    anio_anterior: Comparacion | Metricas | None) -> list[Fila]:
+    ant, anio = como_comparacion(actual, anterior), como_comparacion(actual, anio_anterior)
     filas = []
     for ind in INDICADORES:
-        a, p, y = _valor(ind, actual), _valor(ind, anterior), _valor(ind, anio_anterior)
-        ok = fiable(ind, actual)
-        filas.append(Fila(ind, a, p, _comparar(ind, a, p, ok and fiable(ind, anterior)),
-                          y, _comparar(ind, a, y, ok and fiable(ind, anio_anterior))))
+        p, var_p = _columna(ind, ant)
+        y, var_y = _columna(ind, anio)
+        filas.append(Fila(ind, _valor(ind, actual), p, var_p, y, var_y))
     return filas

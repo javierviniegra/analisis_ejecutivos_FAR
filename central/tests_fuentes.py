@@ -45,3 +45,46 @@ class ResolverCostoVentasTests(SimpleTestCase):
     def test_meses_del_rango(self):
         self.assertEqual(pp._meses(date(2026, 6, 29), date(2026, 7, 5)), [date(2026, 6, 1), date(2026, 7, 1)])
         self.assertEqual(pp._meses(date(2026, 12, 28), date(2027, 1, 3)), [date(2026, 12, 1), date(2027, 1, 1)])
+
+
+class _Cursor:
+    def __init__(self, filas):
+        self.filas, self.sql, self.params = filas, None, None
+
+    def execute(self, sql, params=()):
+        self.sql, self.params = sql, params
+
+    def fetchall(self):
+        return self.filas
+
+
+class ConsultasEnLoteTests(SimpleTestCase):
+    """One query per period for all branches (the ticket table is scanned once)."""
+
+    def test_detalle_agrupa_dias_y_canales_por_sucursal(self):
+        cur = _Cursor([
+            ("PUEBLA", "2026-09-14", "Restaurant", Decimal("100")),
+            ("PUEBLA", "2026-09-14", "eCommerce", Decimal("20")),
+            ("PUEBLA", "2026-09-15", "Restaurant", Decimal("50")),
+            ("PUEBLA", "2026-09-15", "Raro", Decimal("5")),
+            ("ACOXPA", "2026-09-14", "Para llevar", Decimal("7")),
+        ])
+        r = w.detalle_por_sucursal(cur, ["PUEBLA", "ACOXPA", None, "SIN DETALLE"], date(2026, 9, 14), date(2026, 9, 20))
+        self.assertEqual(r["PUEBLA"], (2, {"salon": Decimal("150"), "plataformas": Decimal("20"), "otros": Decimal("5")}))
+        self.assertEqual(r["ACOXPA"], (1, {"llevar": Decimal("7")}))
+        self.assertNotIn("SIN DETALLE", r)
+        self.assertEqual(cur.sql.count("%s"), 5)  # 3 names (None dropped) + 2 dates
+        self.assertEqual(cur.params[-2:], ("2026-09-14", "2026-09-21"))
+
+    def test_sin_sucursales_no_consulta(self):
+        cur = _Cursor([])
+        self.assertEqual(w.detalle_por_sucursal(cur, [None], date(2026, 9, 14), date(2026, 9, 20)), {})
+        self.assertEqual(w.cierres_por_dia(cur, [], date(2026, 9, 14), date(2026, 9, 20)), {})
+        self.assertIsNone(cur.sql)
+
+    def test_cierres_por_sucursal_y_dia(self):
+        fila = (7, date(2026, 9, 14)) + tuple(Decimal(i) for i in range(1, 10))
+        r = w.cierres_por_dia(_Cursor([fila]), [7, 9], date(2026, 9, 14), date(2026, 9, 20))
+        self.assertEqual(r[7][date(2026, 9, 14)]["venta_bruta"], Decimal(1))
+        self.assertEqual(r[7][date(2026, 9, 14)]["descuentos"], Decimal(9))
+        self.assertNotIn(9, r)

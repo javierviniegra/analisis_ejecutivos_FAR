@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — Comparable branches and batched queries
+
+- **Business rule: comparable branches** (owner, 2026-09-24). New branches must not inflate comparisons: a branch that did not operate a comparison period fully (cash closings on less than 90% of its days: new, or no data) is left out of BOTH sides of that comparison (previous period and same period last year are decided separately). Only values that exist are compared. The "actual" column always shows the whole selection; each variation compares the comparable branches only; the Lectura says "en sucursales comparables" and a footnote names the branches left out. Applies to single-branch reports too: a branch new in the comparison period has no comparison (`s/c`). Implemented as `metricas.comparables()` -> `Comparacion(actual, base, excluidas)`, accepted by the table, the Lectura and the footnotes.
+- **Effect on real data (production, August 2026, 19 branches consolidated):** vs July the change goes from +5.0% (all branches) to -0.4% (Puebla, new in July, excluded); vs August 2025 it is -3.4% (Puebla, CentroMyJ and La Esquina Coyoacán excluded) instead of `s/cf`.
+- **Batched queries:** the Wansoft source functions now read all branches of one period in one query (`IN (...)` grouped by branch; days with detail and channel sales share one scan). The unindexed ticket table is scanned 2 times per period instead of 3 times per branch. 19 branches x 3 periods: 6 min 40 s -> ~20 s on production, same figures to the cent.
+- The `probar_semana` command mentioned in an earlier entry no longer exists; `probar_reporte` replaces it.
+
 ## 2026-09-24 — Lectura box, reliable comparisons, footnotes, production sources
 
 - **Lectura del periodo** (`central/motor/lectura.py`): rule-based, computed from the indicators table. Priority: net sales vs both comparisons (always); driver of the change vs the previous period (guests or average check, whichever moved more); controls that went up AND weigh at least 0.5% of net sales; mix/channel rows that moved more than 2 pp; Costo de Ventas above its prorated budget. Title follows the period ("Lectura de la semana", "del mes", ...). For a year, the previous period and the same period last year coincide and are stated once. Thresholds are constants, to be tuned once real reports have been read (owner, 2026-09-24).

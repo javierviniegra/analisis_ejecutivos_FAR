@@ -5,7 +5,7 @@ from django.test import SimpleTestCase
 from .motor import comparativos as c
 from .motor.lectura import AVISO, NEGATIVO, NEUTRO, POSITIVO, construir_lectura, titulo
 from .motor.notas import notas_cobertura, notas_pie, notas_reglas
-from .motor.metricas import Metricas
+from .motor.metricas import Metricas, comparables, consolidar
 from .motor.periodo import Periodo, TipoPeriodo
 from .motor.tabla_comercial import construir_tabla
 
@@ -152,3 +152,52 @@ class NotasTests(SimpleTestCase):
         for fragmento in ("±1%", "±1 pp", "90%", "14:00", "0.5%", "2 pp", "lunes a domingo"):
             self.assertIn(fragmento, texto)
         self.assertEqual(notas_pie(SEM, _m(), _m(), _m()), notas_reglas())
+
+
+class ComparablesTests(SimpleTestCase):
+    """New branches (no full data in the comparison period) are left out of
+    both sides of that comparison and named in the footnotes."""
+
+    ANT = SEM.anterior()
+
+    def _caso(self):
+        nombres = ["Vieja", "Nueva"]
+        actuales = [_m(), _m(venta_neta=D("5000"))]
+        bases = [_m(self.ANT, venta_neta=D("9000")), Metricas(periodo=self.ANT)]  # Nueva did not exist
+        return nombres, actuales, bases
+
+    def test_excluye_de_ambos_lados(self):
+        nombres, actuales, bases = self._caso()
+        comp = comparables(nombres, actuales, bases, SEM, self.ANT)
+        self.assertEqual(comp.excluidas, ["Nueva"])
+        self.assertEqual(comp.actual.venta_neta, D("10000"))  # only Vieja
+        self.assertEqual(comp.base.venta_neta, D("9000"))
+
+    def test_tabla_muestra_total_y_compara_solo_comparables(self):
+        nombres, actuales, bases = self._caso()
+        total = consolidar(actuales, SEM)
+        venta = {f.indicador.clave: f for f in construir_tabla(total, comparables(nombres, actuales, bases, SEM, self.ANT), None)}["venta_neta"]
+        self.assertEqual(venta.actual, D("15000"))  # the whole selection
+        self.assertEqual(venta.anterior, D("9000"))
+        self.assertEqual(round(venta.var_anterior.porcentaje, 4), D("0.1111"))  # 10000 vs 9000, not 15000 vs 9000
+
+    def test_lectura_y_nota(self):
+        nombres, actuales, bases = self._caso()
+        total = consolidar(actuales, SEM)
+        comp = comparables(nombres, actuales, bases, SEM, self.ANT)
+        texto = construir_lectura(SEM, total, comp, None).observaciones[0].texto
+        self.assertIn("La venta neta fue de $15,000", texto)
+        self.assertIn("▲ +11.1% (+$1,000) vs la semana anterior en sucursales comparables", texto)
+        notas = notas_cobertura(SEM, total, comp, None)
+        self.assertTrue(any("se excluye Nueva por no tener" in n for n in notas))
+
+    def test_ninguna_comparable(self):
+        comp = comparables(["Nueva"], [_m()], [Metricas(periodo=self.ANT)], SEM, self.ANT)
+        self.assertIsNone(comp.base)
+        venta = {f.indicador.clave: f for f in construir_tabla(_m(), comp, None)}["venta_neta"]
+        self.assertEqual(venta.var_anterior.direccion, c.SIN_DATO)
+
+    def test_sin_periodo_de_comparacion(self):
+        comp = comparables(["A"], [_m()], None, SEM, None)
+        self.assertIsNone(comp.base)
+        self.assertEqual(comp.excluidas, [])
