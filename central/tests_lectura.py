@@ -194,6 +194,8 @@ class ComparablesTests(SimpleTestCase):
     def test_ninguna_comparable(self):
         comp = comparables(["Nueva"], [_m()], [Metricas(periodo=self.ANT)], SEM, self.ANT)
         self.assertIsNone(comp.base)
+        self.assertIn("Sin comparativo contra la semana anterior: Nueva no tiene datos completos en ese periodo "
+                      "(sucursal nueva o sin operación).", notas_cobertura(SEM, _m(), comp, None))
         venta = {f.indicador.clave: f for f in construir_tabla(_m(), comp, None)}["venta_neta"]
         self.assertEqual(venta.var_anterior.direccion, c.SIN_DATO)
 

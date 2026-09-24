@@ -5,14 +5,18 @@ from the real (read-only) sources and print the Lectura box, the table and the f
     python manage.py probar_reporte puebla acoxpa antenas --tipo mes --fecha 2026-08-15
     python manage.py probar_reporte todas --tipo bimestre --fecha 2026-08-15 --consolidado
     python manage.py probar_reporte puebla --tipo rango --desde 2026-09-01 --hasta 2026-09-20
+    python manage.py probar_reporte puebla --tipo semana --fecha 2026-09-14 --graficas C:/temp/graficas
 """
 
 import sys
 from datetime import date
+from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
 from central.motor import formato, metricas
+from central.motor.graficas import construir_graficas
+from central.motor.graficas_png import dibujar
 from central.motor.lectura import construir_lectura
 from central.motor.notas import notas_pie
 from central.motor.fuentes import conexiones
@@ -31,6 +35,7 @@ class Command(BaseCommand):
         parser.add_argument("--desde", help="Range start (tipo rango)")
         parser.add_argument("--hasta", help="Range end (tipo rango)")
         parser.add_argument("--consolidado", action="store_true", help="Add the selected branches into one report")
+        parser.add_argument("--graficas", help="Folder where the charts are saved as PNG (optional)")
 
     def _periodo(self, tipo, fecha, desde, hasta) -> Periodo:
         if tipo == TipoPeriodo.RANGO:
@@ -39,7 +44,7 @@ class Command(BaseCommand):
             return Periodo.rango(date.fromisoformat(desde), date.fromisoformat(hasta))
         return Periodo.de_fecha(tipo, date.fromisoformat(fecha) if fecha else date.today())
 
-    def handle(self, *args, sucursales, tipo, fecha, desde, hasta, consolidado, **options):
+    def handle(self, *args, sucursales, tipo, fecha, desde, hasta, consolidado, graficas, **options):
         # Windows consoles default to cp1252, which cannot print the arrows.
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         periodo = self._periodo(TipoPeriodo(tipo), fecha, desde, hasta)
@@ -61,7 +66,8 @@ class Command(BaseCommand):
             def leer(p):
                 return metricas.recolectar(cw, cp, elegidas, p) if p else None
 
-            ma, mp, my = leer(periodo), leer(anterior), leer(anio_ant)
+            ma, mp = leer(periodo), leer(anterior)
+            my = mp if anio_ant == anterior else leer(anio_ant)  # a year: both comparisons are the same period
 
         if consolidado:
             nombres = [s.nombre for s in elegidas]
@@ -97,3 +103,10 @@ class Command(BaseCommand):
             self.stdout.write("  -- Notas")
             for n in notas_pie(periodo, a, p, y):
                 self.stdout.write(f"    * {n}")
+            if graficas:
+                carpeta = Path(graficas)
+                carpeta.mkdir(parents=True, exist_ok=True)
+                for i, g in enumerate(construir_graficas(periodo, a, p, y), start=1):
+                    archivo = carpeta / f"{nombre.split(' (')[0].replace(' ', '_')}_{periodo.tipo.value}_{i}.png"
+                    archivo.write_bytes(dibujar(g))
+                    self.stdout.write(f"    grafica: {archivo}")

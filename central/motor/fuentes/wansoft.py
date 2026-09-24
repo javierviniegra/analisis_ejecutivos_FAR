@@ -123,26 +123,43 @@ def detalle_por_sucursal(cur, nombres: list[str], desde: date, hasta: date) -> d
     return {s: (len(dias[s]), canales[s]) for s in dias}
 
 
+def _tramos_mensuales(desde: date, hasta: date) -> list[tuple[date, date]]:
+    """[desde, hasta] cut at calendar-month boundaries."""
+    tramos, inicio = [], desde
+    while inicio <= hasta:
+        fin = min((inicio.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1), hasta)
+        tramos.append((inicio, fin))
+        inicio = fin + timedelta(days=1)
+    return tramos
+
+
 def mix_alimentos_bebidas(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, Decimal]]:
     """Gross sales of Alimentos and Bebidas from the order lines, per branch
-    (ticket-table name). Branches with no detail are absent."""
+    (ticket-table name). Branches with no detail are absent.
+
+    Run one statement per calendar month and add them up: the join to the
+    12 M-row order-line table costs 4-19 s per month for all branches in
+    production, while a whole semester in one statement exceeded the 120 s
+    cap (conexiones.LIMITE_SEGUNDOS_CONSULTA)."""
     nombres = [n for n in nombres if n]
     if not nombres:
         return {}
-    a, b = _rango_fecha_texto(desde, hasta)
-    cur.execute(
-        f"""
-        SELECT v.Sucursal, d.TipoGrupo, SUM(CAST(d.Total AS DECIMAL(14,2)))
-        FROM getallordenesbyday_new_venta v
-        JOIN getallordenesbyday_new_detalleventa d
-          ON d.Movimiento_Id = v.Movimento AND d.Sucursal = v.Sucursal
-        WHERE v.Sucursal IN ({_marcadores(nombres)}) AND v.Fecha >= %s AND v.Fecha < %s
-        GROUP BY v.Sucursal, d.TipoGrupo
-        """,
-        (*nombres, a, b),
-    )
     resultado: dict[str, dict[str, Decimal]] = {}
-    for sucursal, grupo, total in cur.fetchall():
-        if grupo in ("Alimentos", "Bebidas"):
-            resultado.setdefault(sucursal, {})[grupo] = Decimal(total or 0)
+    for inicio, fin in _tramos_mensuales(desde, hasta):
+        a, b = _rango_fecha_texto(inicio, fin)
+        cur.execute(
+            f"""
+            SELECT v.Sucursal, d.TipoGrupo, SUM(CAST(d.Total AS DECIMAL(14,2)))
+            FROM getallordenesbyday_new_venta v
+            JOIN getallordenesbyday_new_detalleventa d
+              ON d.Movimiento_Id = v.Movimento AND d.Sucursal = v.Sucursal
+            WHERE v.Sucursal IN ({_marcadores(nombres)}) AND v.Fecha >= %s AND v.Fecha < %s
+            GROUP BY v.Sucursal, d.TipoGrupo
+            """,
+            (*nombres, a, b),
+        )
+        for sucursal, grupo, total in cur.fetchall():
+            if grupo in ("Alimentos", "Bebidas"):
+                por_grupo = resultado.setdefault(sucursal, {})
+                por_grupo[grupo] = por_grupo.get(grupo, Decimal("0")) + Decimal(total or 0)
     return resultado

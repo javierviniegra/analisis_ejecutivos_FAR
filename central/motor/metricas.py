@@ -41,7 +41,7 @@ class Metricas:
     descuentos: Decimal = CERO
     canal: dict[str, Decimal] = field(default_factory=dict)  # salon / llevar / plataformas / otros
     mix: dict[str, Decimal] = field(default_factory=dict)  # Alimentos / Bebidas
-    venta_por_dia: dict[date, Decimal] = field(default_factory=dict)
+    venta_por_dia: dict[date, Decimal] = field(default_factory=dict)  # net sales (sin IVA) per operating day
     dias_con_cierre: int = 0  # summed over branches
     dias_con_detalle: int = 0  # summed over branches
     costo_ventas_real: Decimal | None = None  # None = not available (never zero)
@@ -99,7 +99,7 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             m.cancelaciones += t["cancelaciones"]
             m.anulaciones += t["anulaciones"]
             m.descuentos += t["descuentos"]
-        m.venta_por_dia = {dia: t["venta_bruta"] for dia, t in dias.items()}
+        m.venta_por_dia = {dia: t["venta_neta"] for dia, t in dias.items()}
         m.dias_con_cierre = len(dias)
 
         nombre = sucursal.wansoft_ticket_nombre

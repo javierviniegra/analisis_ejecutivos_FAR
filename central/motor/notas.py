@@ -50,7 +50,11 @@ def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Comparacion | 
     if periodo.tipo != TipoPeriodo.ANIO:  # for a year both comparisons are the same period
         comparaciones.append((como_comparacion(actual, anio_anterior), lectura.vs_anio(periodo)))
     for comp, nombre in comparaciones:
-        if comp.excluidas:
+        if comp.excluidas and comp.base is None:
+            verbo = "no tiene" if len(comp.excluidas) == 1 else "no tienen"
+            notas.append(f"Sin comparativo contra {nombre}: {_lista(comp.excluidas)} {verbo} datos completos "
+                         "en ese periodo (sucursal nueva o sin operación).")
+        elif comp.excluidas:
             verbo = "se excluye" if len(comp.excluidas) == 1 else "se excluyen"
             notas.append(f"Comparativo contra {nombre} solo con sucursales comparables: {verbo} "
                          f"{_lista(comp.excluidas)} por no tener datos completos en ese periodo "

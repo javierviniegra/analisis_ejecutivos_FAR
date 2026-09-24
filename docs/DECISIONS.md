@@ -2,6 +2,14 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — Charts of the commercial report
+
+- **Two charts, both of net sales (sin IVA):** vs the previous period and vs the same period last year (`central/motor/graficas.py`, drawn by `graficas_png.py`). For a year both comparisons are the same period, so only one chart. They follow the comparable-branches rule like the table; the chart's note names the branches left out, or says "Sin comparativo" (the footnotes explain why).
+- **Bucket size by period length** (confirmed by the owner): one bar per day up to 31 days, per 7-day block from 32 to 92 days (the last block may be shorter), per calendar month beyond. Buckets are matched to the comparison period by position; a bucket with no cash closing has no bar (never a zero bar).
+- **`venta_por_dia` now holds net sales** (it held gross sales); the whole report speaks of net sales.
+- **Look:** grouped columns, period in Fonda green `#10564E`, comparison in light green-grey `#A7C2BC` (large lightness gap, readable by colour-blind readers and in greyscale); legend always names the periods; a comparison with no data is neither drawn nor listed. The palette validator of the dataviz guide needs Node, which is not installed on the dev PC, so it was not run.
+- **Long periods and the order-line join:** the food/beverage mix query (join to the 12 M-row order-line table) exceeded the 120 s cap for a whole semester of 19 branches; it now runs one statement per calendar month (4-19 s each) and adds them up. A consolidated semester (3 periods) takes ~3 min on production; a year's two comparisons are read once. A local monthly summary table would make long periods fast; to be decided before on-demand use in the web.
+
 ## 2026-09-24 — Comparable branches and batched queries
 
 - **Business rule: comparable branches** (owner, 2026-09-24). New branches must not inflate comparisons: a branch that did not operate a comparison period fully (cash closings on less than 90% of its days: new, or no data) is left out of BOTH sides of that comparison (previous period and same period last year are decided separately). Only values that exist are compared. The "actual" column always shows the whole selection; each variation compares the comparable branches only; the Lectura says "en sucursales comparables" and a footnote names the branches left out. Applies to single-branch reports too: a branch new in the comparison period has no comparison (`s/c`). Implemented as `metricas.comparables()` -> `Comparacion(actual, base, excluidas)`, accepted by the table, the Lectura and the footnotes.

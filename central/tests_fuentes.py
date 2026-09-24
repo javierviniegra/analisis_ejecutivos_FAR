@@ -88,3 +88,12 @@ class ConsultasEnLoteTests(SimpleTestCase):
         self.assertEqual(r[7][date(2026, 9, 14)]["venta_bruta"], Decimal(1))
         self.assertEqual(r[7][date(2026, 9, 14)]["descuentos"], Decimal(9))
         self.assertNotIn(9, r)
+
+    def test_mix_una_consulta_por_mes_y_suma(self):
+        cur = _Cursor([("PUEBLA", "Alimentos", Decimal("10")), ("PUEBLA", "Otro", Decimal("1"))])
+        llamadas = []
+        ejecutar = cur.execute
+        cur.execute = lambda sql, params=(): (llamadas.append(params[-2:]), ejecutar(sql, params))
+        r = w.mix_alimentos_bebidas(cur, ["PUEBLA"], date(2026, 7, 15), date(2026, 9, 10))
+        self.assertEqual(llamadas, [("2026-07-15", "2026-08-01"), ("2026-08-01", "2026-09-01"), ("2026-09-01", "2026-09-11")])
+        self.assertEqual(r, {"PUEBLA": {"Alimentos": Decimal("30")}})  # 3 months added, "Otro" ignored
