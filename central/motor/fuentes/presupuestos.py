@@ -107,7 +107,9 @@ def presupuesto_costo_ventas(cur, odoo_company_id: int, desde: date, hasta: date
 
 def gasto_real_costo_ventas(cur, odoo_company_id: int, desde: date, hasta: date) -> Decimal | None:
     """Real Costo de Ventas spend for [desde, hasta], or None when the branch
-    is not active in ControlPresupuestos_AP.
+    is not active in ControlPresupuestos_AP or has no Costo de Ventas spend
+    recorded in the period (e.g. before that app existed): no records is
+    "no data", never a zero spend.
 
     The source keys spend by week (the Monday of the week it counts toward),
     so a period includes the weeks whose Monday falls inside it. For a
@@ -120,7 +122,7 @@ def gasto_real_costo_ventas(cur, odoo_company_id: int, desde: date, hasta: date)
         return None
     cur.execute(
         """
-        SELECT COALESCE(SUM(g.monto), 0)
+        SELECT COUNT(*), COALESCE(SUM(g.monto), 0)
         FROM presupuestos_gastoreal g
         JOIN presupuestos_tipogasto t ON t.id = g.tipo_gasto_id
         JOIN presupuestos_categoria c ON c.id = t.categoria_id
@@ -128,4 +130,5 @@ def gasto_real_costo_ventas(cur, odoo_company_id: int, desde: date, hasta: date)
         """,
         (sucursal, desde, hasta, CATEGORIA),
     )
-    return Decimal(cur.fetchone()[0] or 0)
+    registros, total = cur.fetchone()
+    return Decimal(total) if registros else None

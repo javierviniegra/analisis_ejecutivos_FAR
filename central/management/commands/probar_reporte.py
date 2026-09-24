@@ -1,5 +1,5 @@
 """Build the commercial report's indicators for any branches and any period
-from the real (read-only) sources and print the table. A verification tool.
+from the real (read-only) sources and print the Lectura box, the table and the footnotes. A verification tool.
 
     python manage.py probar_reporte puebla --tipo semana --fecha 2026-09-14
     python manage.py probar_reporte puebla acoxpa antenas --tipo mes --fecha 2026-08-15
@@ -13,6 +13,8 @@ from datetime import date
 from django.core.management.base import BaseCommand, CommandError
 
 from central.motor import formato, metricas
+from central.motor.lectura import construir_lectura
+from central.motor.notas import notas_pie
 from central.motor.fuentes import conexiones
 from central.motor.periodo import Periodo, TipoPeriodo
 from central.motor.tabla_comercial import construir_tabla
@@ -73,6 +75,10 @@ class Command(BaseCommand):
             self.stdout.write(f"\n=== {nombre}")
             self.stdout.write(f"    cobertura: cierres {a.dias_con_cierre}/{a.dias_esperados} dias, "
                               f"detalle de tickets {a.dias_con_detalle}/{a.dias_esperados} dias")
+            lectura = construir_lectura(periodo, a, p, y)
+            self.stdout.write(f"  -- {lectura.titulo}")
+            for o in lectura.observaciones:
+                self.stdout.write(f"    [{o.tono}] {o.texto}")
             seccion = None
             for f in construir_tabla(a, p, y):
                 if f.indicador.seccion != seccion:
@@ -84,3 +90,6 @@ class Command(BaseCommand):
                     f"ant {formato.valor(f.anterior, fm):>16} {formato.variacion(f.var_anterior, fm):>12} | "
                     f"a.ant {formato.valor(f.anio_anterior, fm):>16} {formato.variacion(f.var_anio, fm):>12}"
                 )
+            self.stdout.write("  -- Notas")
+            for n in notas_pie(periodo, a, p, y):
+                self.stdout.write(f"    * {n}")

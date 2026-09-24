@@ -27,6 +27,11 @@ ENV = os.getenv("ENV", "prod").lower()
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 
 # SECURITY WARNING: don't run with debug turned on in production!
+# Where report DATA is read from (Wansoft, Presupuestos AP): "prod" or "dev".
+# Independent of ENV so the app can run in dev while reading the production
+# sources (read-only). Defaults to ENV.
+FUENTES_ENV = os.getenv("FUENTES_ENV", ENV).lower()
+
 DEBUG = os.getenv("DJANGO_DEBUG", "true" if ENV == "dev" else "false").lower() == "true"
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if h.strip()]

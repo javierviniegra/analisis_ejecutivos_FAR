@@ -9,10 +9,15 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 UMBRAL_IGUAL = Decimal("0.01")
+# Project rule (owner, 2026-09-24): a comparison is only reliable when BOTH
+# periods have data on at least 90% of the expected days; otherwise it is
+# shown as "s/cf" (sin comparativo fiable) and explained in a footnote.
+UMBRAL_COBERTURA_FIABLE = Decimal("0.90")
 
-SUBE, BAJA, IGUAL, SIN_DATO = "sube", "baja", "igual", "sin_dato"
+SUBE, BAJA, IGUAL, SIN_DATO, NO_FIABLE = "sube", "baja", "igual", "sin_dato", "no_fiable"
 VERDE, ROJO, GRIS = "verde", "rojo", "gris"
-SIMBOLOS = {SUBE: "▲", BAJA: "▼", IGUAL: "=", SIN_DATO: "s/c"}
+SIMBOLOS = {SUBE: "▲", BAJA: "▼", IGUAL: "=", SIN_DATO: "s/c", NO_FIABLE: "s/cf"}
+NO_COMPARABLE = (SIN_DATO, NO_FIABLE)
 
 
 @dataclass(frozen=True)
@@ -38,6 +43,14 @@ def variacion(actual, base, *, mejor_si_sube: bool = True, umbral: Decimal = UMB
     direccion = SUBE if pct > 0 else BAJA
     es_bueno = (direccion == SUBE) == mejor_si_sube
     return Variacion(pct, direccion, VERDE if es_bueno else ROJO, SIMBOLOS[direccion])
+
+
+def cobertura_fiable(dias_con_dato: int, dias_esperados: int) -> bool:
+    return dias_esperados > 0 and Decimal(dias_con_dato) / dias_esperados >= UMBRAL_COBERTURA_FIABLE
+
+
+def no_fiable() -> Variacion:
+    return Variacion(None, NO_FIABLE, GRIS, SIMBOLOS[NO_FIABLE])
 
 
 def porcentaje_de_meta(actual, meta) -> Decimal | None:
