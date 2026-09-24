@@ -7,6 +7,7 @@ Recessive hairline grid, y axis in pesos (k / M), no value on every bar.
 """
 
 import io
+import textwrap
 
 import matplotlib
 
@@ -24,6 +25,7 @@ REJILLA = "#E6E6E6"
 
 ANCHO_PULG, ALTO_PULG, DPI = 3.7, 2.3, 200
 MAX_ETIQUETAS = 16
+CARACTERES_POR_RENGLON = 92  # note text at 5.3 pt across the figure width
 
 
 def _pesos(v, _pos=None) -> str:
@@ -53,6 +55,8 @@ def dibujar(g: Grafica) -> bytes:
     paso = max(1, -(-n // MAX_ETIQUETAS))  # ceil: at most MAX_ETIQUETAS labels
     ax.set_xticks([x for x in xs if x % paso == 0])
     ax.set_xticklabels([e for i, e in enumerate(g.etiquetas) if i % paso == 0], fontsize=6, color=TEXTO)
+    if g.resaltar is not None and g.resaltar % paso == 0:  # the report's own bucket, in bold
+        ax.get_xticklabels()[g.resaltar // paso].set_fontweight("bold")
     ax.yaxis.set_major_formatter(FuncFormatter(_pesos))
     ax.tick_params(axis="y", labelsize=6, colors=TEXTO_SUAVE, length=0)
     ax.tick_params(axis="x", length=0)
@@ -68,10 +72,13 @@ def dibujar(g: Grafica) -> bytes:
     ax.set_title(g.titulo, fontsize=7.5, color=TEXTO, loc="left", fontweight="bold", pad=4 + 9 * renglones)
     ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=columnas, fontsize=5.8, frameon=False,
               handlelength=1, handleheight=0.8, borderaxespad=0.1, labelcolor=TEXTO)
+    renglones_nota = 0
     if g.nota:
-        fig.text(0.01, 0.01, g.nota, fontsize=5.3, color=TEXTO_SUAVE, ha="left", va="bottom")
+        nota = textwrap.fill(g.nota, CARACTERES_POR_RENGLON)
+        renglones_nota = nota.count("\n") + 1
+        fig.text(0.01, 0.01, nota, fontsize=5.3, color=TEXTO_SUAVE, ha="left", va="bottom", linespacing=1.3)
 
-    fig.tight_layout(rect=(0, 0.04 if g.nota else 0, 1, 1))
+    fig.tight_layout(rect=(0, 0.045 * renglones_nota, 1, 1))
     salida = io.BytesIO()
     fig.savefig(salida, format="png", facecolor="white")
     plt.close(fig)

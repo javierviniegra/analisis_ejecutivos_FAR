@@ -117,6 +117,27 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
     return resultado
 
 
+def mensual_por_sucursal(por_dia: dict[date, Decimal]) -> dict[date, tuple[Decimal, int]]:
+    """Group daily net sales by calendar month: {first day of month: (net sales, days with closing)}."""
+    meses: dict[date, tuple[Decimal, int]] = {}
+    for dia, v in por_dia.items():
+        clave = dia.replace(day=1)
+        total, dias = meses.get(clave, (CERO, 0))
+        meses[clave] = (total + v, dias + 1)
+    return meses
+
+
+def recolectar_mensual(cur_wansoft, sucursales: list, desde: date, hasta: date) -> dict[str, dict[date, tuple[Decimal, int]]]:
+    """Net sales per branch (by name) and calendar month from the cash closing
+    only (small table: a 24-month window for every branch is one fast query)."""
+    ids = [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None]
+    cierres = wansoft.cierres_por_dia(cur_wansoft, ids, desde, hasta)
+    return {
+        s.nombre: mensual_por_sucursal({d: t["venta_neta"] for d, t in cierres.get(s.wansoft_subsidiary_id, {}).items()})
+        for s in sucursales
+    }
+
+
 def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
     """Add several branches' metrics into one. Budget figures are summed over
     the branches that have them only (`n_con_presupuesto` says how many)."""

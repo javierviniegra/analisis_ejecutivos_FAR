@@ -2,6 +2,14 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — Month charts measure calendar months
+
+- **Why:** pairing two different months day by day mixes in the day-of-week effect (Aug 1 2026 was a Saturday, Aug 1 2025 a Friday); the owner wants to measure the calendar month. Prototypes of a cumulative line and a cumulative % gap were rejected (lines overlap when months are similar; the gap exaggerates the first days).
+- **A month report now has:** (1) "Venta neta por día" of the month alone (no pairing); (2) "Venta neta mensual vs año anterior": the 12 calendar months ending with the report's month (highlighted) vs the same months one year earlier. Weeks, bimesters, quarters, semesters, years and ranges keep the two comparison charts.
+- **New branches in the trend:** included (owner: there they can be measured, the bar is empty or lower where there was no data); the chart's note says since when each new branch has data ("Puebla desde jul 26") and flags a partial report month ("sep 26 parcial (23 de 30 días)"). The table and the Lectura keep the comparable-branches rule.
+- The trend reads only the cash-closing table (24 months for all branches is one fast query: `metricas.recolectar_mensual`); a consolidated month with its trend takes ~37 s on production.
+- Pending proposal: sales trends for semester and year reports (owner's request).
+
 ## 2026-09-24 — Charts of the commercial report
 
 - **Two charts, both of net sales (sin IVA):** vs the previous period and vs the same period last year (`central/motor/graficas.py`, drawn by `graficas_png.py`). For a year both comparisons are the same period, so only one chart. They follow the comparable-branches rule like the table; the chart's note names the branches left out, or says "Sin comparativo" (the footnotes explain why).

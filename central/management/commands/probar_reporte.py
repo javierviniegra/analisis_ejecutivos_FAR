@@ -15,7 +15,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 
 from central.motor import formato, metricas
-from central.motor.graficas import construir_graficas
+from central.motor.graficas import construir_graficas, ventana_tendencia
 from central.motor.graficas_png import dibujar
 from central.motor.lectura import construir_lectura
 from central.motor.notas import notas_pie
@@ -68,6 +68,9 @@ class Command(BaseCommand):
 
             ma, mp = leer(periodo), leer(anterior)
             my = mp if anio_ant == anterior else leer(anio_ant)  # a year: both comparisons are the same period
+            mensual = None
+            if graficas and periodo.tipo == TipoPeriodo.MES:  # the month trend chart needs 24 months of closings
+                mensual = metricas.recolectar_mensual(cw, elegidas, *ventana_tendencia(periodo))
 
         if consolidado:
             nombres = [s.nombre for s in elegidas]
@@ -106,7 +109,11 @@ class Command(BaseCommand):
             if graficas:
                 carpeta = Path(graficas)
                 carpeta.mkdir(parents=True, exist_ok=True)
-                for i, g in enumerate(construir_graficas(periodo, a, p, y), start=1):
+                if mensual is not None and not consolidado:
+                    serie = {nombre: mensual[nombre]}
+                else:
+                    serie = mensual
+                for i, g in enumerate(construir_graficas(periodo, a, p, y, serie), start=1):
                     archivo = carpeta / f"{nombre.split(' (')[0].replace(' ', '_')}_{periodo.tipo.value}_{i}.png"
                     archivo.write_bytes(dibujar(g))
                     self.stdout.write(f"    grafica: {archivo}")
