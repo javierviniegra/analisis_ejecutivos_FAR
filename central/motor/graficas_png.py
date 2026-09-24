@@ -25,7 +25,7 @@ REJILLA = "#E6E6E6"
 
 ANCHO_PULG, ALTO_PULG, DPI = 3.7, 2.3, 200
 MAX_ETIQUETAS = 16
-CARACTERES_POR_RENGLON = 92  # note text at 5.3 pt across the figure width
+CARACTERES_POR_RENGLON = 86  # note text at 5.3 pt across the figure width
 
 
 def _pesos(v, _pos=None) -> str:

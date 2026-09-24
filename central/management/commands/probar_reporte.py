@@ -68,9 +68,9 @@ class Command(BaseCommand):
 
             ma, mp = leer(periodo), leer(anterior)
             my = mp if anio_ant == anterior else leer(anio_ant)  # a year: both comparisons are the same period
-            mensual = None
+            diario = None
             if graficas and periodo.tipo == TipoPeriodo.MES:  # the month trend chart needs 24 months of closings
-                mensual = metricas.recolectar_mensual(cw, elegidas, *ventana_tendencia(periodo))
+                diario = metricas.recolectar_diario(cw, elegidas, *ventana_tendencia(periodo))
 
         if consolidado:
             nombres = [s.nombre for s in elegidas]
@@ -109,10 +109,7 @@ class Command(BaseCommand):
             if graficas:
                 carpeta = Path(graficas)
                 carpeta.mkdir(parents=True, exist_ok=True)
-                if mensual is not None and not consolidado:
-                    serie = {nombre: mensual[nombre]}
-                else:
-                    serie = mensual
+                serie = {nombre: diario[nombre]} if diario is not None and not consolidado else diario
                 for i, g in enumerate(construir_graficas(periodo, a, p, y, serie), start=1):
                     archivo = carpeta / f"{nombre.split(' (')[0].replace(' ', '_')}_{periodo.tipo.value}_{i}.png"
                     archivo.write_bytes(dibujar(g))

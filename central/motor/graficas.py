@@ -1,8 +1,8 @@
 """Chart data of the commercial report (pure: no I/O, no drawing).
 
-Both charts compare net sales (sin IVA) of the period, bucket by bucket,
-against a comparison period: the previous period, and the same period last
-year. Each chart uses a `Comparacion`, so it follows the comparable-branches
+Both charts compare gross sales (con IVA: the owner measures the impact of
+sales on gross) of the period, bucket by bucket, against a comparison
+period: the previous period, and the same period last year. Each chart uses a `Comparacion`, so it follows the comparable-branches
 rule like the table (branches left out are named in the chart's note).
 
 Bucket size follows the period length (owner, 2026-09-24): one bar per day
@@ -14,11 +14,13 @@ no value (None), never a zero bar.
 Month reports are different (owner, 2026-09-24): day-by-day pairing of two
 different months mixes in the day-of-week effect (Aug 1 2026 was a
 Saturday, Aug 1 2025 a Friday), and a month should be measured as a
-calendar month. So a month gets (1) its net sales per day alone, and (2) a
+calendar month. So a month gets (1) its gross sales per day alone, and (2) a
 12-month trend by calendar month vs the same months of the previous year.
 The trend includes every branch (new branches show as empty/lower bars in
-the months without data; the note says since when each has data), while
-the table and the Lectura keep the comparable-branches rule.
+the months without data; the note says since when each has data), leaves
+out source gaps, and compares a month in progress month-to-date (see
+`grafica_tendencia_mensual`), while the table and the Lectura keep the
+comparable-branches rule.
 """
 
 from dataclasses import dataclass
@@ -26,6 +28,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from . import lectura
+from .comparativos import cobertura_fiable
 from .metricas import Comparacion, Metricas, como_comparacion
 from .periodo import _MESES_ES, Periodo, TipoPeriodo
 
@@ -108,7 +111,7 @@ def construir_grafica(periodo: Periodo, periodo_base: Periodo | None, comp: Comp
     else:
         notas = []
     return Grafica(
-        titulo=f"Venta neta {_POR[gran]} vs {vs_corto}",
+        titulo=f"Venta bruta {_POR[gran]} vs {vs_corto}",
         etiquetas=etiquetas,
         actual=actual,
         base=base,
@@ -136,10 +139,10 @@ def meses_tendencia(periodo: Periodo, n: int = 12) -> list[date]:
 
 
 def grafica_por_dia(periodo: Periodo, actual: Metricas) -> Grafica:
-    """Net sales per day of the period alone (no pairing with another period)."""
+    """Gross sales per day of the period alone (no pairing with another period)."""
     rangos = cubetas(periodo, DIA)
     return Grafica(
-        titulo="Venta neta por día",
+        titulo="Venta bruta por día",
         etiquetas=[etiqueta(i, DIA, periodo.dias, False) for i, _ in rangos],
         actual=sumar(actual.venta_por_dia, rangos),
         base=[None] * len(rangos),
@@ -149,34 +152,75 @@ def grafica_por_dia(periodo: Periodo, actual: Metricas) -> Grafica:
     )
 
 
-def grafica_tendencia_mensual(periodo: Periodo, mensual: dict[str, dict[date, tuple[Decimal, int]]]) -> Grafica:
+def _dias_del_mes(mes: date) -> int:
+    return ((mes.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)).day
+
+
+def grafica_tendencia_mensual(periodo: Periodo, diario: dict[str, dict[date, Decimal]]) -> Grafica:
     """12 calendar months ending with the period's month vs the same months
-    one year earlier, every branch included. `mensual` comes from
-    metricas.recolectar_mensual over both windows (24 months)."""
+    one year earlier. `diario` (metricas.recolectar_diario over the 24-month
+    `ventana_tendencia`) is gross sales per branch and day.
+
+    Rules (owner, 2026-09-24):
+    - New branches are included: nothing before their first month with data,
+      and their opening month counts as it is.
+    - A branch-month with data on less than UMBRAL_COBERTURA_FIABLE of its
+      days after the branch opened is a gap in the source (e.g. Nov-Dec 2024
+      in Wansoft): that branch is left out of BOTH years of that month.
+    - A month in progress is compared month-to-date: days 1..N of both years.
+    """
     meses = meses_tendencia(periodo)
+    ultimo = meses[-1]
+    dias_ultimo = [d.day for por_dia in diario.values() for d in por_dia if d.replace(day=1) == ultimo]
+    corte = max(dias_ultimo) if dias_ultimo and max(dias_ultimo) < periodo.dias else None
 
-    def total(mes):
-        valores = [m[mes][0] for m in mensual.values() if mes in m]
-        return sum(valores, Decimal("0")) if valores else None
+    def dentro(d: date, mes: date) -> bool:  # month-to-date cut applies to the last pair only
+        return corte is None or mes != ultimo or d.day <= corte
 
-    notas = []
-    inicio = _menos_un_anio(meses[0])
-    for nombre, por_mes in sorted(mensual.items()):
-        con_datos = sorted(por_mes)
-        if con_datos and con_datos[0] > inicio:
-            notas.append(f"{nombre} desde {_mes_corto(con_datos[0])}")
-    ultimo = periodo.desde.replace(day=1)
-    dias_ultimo = [m[ultimo][1] for m in mensual.values() if ultimo in m]
-    if dias_ultimo and max(dias_ultimo) < periodo.dias:
-        notas.append(f"{_mes_corto(ultimo)} parcial ({max(dias_ultimo)} de {periodo.dias} días)")
+    inicio = {n: min(p).replace(day=1) for n, p in diario.items() if p}
+
+    def total_y_dias(nombre: str, mes: date, mes_par: date) -> tuple[Decimal, int]:
+        valores = [v for d, v in diario[nombre].items() if d.replace(day=1) == mes and dentro(d, mes_par)]
+        return sum(valores, Decimal("0")), len(valores)
+
+    def hueco(nombre: str, mes: date, mes_par: date) -> bool:
+        if nombre not in inicio or mes <= inicio[nombre]:
+            return False  # not open yet, or its opening month
+        _, dias = total_y_dias(nombre, mes, mes_par)
+        esperados = corte if (corte and mes_par == ultimo) else _dias_del_mes(mes)
+        return not cobertura_fiable(dias, esperados)
+
+    actual, base, con_huecos = [], [], []
+    for mes in meses:
+        previo = _menos_un_anio(mes)
+        fuera = [n for n in diario if hueco(n, mes, mes) or hueco(n, previo, mes)]
+        if fuera:
+            con_huecos.append(f"{_mes_corto(mes)} ({len(fuera)})")
+        suma_a = [total_y_dias(n, mes, mes) for n in diario if n not in fuera]
+        suma_b = [total_y_dias(n, previo, mes) for n in diario if n not in fuera]
+        actual.append(sum((t for t, d in suma_a if d), Decimal("0")) if any(d for _, d in suma_a) else None)
+        base.append(sum((t for t, d in suma_b if d), Decimal("0")) if any(d for _, d in suma_b) else None)
+
+    notas = [f"{n} desde {_mes_corto(inicio[n])}" for n in sorted(inicio) if inicio[n] > _menos_un_anio(meses[0])]
+    partes = []
+    if notas:
+        partes.append("Incluye sucursales nuevas: " + "; ".join(notas))
+    if con_huecos and len(diario) == 1:
+        partes.append("Meses sin comparar por datos incompletos en Wansoft: "
+                      + ", ".join(h.split(" (")[0] for h in con_huecos))
+    elif con_huecos:
+        partes.append("Meses comparados sin las sucursales con datos incompletos en Wansoft (en ambos años): "
+                      + ", ".join(con_huecos))
+    if corte:
+        partes.append(f"{_mes_corto(ultimo)} a la fecha: días 1 al {corte} de ambos años")
     return Grafica(
-        titulo="Venta neta mensual vs año anterior",
+        titulo="Venta bruta mensual vs año anterior",
         etiquetas=[f"{_MESES_ES[m.month - 1][:3]}\n{m.year % 100:02d}" for m in meses],  # month over year
-        actual=[total(m) for m in meses],
-        base=[total(_menos_un_anio(m)) for m in meses],
+        actual=actual,
+        base=base,
         nombre_actual=f"{_mes_corto(meses[0])} – {_mes_corto(meses[-1])}",
         nombre_base=f"{_mes_corto(_menos_un_anio(meses[0]))} – {_mes_corto(_menos_un_anio(meses[-1]))}",
-        nota=("Incluye sucursales nuevas: " + "; ".join(notas) + ".") if notas else None,
+        nota=". ".join(partes) + "." if partes else None,
         resaltar=len(meses) - 1,
     )
 
@@ -188,14 +232,14 @@ def ventana_tendencia(periodo: Periodo) -> tuple[date, date]:
 
 def construir_graficas(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,
                        anio_anterior: Comparacion | Metricas | None,
-                       mensual: dict[str, dict[date, tuple[Decimal, int]]] | None = None) -> list[Grafica]:
+                       diario: dict[str, dict[date, Decimal]] | None = None) -> list[Grafica]:
     """The report's two charts. A month: its sales per day and the 12-month
-    trend (needs `mensual`). Other periods: vs previous period and vs same
+    trend (needs `diario`). Other periods: vs previous period and vs same
     period last year (for a year both are the same period: one chart)."""
     if periodo.tipo == TipoPeriodo.MES:
-        if mensual is None:
-            raise ValueError("a month report needs the monthly series (metricas.recolectar_mensual)")
-        return [grafica_por_dia(periodo, actual), grafica_tendencia_mensual(periodo, mensual)]
+        if diario is None:
+            raise ValueError("a month report needs the daily series (metricas.recolectar_diario)")
+        return [grafica_por_dia(periodo, actual), grafica_tendencia_mensual(periodo, diario)]
     nombre = lectura.vs_anterior(periodo).split(" ", 1)[1]  # "semana anterior", "mes anterior", ...
     graficas = [construir_grafica(periodo, periodo.anterior(), como_comparacion(actual, anterior),
                                   lectura.vs_anterior(periodo), nombre)]

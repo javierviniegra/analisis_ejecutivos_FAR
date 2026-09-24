@@ -41,7 +41,7 @@ class Metricas:
     descuentos: Decimal = CERO
     canal: dict[str, Decimal] = field(default_factory=dict)  # salon / llevar / plataformas / otros
     mix: dict[str, Decimal] = field(default_factory=dict)  # Alimentos / Bebidas
-    venta_por_dia: dict[date, Decimal] = field(default_factory=dict)  # net sales (sin IVA) per operating day
+    venta_por_dia: dict[date, Decimal] = field(default_factory=dict)  # gross sales (con IVA) per operating day, for the charts
     dias_con_cierre: int = 0  # summed over branches
     dias_con_detalle: int = 0  # summed over branches
     costo_ventas_real: Decimal | None = None  # None = not available (never zero)
@@ -99,7 +99,7 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             m.cancelaciones += t["cancelaciones"]
             m.anulaciones += t["anulaciones"]
             m.descuentos += t["descuentos"]
-        m.venta_por_dia = {dia: t["venta_neta"] for dia, t in dias.items()}
+        m.venta_por_dia = {dia: t["venta_bruta"] for dia, t in dias.items()}
         m.dias_con_cierre = len(dias)
 
         nombre = sucursal.wansoft_ticket_nombre
@@ -117,25 +117,14 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
     return resultado
 
 
-def mensual_por_sucursal(por_dia: dict[date, Decimal]) -> dict[date, tuple[Decimal, int]]:
-    """Group daily net sales by calendar month: {first day of month: (net sales, days with closing)}."""
-    meses: dict[date, tuple[Decimal, int]] = {}
-    for dia, v in por_dia.items():
-        clave = dia.replace(day=1)
-        total, dias = meses.get(clave, (CERO, 0))
-        meses[clave] = (total + v, dias + 1)
-    return meses
-
-
-def recolectar_mensual(cur_wansoft, sucursales: list, desde: date, hasta: date) -> dict[str, dict[date, tuple[Decimal, int]]]:
-    """Net sales per branch (by name) and calendar month from the cash closing
-    only (small table: a 24-month window for every branch is one fast query)."""
+def recolectar_diario(cur_wansoft, sucursales: list, desde: date, hasta: date) -> dict[str, dict[date, Decimal]]:
+    """Gross sales per branch (by name) and operating day from the cash
+    closing only (small table: 24 months for every branch is one fast query).
+    Used by the month trend chart."""
     ids = [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None]
     cierres = wansoft.cierres_por_dia(cur_wansoft, ids, desde, hasta)
-    return {
-        s.nombre: mensual_por_sucursal({d: t["venta_neta"] for d, t in cierres.get(s.wansoft_subsidiary_id, {}).items()})
-        for s in sucursales
-    }
+    return {s.nombre: {d: t["venta_bruta"] for d, t in cierres.get(s.wansoft_subsidiary_id, {}).items()}
+            for s in sucursales}
 
 
 def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:

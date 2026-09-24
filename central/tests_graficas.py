@@ -47,7 +47,7 @@ class GraficaTests(SimpleTestCase):
         ant = self.SEM.anterior()
         comp = Comparacion(_diaria(self.SEM, faltan={date(2026, 9, 16)}), _diaria(ant, D("80")))
         gr = g.construir_grafica(self.SEM, ant, comp, "la semana anterior", "semana anterior")
-        self.assertEqual(gr.titulo, "Venta neta por día vs semana anterior")
+        self.assertEqual(gr.titulo, "Venta bruta por día vs semana anterior")
         self.assertEqual(gr.etiquetas[0], "Lun 14")
         self.assertIsNone(gr.actual[2])  # Wednesday without closing: no bar, not zero
         self.assertEqual(gr.base, [D("80")] * 7)
@@ -70,12 +70,21 @@ class GraficaTests(SimpleTestCase):
         anio = Periodo.anio_completo(2026)
         self.assertEqual(len(g.construir_graficas(anio, _diaria(anio), _diaria(anio.anterior()), None)), 1)
         dos = g.construir_graficas(self.SEM, _diaria(self.SEM), _diaria(self.SEM.anterior()), None)
-        self.assertEqual([x.titulo for x in dos], ["Venta neta por día vs semana anterior",
-                                                   "Venta neta por día vs año anterior"])
+        self.assertEqual([x.titulo for x in dos], ["Venta bruta por día vs semana anterior",
+                                                   "Venta bruta por día vs año anterior"])
 
     def test_dibuja_png(self):
         gr = g.construir_grafica(self.SEM, None, Comparacion(_diaria(self.SEM), None), "x", "x")
         self.assertTrue(dibujar(gr).startswith(b"\x89PNG"))
+
+
+def _dias(desde, hasta, valor=D("10"), faltan=()):
+    out, d = {}, desde
+    while d <= hasta:
+        if d not in faltan:
+            out[d] = valor
+        d += timedelta(1)
+    return out
 
 
 class MesTests(SimpleTestCase):
@@ -83,43 +92,46 @@ class MesTests(SimpleTestCase):
 
     AGO = Periodo.bloque(TipoPeriodo.MES, 2026, 8)
 
-    def _mensual(self):
-        return {
-            "Vieja": {date(a, m, 1): (D("100"), 30) for a in (2024, 2025, 2026) for m in range(1, 13)
-                      if date(2024, 9, 1) <= date(a, m, 1) <= date(2026, 8, 1)},
-            "Nueva": {date(2026, 7, 1): (D("10"), 20), date(2026, 8, 1): (D("50"), 31)},
-        }
+    def _diario(self):
+        vieja = _dias(date(2024, 9, 1), date(2026, 8, 31))
+        for d in list(vieja):  # a source gap: Dec 2024 only has 1 day
+            if d.year == 2024 and d.month == 12 and d.day > 1:
+                del vieja[d]
+        return {"Vieja": vieja, "Nueva": _dias(date(2026, 7, 20), date(2026, 8, 31), D("1"))}
 
     def test_ventana_de_24_meses(self):
         self.assertEqual(g.meses_tendencia(self.AGO)[0], date(2025, 9, 1))
-        self.assertEqual(g.meses_tendencia(self.AGO)[-1], date(2026, 8, 1))
         self.assertEqual(g.ventana_tendencia(self.AGO), (date(2024, 9, 1), date(2026, 8, 31)))
 
-    def test_tendencia_incluye_nuevas_y_lo_dice(self):
-        gr = g.grafica_tendencia_mensual(self.AGO, self._mensual())
-        self.assertEqual(len(gr.etiquetas), 12)
-        self.assertEqual(gr.etiquetas[-1], "ago\n26")
-        self.assertEqual(gr.actual[-1], D("150"))  # every branch, the new one included
-        self.assertEqual(gr.base[-1], D("100"))  # Aug 2025: only the old branch existed
-        self.assertEqual(gr.resaltar, 11)
-        self.assertEqual(gr.nota, "Incluye sucursales nuevas: Nueva desde jul 26.")
+    def test_tendencia(self):
+        gr = g.grafica_tendencia_mensual(self.AGO, self._diario())
+        self.assertEqual(gr.titulo, "Venta bruta mensual vs año anterior")
+        self.assertEqual((len(gr.etiquetas), gr.etiquetas[-1], gr.resaltar), (12, "ago\n26", 11))
+        self.assertEqual(gr.actual[-1], D("341"))  # 31 x 10 + 31 x 1: the new branch is included
+        self.assertEqual(gr.base[-1], D("310"))  # Aug 2025: only the old branch existed
+        self.assertEqual(gr.actual[-2], D("322"))  # Jul 2026: 31 x 10 + 12 opening days of the new one
+        dic = gr.etiquetas.index("dic\n25")
+        self.assertIsNone(gr.actual[dic])  # Dec 2024 is a gap: the branch leaves both years of December
+        self.assertIsNone(gr.base[dic])
+        self.assertIn("Nueva desde jul 26", gr.nota)
+        self.assertIn("datos incompletos en Wansoft (en ambos años): dic 25 (1)", gr.nota)
 
-    def test_mes_parcial(self):
-        mensual = {"A": {date(2026, 9, 1): (D("10"), 23)}}
-        gr = g.grafica_tendencia_mensual(Periodo.bloque(TipoPeriodo.MES, 2026, 9), mensual)
-        self.assertIn("sep 26 parcial (23 de 30 días)", gr.nota)
-        self.assertIsNone(gr.base[-1])  # no data one year earlier: empty bar, not zero
+    def test_mes_a_la_fecha(self):
+        sep = Periodo.bloque(TipoPeriodo.MES, 2026, 9)
+        diario = {"A": {**_dias(date(2025, 9, 1), date(2025, 9, 30)), **_dias(date(2026, 9, 1), date(2026, 9, 23))}}
+        gr = g.grafica_tendencia_mensual(sep, diario)
+        self.assertEqual((gr.actual[-1], gr.base[-1]), (D("230"), D("230")))  # days 1-23 of both years
+        self.assertIn("sep 26 a la fecha: días 1 al 23 de ambos años", gr.nota)
+
+    def test_una_sucursal_con_hueco(self):
+        gr = g.grafica_tendencia_mensual(self.AGO, {"Vieja": self._diario()["Vieja"]})
+        self.assertIn("Meses sin comparar por datos incompletos en Wansoft: dic 25", gr.nota)
 
     def test_mes_usa_sus_dos_graficas(self):
-        dos = g.construir_graficas(self.AGO, _diaria(self.AGO), None, None, self._mensual())
-        self.assertEqual([x.titulo for x in dos], ["Venta neta por día", "Venta neta mensual vs año anterior"])
+        dos = g.construir_graficas(self.AGO, _diaria(self.AGO), None, None, self._diario())
+        self.assertEqual([x.titulo for x in dos], ["Venta bruta por día", "Venta bruta mensual vs año anterior"])
         self.assertTrue(all(v is None for v in dos[0].base))  # the day chart is not paired with another month
         with self.assertRaises(ValueError):
             g.construir_graficas(self.AGO, _diaria(self.AGO), None, None)
         for gr in dos:
             self.assertTrue(dibujar(gr).startswith(b"\x89PNG"))
-
-    def test_mensual_por_sucursal(self):
-        from .motor.metricas import mensual_por_sucursal
-        r = mensual_por_sucursal({date(2026, 8, 1): D("5"), date(2026, 8, 2): D("7"), date(2026, 9, 1): D("1")})
-        self.assertEqual(r, {date(2026, 8, 1): (D("12"), 2), date(2026, 9, 1): (D("1"), 1)})

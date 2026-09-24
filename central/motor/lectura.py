@@ -6,7 +6,8 @@ changing the rest of the report.
 
 Rules, in priority order (owner, 2026-09-24; thresholds are constants to be
 tuned once real reports have been read):
-1. Net sales vs previous period and vs same period last year. Always.
+1. Gross sales (con IVA; owner's choice to measure the impact of sales) vs
+   previous period and vs same period last year. Always.
 2. What drove the change vs the previous period: guests (traffic) or
    average check, whichever moved more. Only when sales moved.
 3. Controls (cancellations, courtesies, discounts) that went up AND weigh at
@@ -100,16 +101,16 @@ def _comparables(comp: Comparacion) -> str:
 
 
 def _venta(periodo, filas, ant: Comparacion, anio: Comparacion) -> Observacion | None:
-    f = _fila(filas, "venta_neta")
+    f = _fila(filas, "venta_bruta")
     if f.actual is None:
         return None
     if f.var_anterior.porcentaje is None:
         vs_ant = f"{_sin_comparativo(f.var_anterior)} contra {vs_anterior(periodo)}"
     else:
-        dif = ant.actual.venta_neta - ant.base.venta_neta  # comparable branches only
+        dif = ant.actual.venta_bruta - ant.base.venta_bruta  # comparable branches only
         vs_ant = (f"{_var(f)} ({'+' if dif >= 0 else '-'}{_pesos(abs(dif))}) vs {vs_anterior(periodo)}"
                   f"{_comparables(ant)}")
-    texto = f"La venta neta fue de {_pesos(f.actual)}, {vs_ant}"
+    texto = f"La venta bruta fue de {_pesos(f.actual)}, {vs_ant}"
     # For a year the previous period IS the same period last year: say it once.
     if periodo.tipo != TipoPeriodo.ANIO:
         if f.var_anio.porcentaje is None:
@@ -120,7 +121,7 @@ def _venta(periodo, filas, ant: Comparacion, anio: Comparacion) -> Observacion |
 
 
 def _causa(periodo, filas) -> Observacion | None:
-    venta = _fila(filas, "venta_neta")
+    venta = _fila(filas, "venta_bruta")
     if venta.var_anterior.direccion not in (SUBE, BAJA):
         return None
     cli, chq = _fila(filas, "clientes"), _fila(filas, "cheque_promedio")

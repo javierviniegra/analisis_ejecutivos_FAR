@@ -2,6 +2,16 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — Gross sales in charts, source gaps in the trend, automations
+
+- **Charts use gross sales (con IVA)** (owner: gross measures the impact of sales). `venta_por_dia` holds gross sales again; titles say "Venta bruta". The table keeps both gross and net rows.
+- **Lectura headline on gross sales too** (owner, 2026-09-24): "La venta bruta fue de ..."; the driver sentence follows gross sales. Control weights keep the net-sales base.
+- **Source gaps in Wansoft (found 2026-09-24):** cash closings are missing for whole months in some branches: Nov 2024 (Isabel La Católica, San Jerónimo), Dec 2024 (Cancún, Isabel, Playa del Carmen, San Jerónimo, Parroquia, Versalles with 0-1 days), and Isabel in Feb 2025 (22 days) and Jul 2025 (24 days). They made Nov-Dec 2025 look like large growth in the 12-month trend. **Cause (owner):** Isabel La Católica, San Jerónimo, Playa del Carmen, Cancún, Versalles (Exhibimex) and Parroquia worked in Odoo in Nov-Dec 2024 (the 2024 pilot), so Wansoft does not have those months complete; the data is not recoverable from Wansoft and the gap rule below is the permanent treatment.
+- **Rule for the month trend:** a branch-month with data on less than 90% of its days AFTER the branch opened is a source gap; that branch is left out of BOTH years of that month and the note lists the months affected (with how many branches). A branch's opening month counts as it is (new-branch effect). A single-branch trend just says which months are not compared.
+- **Month in progress:** the trend compares it month-to-date (days 1..N of both years), with a note ("sep 26 a la fecha: días 1 al 23 de ambos años").
+- **Automations of the commercial report: weekly AND monthly** (owner, 2026-09-24): two automations of the same report, each with its single period kind (week, month), per the one-kind-per-automation rule. To be built in Phase 5.
+- Trends for semester/year (approved design, to build after the PDF): a chart of year-over-year growth by month for gross sales and guests (traffic) on comparable branches, in % with a 0% reference line (one axis), plus a trend sentence in the Lectura.
+
 ## 2026-09-24 — Month charts measure calendar months
 
 - **Why:** pairing two different months day by day mixes in the day-of-week effect (Aug 1 2026 was a Saturday, Aug 1 2025 a Friday); the owner wants to measure the calendar month. Prototypes of a cumulative line and a cumulative % gap were rejected (lines overlap when months are similar; the gap exaggerates the first days).
