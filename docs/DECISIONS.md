@@ -2,6 +2,14 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — PDF of the commercial report
+
+- **One letter page per report** (`central/salidas/pdf_comercial.py`, reportlab): title with branch and period (and what it is compared with), the Lectura box (a coloured dot per observation: green good, red bad, amber warning, grey neutral), the indicators table (arrows drawn as coloured triangles, values in text colour), the two charts side by side, and the footnotes. If the footnotes do not fit they continue on a second page with the same template (not needed in the tested cases: branch week, branch month, 19-branch consolidated month).
+- **Template:** the same brand background as the monthly executive PDFs (copied into the app as `central/salidas/recursos/fondo_fonda.jpeg`; the scripts keep their own copy), content starts below the logo badge, footnotes kept clear of the watermark. **Font: DejaVu Sans** (bundled with matplotlib, so no extra dependency): the standard PDF fonts (Times) lack the ▲ ▼ glyphs, and it is the charts' font.
+- A table section with no value at all in the period is left out (e.g. Costo de Ventas for branches not in Presupuestos AP), instead of a block of dashes.
+- The "Monday-Sunday / ISO week" rule is listed in the footnotes of weekly reports only.
+- `central/motor/reporte_comercial.py` now assembles the report once (Lectura, table, charts, footnotes) for every output; `probar_reporte --pdf <folder>` writes one PDF per report.
+
 ## 2026-09-24 — Gross sales in charts, source gaps in the trend, automations
 
 - **Charts use gross sales (con IVA)** (owner: gross measures the impact of sales). `venta_por_dia` holds gross sales again; titles say "Venta bruta". The table keeps both gross and net rows.

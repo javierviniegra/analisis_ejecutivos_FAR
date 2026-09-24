@@ -24,7 +24,7 @@ def variacion(var, formato: str) -> str:
     percentage points for shares. 's/c' when there is nothing to compare."""
     if var.porcentaje is None:
         return var.simbolo
-    signo = "+" if var.porcentaje > 0 else ""
-    if formato == PORCENTAJE:
-        return f"{var.simbolo} {signo}{var.porcentaje * 100:.1f} pp"
-    return f"{var.simbolo} {signo}{var.porcentaje * 100:.1f}%"
+    cifra = round(var.porcentaje * 100, 1) + 0  # + 0 turns -0.0 into 0.0
+    signo = "+" if cifra > 0 else ""
+    unidad = " pp" if formato == PORCENTAJE else "%"
+    return f"{var.simbolo} {signo}{cifra:.1f}{unidad}"

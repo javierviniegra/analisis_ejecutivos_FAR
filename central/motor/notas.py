@@ -71,8 +71,8 @@ def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Comparacion | 
     return notas
 
 
-def notas_reglas() -> list[str]:
-    return [
+def notas_reglas(periodo: Periodo | None = None) -> list[str]:
+    reglas = [
         f"Flechas: ▲ verde mejora, ▼ rojo empeora; «=» gris si el cambio está dentro de ±{_pct(UMBRAL_IGUAL)} "
         f"(±{_pp(UMBRAL_IGUAL)}, puntos porcentuales, en porcentajes). En cancelaciones, cortesías y descuentos subir es peor. "
         "Mezcla, canal y presupuesto se muestran siempre en gris.",
@@ -83,14 +83,16 @@ def notas_reglas() -> list[str]:
         "la columna del periodo muestra siempre el total de todas las sucursales elegidas.",
         f"Día operativo: un cierre de caja hecho antes de las {HORA_CORTE_DIA}:00 cuenta para el día anterior; "
         "los cierres duplicados (mismo día y mismos totales) se cuentan una sola vez.",
-        "Semana de lunes a domingo; el mismo periodo del año anterior de una semana es la misma semana ISO "
-        "del año anterior.",
         f"Lectura: controles solo si suben y pesan al menos {_pct(lectura.UMBRAL_PESO_CONTROL)} de la venta neta; "
         f"mezcla y canal solo si se mueven más de {_pp(lectura.UMBRAL_PUNTOS_MEZCLA)}; Costo de Ventas solo si "
         "supera el presupuesto prorrateado por días.",
     ]
+    if periodo is None or periodo.tipo == TipoPeriodo.SEMANA:
+        reglas.insert(4, "Semana de lunes a domingo; la misma semana del año anterior es la misma semana ISO "
+                         "del año anterior.")
+    return reglas
 
 
 def notas_pie(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,
               anio_anterior: Comparacion | Metricas | None) -> list[str]:
-    return notas_cobertura(periodo, actual, anterior, anio_anterior) + notas_reglas()
+    return notas_cobertura(periodo, actual, anterior, anio_anterior) + notas_reglas(periodo)
