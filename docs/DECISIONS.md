@@ -2,6 +2,14 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — Indicators, consolidation and timing
+
+- `central/motor/metricas.py` (metrics of one branch or a consolidated set, with explicit coverage) and `central/motor/tabla_comercial.py` (indicator table with arrows) are pure and tested; `manage.py probar_reporte <branches|todas> --tipo <kind> --fecha/--desde/--hasta [--consolidado]` runs them against the real sources.
+- **Shares are compared in percentage points** (threshold 1 point); mix, channel and budget rows keep their arrow but always grey (no good/bad direction).
+- **Costo de Ventas real is shown even when no budget is captured** (a missing budget is not a zero target); `% ejercido` only uses branches that have both, so branches without budget never distort it.
+- **Timing (dev copy):** all 19 branches consolidated for one period plus its two comparison periods takes ~56 s (queries run per branch). Acceptable for on-demand in dev; batching per-branch queries into one is a known optimization before production.
+- Real Costo de Ventas is keyed by the week of goods receipt/payment in ControlPresupuestos_AP, so week-to-week swings (e.g. Puebla $13k vs $319k) reflect purchasing/receipt rhythm, not a calculation error.
+
 ## 2026-09-24 — Name, on-demand model and open periods
 
 - **Name:** the application is **Central de Reportes** (a library of reports plus automations). Django app `central` (renamed from `reportes`; tables `central_*`, existing data preserved by renaming tables and Django's content-type/migration records). URL prefix behind the proxy: `/central_reportes/`. The repo remains `analisis_ejecutivos_FAR` (renaming it on GitHub is the owner's call).
@@ -15,7 +23,7 @@ Newest first. Each entry: what, why, and where it applies.
 - **Operating day of a cash closing:** `getglobalcashclosing.fecha_corte` is when the closing was done. A closing before 14:00 belongs to the PREVIOUS operating day (validated: 30/30 days of a full month match the ticket detail to the cent; unshifted only 8/30).
 - **Duplicate closings exist in the source.** The same closing can be stored several times (same operating day, identical totals; e.g. three identical rows 13 s apart, or the previous night's closing re-issued the next noon). The engine counts one row per identical (day, totals). **Impact on the August 2026 executive PDFs already delivered:** they summed the table without deduplicating; 4 duplicate rows in 3 branches (San Jeronimo $152,228, Viaducto $110,188, Tepeyac $74,270; about $337k of $67.5M, 0.5%). Puebla not affected. Decision pending: regenerate those 3 PDFs with the deduplicated numbers.
 - **Branch mapping across systems:** `Sucursal` now carries `wansoft_subsidiary_id`, `wansoft_ticket_nombre` and `odoo_company_id` (loaded by `cargar_sucursales`); no name matches across systems, so queries use these keys, never names.
-- **Ticket detail coverage is partial for some branches** (added late, or none: Metepec, Versalles). Coverage (days with data out of 7) is returned so reports can flag partial data.
+- **Ticket detail coverage is partial for several branches** (loaded late; e.g. Metepec and Versalles only have detail from 2026-08-21). Coverage (days with data out of the days expected) is returned so reports can flag partial data. *Correction (2026-09-24):* an earlier note in these docs and in the August PDFs' handling claimed Metepec and Versalles had NO ticket detail; that was wrong (they were searched under the wrong names, Tollocan/Exhibimex). Their August PDFs show N/D for waiters/mix where partial data (with an asterisk) was possible.
 - **Presupuestos AP** is only active for the 7 Odoo-migrated branches; other branches have no budget block (None, never zero). Its "everything else" spread logic is reproduced (and tested) so numbers agree with its dashboard.
 - **Read-only by construction:** every source connection runs `SET SESSION TRANSACTION READ ONLY`; production accounts must also be SELECT-only.
 - **RISK before production use:** `getallordenesbyday_new_venta` is large and unindexed on (Sucursal, Fecha); on 2026-09-15 an ad-hoc query against the production copy hung for over an hour. Channel and mix queries filter on exactly those columns. Before pointing at production: check row count and indexes, run off-peak, and decide with the owner whether to request an index. Fine on the local dev copy.

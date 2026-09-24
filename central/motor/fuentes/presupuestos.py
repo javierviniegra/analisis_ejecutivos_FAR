@@ -105,9 +105,16 @@ def presupuesto_costo_ventas(cur, odoo_company_id: int, desde: date, hasta: date
     return prorratear_mensual(mensual, desde, hasta)
 
 
-def gasto_real_costo_ventas(cur, odoo_company_id: int, lunes: date) -> Decimal | None:
-    """Real Costo de Ventas spend of the week starting Monday `lunes`, or None
-    when the branch is not active in ControlPresupuestos_AP."""
+def gasto_real_costo_ventas(cur, odoo_company_id: int, desde: date, hasta: date) -> Decimal | None:
+    """Real Costo de Ventas spend for [desde, hasta], or None when the branch
+    is not active in ControlPresupuestos_AP.
+
+    The source keys spend by week (the Monday of the week it counts toward),
+    so a period includes the weeks whose Monday falls inside it. For a
+    Monday-Sunday week that is exactly that week; for longer periods (month,
+    year, range) a week straddling a boundary counts entirely in the period
+    that contains its Monday.
+    """
     sucursal = _sucursal_id(cur, odoo_company_id)
     if sucursal is None:
         return None
@@ -117,8 +124,8 @@ def gasto_real_costo_ventas(cur, odoo_company_id: int, lunes: date) -> Decimal |
         FROM presupuestos_gastoreal g
         JOIN presupuestos_tipogasto t ON t.id = g.tipo_gasto_id
         JOIN presupuestos_categoria c ON c.id = t.categoria_id
-        WHERE g.sucursal_id = %s AND g.semana = %s AND c.nombre = %s
+        WHERE g.sucursal_id = %s AND g.semana >= %s AND g.semana <= %s AND c.nombre = %s
         """,
-        (sucursal, lunes, CATEGORIA),
+        (sucursal, desde, hasta, CATEGORIA),
     )
     return Decimal(cur.fetchone()[0] or 0)
