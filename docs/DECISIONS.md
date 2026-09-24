@@ -2,6 +2,14 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — Name, on-demand model and open periods
+
+- **Name:** the application is **Central de Reportes** (a library of reports plus automations). Django app `central` (renamed from `reportes`; tables `central_*`, existing data preserved by renaming tables and Django's content-type/migration records). URL prefix behind the proxy: `/central_reportes/`. The repo remains `analisis_ejecutivos_FAR` (renaming it on GitHub is the owner's call).
+- **The system is on-demand.** For each report the user chooses branches (one, several or all) and the period; automations are the special case with a single, predefined period kind.
+- **Open periods:** `central/motor/periodo.py` — week (Monday-Sunday, ISO number), month, bimester, quarter, semester, year, or a free date range. Each kind defines its "previous period" (previous week/block/year; for a range, the equally long range ending the day before it starts) and its "same period last year" (same ISO week number, same block, or the same dates one year earlier; week 53 and Feb 29 are handled). An automation is bound to exactly ONE kind.
+- **Multi-branch behaviour is dictated by each report:** `alcance` is per branch, consolidated or both (`ambos`); there is no global rule.
+- **August 2026 executive PDFs:** not regenerated now (they come from the old script and do not deduplicate closings; 3 branches affected, see the data-layer entry). They will be regenerated once the monthly report runs on the new engine.
+
 ## 2026-09-23 — Data layer for the weekly commercial report (findings and rules)
 
 - **Operating day of a cash closing:** `getglobalcashclosing.fecha_corte` is when the closing was done. A closing before 14:00 belongs to the PREVIOUS operating day (validated: 30/30 days of a full month match the ticket detail to the cent; unshifted only 8/30).

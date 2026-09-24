@@ -1,6 +1,6 @@
-# Analisis Ejecutivos
+# Central de Reportes
 
-Web application (Django) for Grupo Fonda Argentina that will:
+**Central de Reportes** — web application (Django) for Grupo Fonda Argentina: a library of reports and automations, on demand by branch(es) and period. It will:
 
 1. **Show** report information to authorized users.
 2. **Generate** reports as Excel, PDF or both.
@@ -28,9 +28,9 @@ Initial reports planned: weekly commercial report for managers (not yet defined)
 
 - `config/` — Django project (settings, urls, wsgi). Settings are env-driven; see `config/.env.example`.
 - `cuentas/` — users: `Sucursal`, `PerfilUsuario` (branch scope per user), role bootstrap command.
-- `reportes/` — report catalog: `Reporte` model (category, periodicity, template, data source, scope, formats, state, allowed profiles), `cargar_catalogo` seed command, catalog/detail pages.
-- `reportes/motor/` — engine building blocks shared by every report: `periodos.py` (Monday-Sunday weeks, previous week, same ISO week last year, monthly-to-daily budget proration) and `comparativos.py` (variation and arrow rule, +-1% threshold).
-- `reportes/motor/fuentes/` — read-only data access: `wansoft.py` (deduplicated daily cash closings by operating day, channel, mix), `presupuestos.py` (Costo de Ventas budget vs real from ControlPresupuestos_AP), `conexiones.py`. Verify with `python manage.py probar_semana <branch> [date]`. Branch mapping across systems: `python manage.py cargar_sucursales`.
+- `central/` — the report library (Django app `central`): report catalog: `Reporte` model (category, periodicity, template, data source, scope, formats, state, allowed profiles), `cargar_catalogo` seed command, catalog/detail pages.
+- `central/motor/` — engine building blocks shared by every report: `periodos.py` (Monday-Sunday weeks, previous week, same ISO week last year, monthly-to-daily budget proration) and `comparativos.py` (variation and arrow rule, +-1% threshold).
+- `central/motor/fuentes/` — read-only data access: `wansoft.py` (deduplicated daily cash closings by operating day, channel, mix), `presupuestos.py` (Costo de Ventas budget vs real from ControlPresupuestos_AP), `conexiones.py`. Verify with `python manage.py probar_semana <branch> [date]`. Branch mapping across systems: `python manage.py cargar_sucursales`.
 - `templates/` — shared templates (`base.html`, login, admin branding). Same look as ControlPresupuestos_AP: brand green `#035953`, dark green `#023f3b`, cream `#f0e9d8`, gradient login card, Fonda Argentina logo.
 - `static/ejecutivos/` — logo and admin theme CSS (copied from ControlPresupuestos_AP so both apps stay visually consistent).
 - `scripts/` — standalone report generators (pre-Django). `build_executive_pdf_all.py` is the current standard (19 branches); `build_executive_pdf.py` and `build_executive_pdf_multi.py` are historical.
@@ -40,7 +40,7 @@ Initial reports planned: weekly commercial report for managers (not yet defined)
 
 - Django `>=4.2,<5.0` (the dev/prod MariaDB is 10.4.32; Django 5 needs 10.5+).
 - `.env` driven, with a `_DEV` suffix for the dev database variables. **One deliberate difference:** the `.env` lives at `config/.env`, not `core/config/.env`, because this repo has no `core` package (the scripts import the Wansoft repo's own `core`; two packages with that name would collide).
-- Production: Waitress + WhiteNoise on the app machine, behind the Apache reverse proxy under the URL prefix `/analisis_ejecutivos/`.
+- Production: Waitress + WhiteNoise on the app machine, behind the Apache reverse proxy under the URL prefix `/central_reportes/`.
 - **Port 8040** (dev and production). Do not use 8000 (XAMPP), 8010/8020 (ControlPresupuestos_AP).
 - The app's own database (users, profiles, subscriptions, send log) lives on the **separate database server**, not on the app machine.
 

@@ -11,8 +11,8 @@ from datetime import date
 from django.core.management.base import BaseCommand, CommandError
 
 from cuentas.models import Sucursal
-from reportes.motor import periodos
-from reportes.motor.fuentes import conexiones, presupuestos, wansoft
+from central.motor import periodos
+from central.motor.fuentes import conexiones, presupuestos, wansoft
 
 
 class Command(BaseCommand):

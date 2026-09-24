@@ -39,6 +39,7 @@ class Reporte(models.Model):
     class Alcance(models.TextChoices):
         POR_SUCURSAL = "por_sucursal", "Un reporte por sucursal"
         CONSOLIDADO = "consolidado", "Consolidado (todas las sucursales juntas)"
+        AMBOS = "ambos", "Por sucursal y consolidado"
 
     class Estado(models.TextChoices):
         PENDIENTE = "pendiente_definicion", "Pendiente de definir"

@@ -8,7 +8,7 @@ nobody but staff sees them until access is granted in the admin.
 
 from django.core.management.base import BaseCommand
 
-from reportes.models import Reporte
+from central.models import Reporte
 
 C, P, F, S = Reporte.Categoria, Reporte.Periodicidad, Reporte.Plantilla, Reporte.Fuente
 A, E = Reporte.Alcance, Reporte.Estado

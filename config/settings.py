@@ -1,5 +1,5 @@
 """
-Django settings for the Analisis Ejecutivos project.
+Django settings for Central de Reportes (repo analisis_ejecutivos_FAR).
 
 Mirrors the conventions of ControlPresupuestos_AP (env-driven, _DEV suffix
 for the dev database, optional URL prefix when reverse-proxied, WhiteNoise +
@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "cuentas",
-    "reportes",
+    "central",
 ]
 
 MIDDLEWARE = [

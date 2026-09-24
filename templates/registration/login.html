@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Iniciar sesión - Análisis Ejecutivos</title>
+<title>Iniciar sesión - Central de Reportes</title>
 <style>
   :root {
     --verde: #035953;
@@ -73,11 +73,11 @@
 <body>
   <div class="card">
     <img class="logo" src="{% static 'ejecutivos/img/logo.png' %}" alt="Fonda Argentina">
-    <h1>Análisis Ejecutivos</h1>
+    <h1>Central de Reportes</h1>
     <p class="descripcion">
-      Sistema de reportes de Fonda Argentina: consulta, generación (Excel/PDF) y envío
-      programado por correo de los reportes comerciales, operativos y financieros de cada
-      sucursal, según tu perfil.
+      Biblioteca de reportes y automatizaciones de Fonda Argentina: consulta, generación (Excel/PDF)
+      por sucursal y periodo, y envío programado por correo de los reportes comerciales, operativos
+      y financieros, según tu perfil.
     </p>
     {% if form.errors %}
       <div class="errores">Usuario o contraseña incorrectos.</div>
