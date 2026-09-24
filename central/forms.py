@@ -19,6 +19,7 @@ TIPOS = [
 MAX_DIAS_RANGO = 366
 
 POR_SUCURSAL, CONSOLIDADO = "por_sucursal", "consolidado"
+UN_ARCHIVO, SEPARADOS = "un_archivo", "separados"
 
 
 class GenerarForm(forms.Form):
@@ -32,6 +33,10 @@ class GenerarForm(forms.Form):
     hasta = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
     modo = forms.ChoiceField(choices=[(POR_SUCURSAL, "Un reporte por sucursal"), (CONSOLIDADO, "Consolidado")],
                              widget=forms.RadioSelect, label="Presentación")
+    # Rule (owner, 2026-09-24): several branches per branch -> always ask; no default.
+    entrega = forms.ChoiceField(required=False, widget=forms.RadioSelect, label="Entrega",
+                                choices=[(UN_ARCHIVO, "Todo en un PDF (una página por sucursal)"),
+                                         (SEPARADOS, "Un PDF por sucursal (se descargan juntos en un .zip)")])
 
     def __init__(self, *args, reporte: Reporte, sucursales, **kwargs):
         super().__init__(*args, **kwargs)
@@ -47,6 +52,10 @@ class GenerarForm(forms.Form):
 
     def clean(self):
         datos = super().clean()
+        varias = len(datos.get("sucursales") or []) > 1 and datos.get("modo") == POR_SUCURSAL
+        if varias and not datos.get("entrega"):
+            self.add_error("entrega", "Elige si quieres todo en un PDF o un PDF por sucursal.")
+        datos["separados"] = varias and datos.get("entrega") == SEPARADOS
         tipo = datos.get("tipo")
         if not tipo:
             return datos

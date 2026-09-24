@@ -57,6 +57,12 @@
     {{ form.modo }}
   </fieldset>
 
+  <fieldset class="campo opciones" id="con-entrega">
+    <legend>Entrega</legend>
+    {{ form.entrega }}
+    {{ form.entrega.errors }}
+  </fieldset>
+
   <button class="btn" id="enviar" {% if not form.fields.sucursales.queryset %}disabled{% endif %}>Generar PDF</button>
   <span class="muted aviso" id="aviso">Generando… puede tardar hasta un minuto con muchas sucursales o periodos largos.</span>
 </form>
@@ -73,8 +79,19 @@
     tipo.addEventListener("change", mostrar);
     mostrar();
 
+    // Several branches, one report each: ask how to deliver them (one PDF or one per branch).
+    function entrega() {
+      var marcadas = document.querySelectorAll(".sucursales input[type=checkbox]:checked").length;
+      var modo = document.querySelector("input[name=modo]:checked");
+      var porSucursal = !modo || modo.value === "por_sucursal";
+      document.getElementById("con-entrega").style.display = (marcadas > 1 && porSucursal) ? "" : "none";
+    }
+    document.getElementById("generar").addEventListener("change", entrega);
+    entrega();
+
     function marcar(valor) {
       document.querySelectorAll(".sucursales input[type=checkbox]").forEach(function (c) { c.checked = valor; });
+      entrega();
     }
     var todas = document.getElementById("todas"), ninguna = document.getElementById("ninguna");
     if (todas) { todas.onclick = function () { marcar(true); }; ninguna.onclick = function () { marcar(false); }; }

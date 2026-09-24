@@ -52,10 +52,11 @@ class GenerarTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertIn('attachment; filename="Reporte.pdf"', r["Content-Disposition"])
-        sucursales, periodo, consolidado = self._generador().call_args.args
+        sucursales, periodo, consolidado, separados = self._generador().call_args.args
         self.assertEqual(sucursales, [self.puebla])
         self.assertEqual(periodo, Periodo.semana_de(date(2026, 9, 16)))
         self.assertFalse(consolidado)
+        self.assertFalse(separados)  # one branch: nothing to ask
 
     def test_no_puede_pedir_una_sucursal_ajena(self):
         r = self.client.post(self.url, {"sucursales": [self.acoxpa.pk], "tipo": "mes",
@@ -71,7 +72,7 @@ class GenerarTests(TestCase):
         self.assertContains(r, "todavía no empieza")
         r = self.client.post(self.url, {**base, "tipo": "rango", "desde": "2026-09-01", "hasta": "2026-09-10"})
         self.assertEqual(r.status_code, 200)
-        _, periodo, consolidado = self._generador().call_args.args
+        _, periodo, consolidado, _ = self._generador().call_args.args
         self.assertEqual((periodo.desde, periodo.hasta, consolidado), (date(2026, 9, 1), date(2026, 9, 10), True))
 
     def test_alcance_por_sucursal_no_ofrece_consolidado(self):
@@ -102,3 +103,30 @@ class GenerarTests(TestCase):
             r = self.client.post(self.url, {"sucursales": [self.puebla.pk], "tipo": "semana",
                                             "fecha": "2026-09-16", "modo": "por_sucursal"})
         self.assertContains(r, "No se pudo generar el reporte")
+
+    def test_varias_por_sucursal_siempre_pregunta_la_entrega(self):
+        self.gerente.perfil.sucursales.add(self.acoxpa)
+        base = {"sucursales": [self.puebla.pk, self.acoxpa.pk], "tipo": "semana", "fecha": "2026-09-16",
+                "modo": "por_sucursal"}
+        r = self.client.post(self.url, base)  # no answer: no default, the question comes back
+        self.assertContains(r, "Elige si quieres todo en un PDF o un PDF por sucursal")
+        self.assertFalse(self._generador().called)
+        self.client.post(self.url, {**base, "entrega": "separados"})
+        self.assertTrue(self._generador().call_args.args[3])
+        self.client.post(self.url, {**base, "entrega": "un_archivo"})
+        self.assertFalse(self._generador().call_args.args[3])
+        self.client.post(self.url, {**base, "modo": "consolidado"})  # consolidated: one page, nothing to ask
+        self.assertEqual(self._generador().call_args.args[2:], (True, False))
+
+
+class ZipTests(TestCase):
+    def test_zip_con_un_pdf_por_archivo(self):
+        import io
+        import zipfile
+
+        from .generadores import _zip
+        archivo = _zip([("A.pdf", b"%PDF-a"), ("B.pdf", b"%PDF-b")], "Reportes.zip")
+        self.assertEqual((archivo.nombre, archivo.tipo), ("Reportes.zip", "application/zip"))
+        with zipfile.ZipFile(io.BytesIO(archivo.contenido)) as z:
+            self.assertEqual(z.namelist(), ["A.pdf", "B.pdf"])
+            self.assertEqual(z.read("B.pdf"), b"%PDF-b")
