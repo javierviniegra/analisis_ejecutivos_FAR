@@ -6,7 +6,7 @@ Optionally save the charts as PNG and the PDF. A verification tool.
     python manage.py probar_reporte puebla acoxpa antenas --tipo mes --fecha 2026-08-15
     python manage.py probar_reporte todas --tipo bimestre --fecha 2026-08-15 --consolidado
     python manage.py probar_reporte puebla --tipo rango --desde 2026-09-01 --hasta 2026-09-20
-    python manage.py probar_reporte puebla --tipo semana --fecha 2026-09-14 --graficas C:/temp/graficas --pdf C:/temp/pdf
+    python manage.py probar_reporte puebla --tipo semana --fecha 2026-09-14 --graficas C:/temp/graficas --pdf C:/temp/pdf --excel C:/temp/excel
 """
 
 import sys
@@ -18,7 +18,7 @@ from django.core.management.base import BaseCommand, CommandError
 from central.motor import formato, reporte_comercial
 from central.motor.graficas_png import dibujar
 from central.motor.periodo import Periodo, TipoPeriodo
-from central.salidas import pdf_comercial
+from central.salidas import excel_comercial, pdf_comercial
 from cuentas.models import Sucursal
 
 
@@ -34,6 +34,7 @@ class Command(BaseCommand):
         parser.add_argument("--consolidado", action="store_true", help="Add the selected branches into one report")
         parser.add_argument("--graficas", help="Folder where the charts are saved as PNG (optional)")
         parser.add_argument("--pdf", help="Folder where the PDF is saved, one per report (optional)")
+        parser.add_argument("--excel", help="Folder where the Excel workbook is saved, one per report (optional)")
 
     def _periodo(self, tipo, fecha, desde, hasta) -> Periodo:
         if tipo == TipoPeriodo.RANGO:
@@ -42,7 +43,7 @@ class Command(BaseCommand):
             return Periodo.rango(date.fromisoformat(desde), date.fromisoformat(hasta))
         return Periodo.de_fecha(tipo, date.fromisoformat(fecha) if fecha else date.today())
 
-    def handle(self, *args, sucursales, tipo, fecha, desde, hasta, consolidado, graficas, pdf, **options):
+    def handle(self, *args, sucursales, tipo, fecha, desde, hasta, consolidado, graficas, pdf, excel, **options):
         # Windows consoles default to cp1252, which cannot print the arrows.
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         periodo = self._periodo(TipoPeriodo(tipo), fecha, desde, hasta)
@@ -91,3 +92,9 @@ class Command(BaseCommand):
                 archivo = carpeta / pdf_comercial.nombre_archivo([r])
                 archivo.write_bytes(pdf_comercial.generar([r]))
                 self.stdout.write(f"    pdf: {archivo}")
+            if excel:
+                carpeta = Path(excel)
+                carpeta.mkdir(parents=True, exist_ok=True)
+                archivo = carpeta / excel_comercial.nombre_archivo([r])
+                archivo.write_bytes(excel_comercial.generar([r]))
+                self.stdout.write(f"    excel: {archivo}")

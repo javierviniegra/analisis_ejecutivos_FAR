@@ -2,6 +2,12 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-24 — Excel output of the commercial report
+
+- **Workbook per report** (`central/salidas/excel_comercial.py`, openpyxl, approved design): *Resumen* (header, Lectura, indicators table with real numbers so they can be worked on: values with number formats, the change as a number in its own column -- relative % or percentage points -- and the coloured arrow in the next column; `s/c` / `s/cf` when not comparable; empty sections left out as in the PDF), one sheet per chart with its data and a native Excel column chart (month: *Venta por día*, *Venta mensual*; other periods: *Vs periodo anterior*, *Vs año anterior*), and *Notas*. Several reports in one workbook: each sheet name starts with the branch.
+- **Web:** the format is chosen on the screen (PDF, Excel, or both), offering only what the report admits (`admite_pdf` / `admite_excel`; the commercial report now admits both, seed and dev database). Whenever the answer is several files (one per branch and/or PDF + Excel) they are downloaded together in a .zip. The delivery question now speaks of files, not PDFs.
+- File names and the "hide empty sections" rule are shared by both outputs (`reporte_comercial.nombre_base`, `filas_visibles`).
+
 ## 2026-09-24 — Sales targets: found, but no 2026 data (pending task)
 
 - **Source found:** the owner's SharePoint folder *Directores > Documentos compartidos > General > BI_Fonda* (synced locally under `OneDrive - GRUPO FONDA ARGENTINA\General - Directores Fonda Argentina\BI_Fonda`) holds scorecard Excel files with **monthly targets per branch in four levels: Mínimo, Meta chica, Meta grande, Máximo**, for sales (`scorecard_ventas.xlsx`, gross sales con IVA: e.g. Acoxpa Jan 2025 meta chica $6.28M vs $6.20M real gross), guests (`scorecard_comensales.xlsx`), average check (`socrecard_cheque.xlsx`) and average ticket (`socrecard_ticket.xlsx`). The `*_semana.xlsx` files are partial copies of the monthly ones (empty week column).

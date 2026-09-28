@@ -29,7 +29,7 @@ from ..motor.comparativos import BAJA, IGUAL, ROJO, SUBE, VERDE
 from ..motor.graficas_png import dibujar
 from ..motor.lectura import AVISO, NEGATIVO, POSITIVO
 from ..motor.periodo import _MESES_ES
-from ..motor.reporte_comercial import TITULO, ReporteComercial
+from ..motor.reporte_comercial import TITULO, ReporteComercial, filas_visibles, nombre_base
 
 FONDO = str(Path(__file__).resolve().parent / "recursos" / "fondo_fonda.jpeg")
 
@@ -156,13 +156,6 @@ def _variacion(c, x_der: float, y: float, var, fmt: str):
         c.drawRightString(x_der, y, texto if var.direccion == IGUAL else var.simbolo)
 
 
-def _filas_visibles(filas):
-    """A section with no value at all in the period (e.g. Costo de Ventas for a
-    branch that is not in Presupuestos AP) is left out of the page."""
-    vacias = {f.indicador.seccion for f in filas} - {f.indicador.seccion for f in filas if f.actual is not None}
-    return [f for f in filas if f.indicador.seccion not in vacias]
-
-
 def _tabla(c, r: ReporteComercial, y: float) -> float:
     columnas = [170, 80, 80, 53, 80, 53]  # indicator, period, previous, var, last year, var (= ANCHO_UTIL)
     alto = 10.4
@@ -178,7 +171,7 @@ def _tabla(c, r: ReporteComercial, y: float) -> float:
         c.drawRightString(x[i + 1] - 5, y - 6, h)
     y -= alto + 1
     seccion, par = None, False
-    for f in _filas_visibles(r.filas):
+    for f in filas_visibles(r.filas):
         if f.indicador.seccion != seccion:
             seccion = f.indicador.seccion
             c.setFillColor(VERDE_MARCA)
@@ -259,13 +252,5 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
     return salida.getvalue()
 
 
-def _limpio(base: str) -> str:
-    limpio = "".join(ch if ch.isalnum() else "_" for ch in base)
-    return "_".join(p for p in limpio.split("_") if p) + ".pdf"
-
-
 def nombre_archivo(reportes: list[ReporteComercial]) -> str:
-    """File name: the branch (or "Consolidado"), or how many branches when
-    the PDF holds one page per branch; then the period."""
-    quien = reportes[0].nombre if len(reportes) == 1 else f"{len(reportes)} sucursales"
-    return _limpio(f"Reporte_Comercial_{quien}_{reportes[0].periodo.etiqueta()}")
+    return nombre_base(reportes) + ".pdf"

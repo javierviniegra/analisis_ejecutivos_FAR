@@ -48,7 +48,7 @@ def generar(request, clave):
         datos = form.cleaned_data
         try:
             archivo = GENERADORES[clave](list(datos["sucursales"]), datos["periodo"],
-                                         datos["modo"] == CONSOLIDADO, datos["separados"])
+                                         datos["modo"] == CONSOLIDADO, datos["separados"], datos["formatos"])
         except Exception:  # a source down or a query over the time cap: tell the user, keep the details in the log
             log.exception("Report generation failed: %s", clave)
             error = "No se pudo generar el reporte (fuente de datos no disponible o consulta demasiado larga). Intenta de nuevo o con un periodo más corto."

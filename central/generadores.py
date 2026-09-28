@@ -2,8 +2,9 @@
 
 A report appears with a "Generar" button only when its key is registered
 here; the rest of the catalog stays descriptive until its generator exists.
-Each generator receives the branches, the period, whether to consolidate and
-whether to deliver one file per branch, and returns the file to download.
+Each generator receives the branches, the period, whether to consolidate,
+whether to deliver one file per branch and the formats (PDF / Excel), and
+returns the file to download (a .zip when that makes several files).
 """
 
 import io
@@ -13,7 +14,7 @@ from typing import Callable
 
 from .motor import reporte_comercial
 from .motor.periodo import Periodo
-from .salidas import pdf_comercial
+from .salidas import excel_comercial, pdf_comercial
 
 
 @dataclass(frozen=True)
@@ -31,16 +32,28 @@ def _zip(archivos: list[tuple[str, bytes]], nombre: str) -> Archivo:
     return Archivo(salida.getvalue(), nombre, "application/zip")
 
 
-def _comercial(sucursales: list, periodo: Periodo, consolidado: bool, separados: bool) -> Archivo:
+PDF, EXCEL = "pdf", "excel"
+
+
+def _comercial(sucursales: list, periodo: Periodo, consolidado: bool, separados: bool, formatos: set[str]) -> Archivo:
     reportes = reporte_comercial.armar(sucursales, periodo, consolidado)
-    if separados:  # one PDF per branch, downloaded together in a .zip
-        pdfs = [(pdf_comercial.nombre_archivo([r]), pdf_comercial.generar([r])) for r in reportes]
-        return _zip(pdfs, pdf_comercial.nombre_archivo(reportes)[:-4] + ".zip")
-    return Archivo(pdf_comercial.generar(reportes), pdf_comercial.nombre_archivo(reportes), "application/pdf")
+    grupos = [[r] for r in reportes] if separados else [reportes]  # one file per branch, or all together
+    archivos = []
+    for grupo in grupos:
+        if PDF in formatos:
+            archivos.append((pdf_comercial.nombre_archivo(grupo), pdf_comercial.generar(grupo), "application/pdf"))
+        if EXCEL in formatos:
+            archivos.append((excel_comercial.nombre_archivo(grupo), excel_comercial.generar(grupo),
+                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+    if len(archivos) == 1:
+        nombre, contenido, tipo = archivos[0]
+        return Archivo(contenido, nombre, tipo)
+    # several files (one per branch and/or PDF + Excel): downloaded together in a .zip
+    return _zip([(n, c) for n, c, _ in archivos], reporte_comercial.nombre_base(reportes) + ".zip")
 
 
-# (branches, period, consolidated, one file per branch) -> file to download
-GENERADORES: dict[str, Callable[[list, Periodo, bool, bool], Archivo]] = {
+# (branches, period, consolidated, one file per branch, formats) -> file to download
+GENERADORES: dict[str, Callable[[list, Periodo, bool, bool, set[str]], Archivo]] = {
     "comercial-semanal-gerentes": _comercial,
 }
 

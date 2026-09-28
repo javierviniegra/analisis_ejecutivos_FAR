@@ -31,7 +31,7 @@ CATALOGO = [
         "cancelaciones, cortesias y descuentos; Costo de Ventas real vs presupuesto; lectura por reglas y dos graficas. Cada indicador "
         "se compara contra el periodo anterior y el mismo periodo del anio anterior (sucursales comparables), con columna de flechas.",
         categoria=C.COMERCIAL, periodicidad=P.SEMANAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
-        alcance=A.AMBOS, admite_pdf=True, estado=E.IMPLEMENTADO,
+        alcance=A.AMBOS, admite_pdf=True, admite_excel=True, estado=E.IMPLEMENTADO,
         notas="Definido 2026-09-23. Semana lunes-domingo; canal = tipo de orden de Wansoft; sin meta de venta por ahora (llegara de un KPI por definir); "
         "bloque extra de Costo de Ventas real vs presupuesto de Presupuestos AP prorrateado por dias. Fuentes: Wansoft y Presupuestos AP (solo lectura).",
     ),

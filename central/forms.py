@@ -20,6 +20,7 @@ MAX_DIAS_RANGO = 366
 
 POR_SUCURSAL, CONSOLIDADO = "por_sucursal", "consolidado"
 UN_ARCHIVO, SEPARADOS = "un_archivo", "separados"
+PDF, EXCEL, AMBOS = "pdf", "excel", "ambos"
 
 
 class GenerarForm(forms.Form):
@@ -35,8 +36,10 @@ class GenerarForm(forms.Form):
                              widget=forms.RadioSelect, label="Presentación")
     # Rule (owner, 2026-09-24): several branches per branch -> always ask; no default.
     entrega = forms.ChoiceField(required=False, widget=forms.RadioSelect, label="Entrega",
-                                choices=[(UN_ARCHIVO, "Todo en un PDF (una página por sucursal)"),
-                                         (SEPARADOS, "Un PDF por sucursal (se descargan juntos en un .zip)")])
+                                choices=[(UN_ARCHIVO, "Todo en un archivo (una página u hoja por sucursal)"),
+                                         (SEPARADOS, "Un archivo por sucursal (se descargan juntos en un .zip)")])
+    formato = forms.ChoiceField(widget=forms.RadioSelect, label="Formato",
+                                choices=[(PDF, "PDF"), (EXCEL, "Excel"), (AMBOS, "PDF y Excel (en un .zip)")])
 
     def __init__(self, *args, reporte: Reporte, sucursales, **kwargs):
         super().__init__(*args, **kwargs)
@@ -49,13 +52,21 @@ class GenerarForm(forms.Form):
         elif reporte.alcance == Reporte.Alcance.CONSOLIDADO:
             self.fields["modo"].choices = [(CONSOLIDADO, "Consolidado")]
         self.fields["modo"].initial = self.fields["modo"].choices[0][0]
+        # Only the formats the report admits.
+        formatos = [(PDF, "PDF")] * reporte.admite_pdf + [(EXCEL, "Excel")] * reporte.admite_excel
+        if len(formatos) == 2:
+            formatos.append((AMBOS, "PDF y Excel (en un .zip)"))
+        self.fields["formato"].choices = formatos
+        self.fields["formato"].initial = formatos[0][0] if formatos else None
 
     def clean(self):
         datos = super().clean()
         varias = len(datos.get("sucursales") or []) > 1 and datos.get("modo") == POR_SUCURSAL
         if varias and not datos.get("entrega"):
-            self.add_error("entrega", "Elige si quieres todo en un PDF o un PDF por sucursal.")
+            self.add_error("entrega", "Elige si quieres todo en un archivo o un archivo por sucursal.")
         datos["separados"] = varias and datos.get("entrega") == SEPARADOS
+        formato = datos.get("formato")
+        datos["formatos"] = {PDF, EXCEL} if formato == AMBOS else {formato}
         tipo = datos.get("tipo")
         if not tipo:
             return datos

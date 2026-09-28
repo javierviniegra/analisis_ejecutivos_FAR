@@ -5,8 +5,8 @@ from django.test import SimpleTestCase
 
 from .motor.metricas import Comparacion, Metricas
 from .motor.periodo import Periodo
-from .motor.reporte_comercial import _uno
-from .salidas import pdf_comercial
+from .motor.reporte_comercial import _uno, filas_visibles
+from .salidas import excel_comercial, pdf_comercial
 
 
 def _m(periodo):
@@ -30,7 +30,7 @@ class PdfTests(SimpleTestCase):
         self.assertEqual(pdf.count(b"/Type /Page\n") + pdf.count(b"/Type /Page\r"), 2)
 
     def test_oculta_secciones_sin_datos(self):
-        visibles = pdf_comercial._filas_visibles(self._reporte().filas)
+        visibles = filas_visibles(self._reporte().filas)
         self.assertNotIn("Costo de Ventas vs presupuesto", {f.indicador.seccion for f in visibles})
         self.assertIn("Ventas", {f.indicador.seccion for f in visibles})
 
@@ -39,3 +39,19 @@ class PdfTests(SimpleTestCase):
                          "Reporte_Comercial_La_Esquina_Coyoacán_Semana_38_14_sep_20_sep_2026.pdf")
         self.assertEqual(pdf_comercial.nombre_archivo([self._reporte(), self._reporte("Acoxpa")]),
                          "Reporte_Comercial_2_sucursales_Semana_38_14_sep_20_sep_2026.pdf")
+
+    def test_excel_hojas_y_valores(self):
+        import io
+
+        import openpyxl
+        libro = openpyxl.load_workbook(io.BytesIO(excel_comercial.generar([self._reporte()])))
+        self.assertEqual(libro.sheetnames, ["Resumen", "Vs periodo anterior", "Vs año anterior", "Notas"])
+        resumen = libro["Resumen"]
+        self.assertEqual(resumen["A1"].value, "Reporte comercial · Puebla")
+        filas = {str(r[0].value).strip(): r for r in resumen.iter_rows() if r[0].value}
+        self.assertEqual(filas["Venta bruta (con IVA)"][1].value, 7000)  # a real number, not text
+        self.assertNotIn("Costo de Ventas vs presupuesto", filas)  # empty section left out
+        self.assertEqual(len(libro["Vs periodo anterior"]._charts), 1)
+        dos = openpyxl.load_workbook(io.BytesIO(excel_comercial.generar([self._reporte(), self._reporte("Acoxpa")])))
+        self.assertIn("Acoxpa · Resumen", dos.sheetnames)
+        self.assertEqual(len(dos.sheetnames), 8)

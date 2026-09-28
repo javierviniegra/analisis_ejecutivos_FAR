@@ -57,13 +57,19 @@
     {{ form.modo }}
   </fieldset>
 
+  <fieldset class="campo opciones">
+    <legend>Formato</legend>
+    {{ form.formato }}
+    {{ form.formato.errors }}
+  </fieldset>
+
   <fieldset class="campo opciones" id="con-entrega">
     <legend>Entrega</legend>
     {{ form.entrega }}
     {{ form.entrega.errors }}
   </fieldset>
 
-  <button class="btn" id="enviar" {% if not form.fields.sucursales.queryset %}disabled{% endif %}>Generar PDF</button>
+  <button class="btn" id="enviar" {% if not form.fields.sucursales.queryset %}disabled{% endif %}>Generar</button>
   <span class="muted aviso" id="aviso">Generando… puede tardar hasta un minuto con muchas sucursales o periodos largos.</span>
 </form>
 

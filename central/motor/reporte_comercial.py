@@ -79,3 +79,18 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool) -> list[Reporte
              {n: diario[n]} if diario is not None else None)
         for i, n in enumerate(nombres)
     ]
+
+
+def filas_visibles(filas: list[Fila]) -> list[Fila]:
+    """A section with no value at all in the period (e.g. Costo de Ventas for a
+    branch that is not in Presupuestos AP) is left out of every output."""
+    vacias = {f.indicador.seccion for f in filas} - {f.indicador.seccion for f in filas if f.actual is not None}
+    return [f for f in filas if f.indicador.seccion not in vacias]
+
+
+def nombre_base(reportes: list[ReporteComercial]) -> str:
+    """File name without extension: the branch (or "Consolidado"), or how many
+    branches when one file holds several; then the period."""
+    quien = reportes[0].nombre if len(reportes) == 1 else f"{len(reportes)} sucursales"
+    limpio = "".join(ch if ch.isalnum() else "_" for ch in f"Reporte_Comercial_{quien}_{reportes[0].periodo.etiqueta()}")
+    return "_".join(p for p in limpio.split("_") if p)
