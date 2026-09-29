@@ -25,6 +25,16 @@ from ..periodos import prorratear_mensual
 
 CATEGORIA = "Costo de Ventas"
 
+# Every table/column the queries below read; `manage.py verificar_fuentes`
+# checks them against the live schema (keep in sync when a query changes).
+COLUMNAS_REQUERIDAS = {
+    "presupuestos_sucursal": ["id", "odoo_company_id", "activa"],
+    "presupuestos_categoria": ["id", "nombre"],
+    "presupuestos_tipogasto": ["id", "categoria_id"],
+    "presupuestos_presupuesto": ["sucursal_id", "mes", "tipo_gasto_id", "monto"],
+    "presupuestos_gastoreal": ["sucursal_id", "tipo_gasto_id", "fecha_pago", "semana", "monto"],
+}
+
 
 def _centavos(valor: Decimal) -> Decimal:
     return Decimal(valor).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)

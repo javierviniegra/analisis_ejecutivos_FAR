@@ -37,6 +37,8 @@ Initial reports planned: weekly commercial report for managers (not yet defined)
 - `templates/` — shared templates (`base.html`, login, admin branding). Same look as ControlPresupuestos_AP: brand green `#035953`, dark green `#023f3b`, cream `#f0e9d8`, gradient login card, Fonda Argentina logo.
 - `static/ejecutivos/` — logo and admin theme CSS (copied from ControlPresupuestos_AP so both apps stay visually consistent).
 - `scripts/` — standalone report generators (pre-Django). `build_executive_pdf_all.py` is the current standard (19 branches); `build_executive_pdf.py` and `build_executive_pdf_multi.py` are historical.
+- **Source checks:** `python manage.py verificar_fuentes [--hoy YYYY-MM-DD] [--sin-tickets]` — read-only PASS/WARN/FAIL check that every table/column the engine reads exists (declared as `COLUMNAS_REQUERIDAS` next to the queries in `central/motor/fuentes/`), that the configured accounts cannot write, that the 2026-10-01 cutover migration is applied, and that cash closings and ticket detail are fresh for every active branch. Run it after any change on the source side.
+- `deploy/sql/create_central_reportes_readonly_user.sql` — the dedicated read-only database user for this app (SELECT on the documented `wansoft` tables and the 5 `presupuestos_ap` tables it reads; 4 connections, 5 min per query). Run by the owner as root; password only in `config/.env`.
 - `docs/` — documentation (`docs/PRODUCTION_SETUP.md`, `docs/DECISIONS.md`), example reports (`docs/Ejemplos/`) and generated monthly PDFs (`docs/Mensuales/<year>/<Month>/`, gitignored).
 
 ## Conventions (mirrors ControlPresupuestos_AP)

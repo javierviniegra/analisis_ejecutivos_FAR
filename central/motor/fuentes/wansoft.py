@@ -34,6 +34,19 @@ HORA_CORTE_DIA = 14  # closings before this hour belong to the previous operatin
 CANALES = {"Restaurant": "salon", "Para llevar": "llevar", "eCommerce": "plataformas"}
 CANAL_OTROS = "otros"
 
+# Every table/column the queries below read; `manage.py verificar_fuentes`
+# checks them against the live schema (keep in sync when a query changes).
+COLUMNAS_REQUERIDAS = {
+    "getglobalcashclosing": [
+        "id", "subsidiary_id", "fecha_corte", "total_ventas", "subtotal", "no_ordenes", "total_personas",
+        "total_mesas_atendidas", "cortesias_en_cuentas", "cortesias_en_platillos", "cancelaciones_en_cuentas",
+        "cancelaciones_en_platillos", "anulaciones_en_cuentas", "anulaciones_en_platillos",
+        "descuentos_en_cuentas", "descuentos_en_platillos",
+    ],
+    "getallordenesbyday_new_venta": ["Sucursal", "Fecha", "TipoOrden", "Total", "Movimento"],
+    "getallordenesbyday_new_detalleventa": ["Movimiento_Id", "Sucursal", "TipoGrupo", "Total"],
+}
+
 
 def dia_operativo(fecha_corte: datetime) -> date:
     """Operating day a cash closing belongs to (see module docstring)."""
