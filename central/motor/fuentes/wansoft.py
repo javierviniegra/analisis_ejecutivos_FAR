@@ -241,3 +241,11 @@ def inicio_compras_odoo(cur) -> dict[str, date]:
         COMPRAS_EN_ODOO,
     )
     return {clave: inicio for clave, inicio in cur.fetchall()}
+
+
+def inicio_proveedores_internos(cur) -> dict[str, date]:
+    """Odoo start date of the internal providers (El Bodegón, Las Empanadas), by
+    their display name, from the same governance table."""
+    cur.execute("SELECT display_name, operational_start_date FROM dim_company_analytical "
+                "WHERE is_internal_provider = 1 AND operational_start_date IS NOT NULL")
+    return {nombre: inicio for nombre, inicio in cur.fetchall()}

@@ -87,7 +87,8 @@ class TablasTests(SimpleTestCase):
         m = openpyxl.load_workbook(io.BytesIO(excel_cedis.modificaciones(d)))
         self.assertEqual(m.sheetnames, ["Resumen", "Ordenes modificadas", "Cambios de cantidad", "Lineas extra",
                                         "Cambios de monto", "Productos mas cambiados", "Notas"])
-        self.assertEqual(m["Resumen"]["I2"].value, -1597.9)
+        self.assertEqual(m["Resumen"]["K2"].value, -1597.9)
+        self.assertEqual(m["Resumen"]["I1"].value, "Modificadas por la sucursal")
         self.assertEqual([m["Resumen"].cell(i, 2).value for i in range(2, 7)], ["Antenas", "Puebla", "Total", "Antenas", "Total"])
         self.assertIn("Se excluyen 45 órdenes generadas automáticamente", m["Notas"]["A5"].value)
         h = openpyxl.load_workbook(io.BytesIO(excel_cedis.por_hora(d)))
@@ -95,3 +96,24 @@ class TablasTests(SimpleTestCase):
                                         "Por hora - Empanadas", "Detalle", "Notas"])
         self.assertEqual(h["Ordenes por hora"]["A26"].value, "Total")
         self.assertEqual(h["Ordenes por hora"]["D26"].value, 3)  # 3 orders in total
+
+
+class QuienYClientesTests(SimpleTestCase):
+    def test_hecho_por_la_sucursal_o_el_cedis(self):
+        mensajes = [_msg(2, "2026-06-01 19:00:57", "Se actualizó la cantidad ordenada. Queso Gouda: Cantidad ordenada: 5.0 -> 0.0"),
+                    _msg(3, "2026-06-01 20:00:00", "Linea adicional con Gouda Polaco Recorte")]  # sales-order wording
+        mensajes[1]["author_id"] = [99, "Lilia Arredondo"]
+        o = rc.interpretar(_orden(), mensajes, {}, LINEAS, odoo.a_cdmx, lambda autor: rc.CEDIS if autor == 99 else rc.SUCURSAL)
+        self.assertEqual((o.cantidades[0].hecho_por, o.extras[0].hecho_por), (rc.SUCURSAL, rc.CEDIS))
+        self.assertTrue(o.modificada_por(rc.CEDIS) and o.modificada_por(rc.SUCURSAL))
+
+    def test_la_direccion_de_entrega_manda_sobre_el_cliente(self):
+        class Fila:
+            def __init__(self, nombre=None, excluir=False):
+                self.nombre_reporte, self.excluir = nombre, excluir
+        clientes = {1: Fila("Aeropuerto"), 2: Fila("Taquería Viaducto"), 3: Fila(excluir=True), 4: Fila()}
+        pedido = lambda cliente, entrega: {"partner_id": [cliente, "x"], "partner_shipping_id": [entrega, "y"] if entrega else False}  # noqa: E731
+        self.assertEqual(rc._cliente_de(pedido(1, 2), clientes).nombre_reporte, "Taquería Viaducto")
+        self.assertEqual(rc._cliente_de(pedido(1, 1), clientes).nombre_reporte, "Aeropuerto")
+        self.assertTrue(rc._cliente_de(pedido(3, None), clientes).excluir)
+        self.assertIsNone(rc._cliente_de(pedido(4, 5), clientes))  # unassigned: reported in the notes

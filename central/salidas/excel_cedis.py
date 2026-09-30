@@ -43,8 +43,8 @@ def _notas(wb: Workbook, notas: list[str], datos: DatosCedis):
     ws.append(["Sucursal", "Inicio en Odoo"])
     for c in ws[ws.max_row]:
         c.font = Font(bold=True)
-    for suc in datos.sucursales:
-        ws.append([suc, datos.inicio_por_sucursal[suc]])
+    for suc, inicio in sorted(datos.inicio_por_sucursal.items()):
+        ws.append([suc, inicio])
         ws.cell(ws.max_row, 2).number_format = "yyyy-mm-dd"
     ws.column_dimensions["A"].width = 140
     for (celda,) in ws.iter_rows(min_row=2, max_col=1):
@@ -66,41 +66,44 @@ def modificaciones(datos: DatosCedis) -> bytes:
         bloque = [f for f in resumen if f["proveedor"] == proveedor]
         for i, f in enumerate(bloque + ([rc.total_resumen(bloque)] if bloque else [])):
             filas.append([proveedor if i == 0 else None, f["sucursal"], f["ordenes"], f["modificadas"], f["pct"],
-                          f["con_cantidad"], f["con_extras"], f["con_monto"], f["diferencia"]])
+                          f["con_cantidad"], f["con_extras"], f["con_monto"], f["por_sucursal"], f["por_cedis"],
+                          f["diferencia"]])
     _hoja(wb, "Resumen", ["Proveedor", "Sucursal", "Ordenes", "Modificadas", "% modificadas", "Con cambio de cantidad",
-                          "Con lineas extra", "Con cambio de monto", "Diferencia neta $ (sin IVA)"], filas,
-          {5: PCT, 9: MONEDA}, {1: 30, 2: 24})
+                          "Con lineas extra", "Con cambio de monto", "Modificadas por la sucursal",
+                          "Modificadas por el CEDIS", "Diferencia neta $ (sin IVA)"], filas,
+          {5: PCT, 11: MONEDA}, {1: 30, 2: 24})
 
     mods = [o for o in datos.ordenes if o.modificada]
     _hoja(wb, "Ordenes modificadas", ["Orden", "Sucursal", "Proveedor", "Confirmada (CDMX)", "Cambios de cantidad",
                                       "Lineas extra", "Cambios de monto", "Monto al confirmar", "Monto final",
-                                      "Diferencia neta $", "Diferencia %", "Quedo en $0"],
+                                      "Diferencia neta $", "Diferencia %", "Quedo en $0", "Origen"],
           [[o.nombre, o.sucursal, o.proveedor, o.confirmada, len(o.cantidades), len(o.extras), len(o.montos),
             o.monto_al_confirmar, o.monto_final, o.diferencia,
             (o.diferencia / o.monto_al_confirmar) if o.monto_al_confirmar else None,
-            "Si" if o.monto_final == 0 else None] for o in mods],
-          {4: FECHA, 8: MONEDA, 9: MONEDA, 10: MONEDA, 11: PCT}, {2: 22, 3: 30, 4: 20})
+            "Si" if o.monto_final == 0 else None, o.origen] for o in mods],
+          {4: FECHA, 8: MONEDA, 9: MONEDA, 10: MONEDA, 11: PCT}, {2: 22, 3: 30, 4: 20, 13: 24})
 
     _hoja(wb, "Cambios de cantidad", ["Orden", "Sucursal", "Proveedor", "Confirmada (CDMX)", "Fecha cambio (CDMX)",
                                       "Horas despues de confirmar", "Usuario", "Producto", "Cantidad anterior",
-                                      "Cantidad nueva", "Diferencia", "Tipo", "Precio unitario", "Impacto $ (sin IVA)"],
+                                      "Cantidad nueva", "Diferencia", "Tipo", "Precio unitario", "Impacto $ (sin IVA)", "Hecho por"],
           [[o.nombre, o.sucursal, o.proveedor, o.confirmada, c.fecha, o.horas_despues(c.fecha), c.usuario, c.producto,
-            c.anterior, c.nueva, c.diferencia, c.tipo, c.precio, c.impacto] for o in datos.ordenes for c in o.cantidades],
+            c.anterior, c.nueva, c.diferencia, c.tipo, c.precio, c.impacto, c.hecho_por]
+           for o in datos.ordenes for c in o.cantidades],
           {4: FECHA, 5: FECHA, 9: DECIMAL, 10: DECIMAL, 11: DECIMAL, 13: MONEDA, 14: MONEDA},
           {2: 22, 3: 30, 4: 20, 5: 20, 7: 34, 8: 36})
 
     _hoja(wb, "Lineas extra", ["Orden", "Sucursal", "Proveedor", "Confirmada (CDMX)", "Fecha cambio (CDMX)",
                                "Horas despues de confirmar", "Usuario", "Producto agregado", "Cantidad pedida",
-                               "Cantidad recibida", "Precio unitario", "Subtotal $ (sin IVA)"],
+                               "Cantidad recibida", "Precio unitario", "Subtotal $ (sin IVA)", "Hecho por"],
           [[o.nombre, o.sucursal, o.proveedor, o.confirmada, e.fecha, o.horas_despues(e.fecha), e.usuario, e.producto,
-            e.pedida, e.recibida, e.precio, e.subtotal] for o in datos.ordenes for e in o.extras],
+            e.pedida, e.recibida, e.precio, e.subtotal, e.hecho_por] for o in datos.ordenes for e in o.extras],
           {4: FECHA, 5: FECHA, 9: DECIMAL, 10: DECIMAL, 11: MONEDA, 12: MONEDA}, {2: 22, 3: 30, 4: 20, 5: 20, 7: 34, 8: 36})
 
     _hoja(wb, "Cambios de monto", ["Orden", "Sucursal", "Proveedor", "Confirmada (CDMX)", "Fecha cambio (CDMX)",
                                    "Horas despues de confirmar", "Usuario", "Monto anterior (sin IVA)",
-                                   "Monto nuevo (sin IVA)", "Diferencia $"],
+                                   "Monto nuevo (sin IVA)", "Diferencia $", "Hecho por"],
           [[o.nombre, o.sucursal, o.proveedor, o.confirmada, m.fecha, o.horas_despues(m.fecha), m.usuario, m.anterior,
-            m.nuevo, m.diferencia] for o in datos.ordenes for m in o.montos],
+            m.nuevo, m.diferencia, m.hecho_por] for o in datos.ordenes for m in o.montos],
           {4: FECHA, 5: FECHA, 8: MONEDA, 9: MONEDA, 10: MONEDA}, {2: 22, 3: 30, 4: 20, 5: 20, 7: 34})
 
     _hoja(wb, "Productos mas cambiados", ["Proveedor", "Producto", "Tipo de cambio", "Cambios", "Aumentos",
@@ -143,10 +146,10 @@ def por_hora(datos: DatosCedis) -> bytes:
     _hoja(wb, "Por hora - Bodegon", encabezado, _tabla_horas(rc.por_hora(datos, BODEGON), sucs), anchos={1: 16})
     _hoja(wb, "Por hora - Empanadas", encabezado, _tabla_horas(rc.por_hora(datos, EMPANADAS), sucs), anchos={1: 16})
     _hoja(wb, "Detalle", ["Orden", "Sucursal", "Proveedor", "Estado", "Creada (CDMX)", "Confirmada (CDMX)", "Hora",
-                          "Subtotal actual", "Modificada", "Detalle"],
+                          "Subtotal actual", "Modificada", "Detalle", "Origen"],
           [[o.nombre, o.sucursal, o.proveedor, o.estado, o.creada, o.confirmada, o.creada.hour, o.monto_final,
-            o.modificada_subtotal, rc.detalle_cambios(o)] for o in datos.ordenes],
-          {5: FECHA, 6: FECHA, 8: MONEDA}, {2: 22, 3: 30, 5: 20, 6: 20, 10: 90})
+            o.modificada_subtotal, rc.detalle_cambios(o), o.origen] for o in datos.ordenes],
+          {5: FECHA, 6: FECHA, 8: MONEDA}, {2: 22, 3: 30, 5: 20, 6: 20, 10: 90, 11: 24})
     _notas(wb, rc.notas(datos, "por_hora"), datos)
     return _guardar(wb)
 

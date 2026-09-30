@@ -92,3 +92,37 @@ class Reporte(models.Model):
         if user.is_superuser or user.is_staff:
             return qs
         return qs.filter(perfiles__in=user.groups.all()).distinct()
+
+
+class ClienteCedis(models.Model):
+    """Who an Odoo customer (or delivery address) of El Bodegón / Las Empanadas
+    is, for the CEDIS reports: a branch, a label for customers that are not
+    one of our branches, or excluded. Data, not code: edit it in the admin
+    when a customer or address changes. Seeded by `cargar_clientes_cedis`.
+
+    The Odoo delivery address wins over the customer (e.g. customer
+    "FONDA ARGENTINA AEROPUERTO" delivering to "... TAQUERIA VIADUCTO")."""
+
+    odoo_partner_id = models.IntegerField(unique=True, help_text="res.partner id in Odoo (customer or delivery address).")
+    nombre_odoo = models.CharField(max_length=200, help_text="Name in Odoo, for reference.")
+    sucursal = models.ForeignKey("cuentas.Sucursal", null=True, blank=True, on_delete=models.PROTECT,
+                                 related_name="clientes_cedis")
+    etiqueta = models.CharField(max_length=80, blank=True,
+                                help_text="Name to show when it is not one of our branches (e.g. Perisur, León).")
+    excluir = models.BooleanField(default=False, help_text="Left out of the reports (e.g. Público general, CEDIS to CEDIS).")
+    nota = models.CharField(max_length=200, blank=True, help_text="Shown in the report's notes (e.g. internal delivery).")
+
+    class Meta:
+        ordering = ["nombre_odoo"]
+        verbose_name = "cliente de CEDIS (Odoo)"
+        verbose_name_plural = "clientes de CEDIS (Odoo)"
+
+    def __str__(self):
+        destino = "(excluido)" if self.excluir else (self.nombre_reporte or "(sin asignar)")
+        return f"{self.nombre_odoo} -> {destino}"
+
+    @property
+    def nombre_reporte(self) -> str | None:
+        if self.excluir:
+            return None
+        return self.sucursal.nombre if self.sucursal else (self.etiqueta or None)

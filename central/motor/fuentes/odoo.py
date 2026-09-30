@@ -129,3 +129,54 @@ def lineas(cli: OdooLectura, order_ids: list[int]) -> list[dict]:
         salida += cli.leer_todo("purchase.order.line", [["order_id", "in", order_ids[i:i + LOTE]]],
                                 ["order_id", "product_id", "name", "product_qty", "qty_received", "price_unit"])
     return salida
+
+
+# -- provider side (sales orders of El Bodegón / Las Empanadas) --------------
+def companias_de(cli: OdooLectura, partner_ids: list[int]) -> list[int]:
+    """Odoo companies whose partner is one of these (the internal providers)."""
+    return [c["id"] for c in cli.llamar("res.company", "search_read", [["partner_id", "in", partner_ids]], fields=["id"])]
+
+
+def pedidos_venta(cli: OdooLectura, companias: list[int], desde: date, hasta: date) -> list[dict]:
+    """Confirmed sales orders ('sale'/'done') of the provider companies CREATED
+    in [desde, hasta] (Mexico City days). `auto_purchase_order_id` links the
+    ones generated from a branch's purchase order (inter-company)."""
+    return cli.leer_todo("sale.order", [
+        ["company_id", "in", companias], ["state", "in", ["sale", "done"]],
+        ["create_date", ">=", limite_utc(desde)], ["create_date", "<", limite_utc(hasta + timedelta(days=1))],
+    ], ["name", "company_id", "partner_id", "partner_shipping_id", "state", "create_date", "date_order",
+        "amount_untaxed", "auto_purchase_order_id"])
+
+
+def ordenes_por_id(cli: OdooLectura, ids: list[int]) -> list[dict]:
+    salida = []
+    for i in range(0, len(ids), LOTE):
+        salida += cli.leer_todo("purchase.order", [["id", "in", ids[i:i + LOTE]]],
+                                ["name", "company_id", "partner_id", "state", "create_date", "date_approve", "amount_untaxed"])
+    return salida
+
+
+def mensajes_de(cli: OdooLectura, modelo: str, ids: list[int]) -> list[dict]:
+    salida = []
+    for i in range(0, len(ids), LOTE):
+        salida += cli.leer_todo("mail.message", [["model", "=", modelo], ["res_id", "in", ids[i:i + LOTE]]],
+                                ["res_id", "date", "author_id", "body", "tracking_value_ids"], orden="date asc, id asc")
+    return salida
+
+
+def lineas_venta(cli: OdooLectura, ids: list[int]) -> list[dict]:
+    salida = []
+    for i in range(0, len(ids), LOTE):
+        salida += cli.leer_todo("sale.order.line", [["order_id", "in", ids[i:i + LOTE]]],
+                                ["order_id", "product_id", "name", "product_uom_qty", "qty_delivered", "price_unit"])
+    return salida
+
+
+def compania_de_autores(cli: OdooLectura, partner_ids: list[int]) -> dict[int, int]:
+    """Main company of the Odoo user behind each message author (partner id)."""
+    salida = {}
+    for i in range(0, len(partner_ids), LOTE):
+        for u in cli.llamar("res.users", "search_read", [["partner_id", "in", partner_ids[i:i + LOTE]]],
+                            fields=["partner_id", "company_id"], context={**cli._contexto, "active_test": False}):
+            salida[u["partner_id"][0]] = u["company_id"][0]
+    return salida
