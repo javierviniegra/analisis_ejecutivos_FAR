@@ -25,6 +25,23 @@ from ..periodos import prorratear_mensual
 
 CATEGORIA = "Costo de Ventas"
 
+# Supplier invoices of a period keep being captured in Odoo after it ends (in
+# the week of 2026-09-21 Acoxpa had 12 invoices recorded vs 119-247 in the
+# previous weeks). Rule (owner, 2026-09-30): real spend of a period is
+# PRELIMINARY until DIAS_CIERRE_MES days after the end of the month in which
+# the period ends; its comparisons are then "s/cf".
+DIAS_CIERRE_MES = 10
+
+
+def fecha_definitiva(hasta: date) -> date:
+    """First day on which the real spend of a period ending on `hasta` is final."""
+    primero_siguiente = (hasta.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return primero_siguiente + timedelta(days=DIAS_CIERRE_MES)
+
+
+def es_preliminar(hasta: date, hoy: date) -> bool:
+    return hoy < fecha_definitiva(hasta)
+
 # Every table/column the queries below read; `manage.py verificar_fuentes`
 # checks them against the live schema (keep in sync when a query changes).
 COLUMNAS_REQUERIDAS = {

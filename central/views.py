@@ -10,6 +10,7 @@ from cuentas.models import puede_generar, sucursales_de
 from .forms import CONSOLIDADO, GenerarForm
 from .generadores import GENERADORES, tiene_generador
 from .models import Reporte
+from .motor.fuentes import conexiones
 
 log = logging.getLogger(__name__)
 
@@ -56,4 +57,5 @@ def generar(request, clave):
             respuesta = HttpResponse(archivo.contenido, content_type=archivo.tipo)
             respuesta["Content-Disposition"] = f'attachment; filename="{archivo.nombre}"'
             return respuesta
-    return render(request, "central/generar.html", {"reporte": reporte, "form": form, "error": error})
+    return render(request, "central/generar.html", {"reporte": reporte, "form": form, "error": error,
+                                                    "bases": conexiones.bases()})

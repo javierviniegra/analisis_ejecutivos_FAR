@@ -39,7 +39,7 @@ class MetricasTests(SimpleTestCase):
         self.assertIsNone(m.pct_mix("Alimentos"))
 
     def test_consolidar_suma_y_lleva_la_cobertura(self):
-        a = _m(costo_ventas_real=D("10"), costo_ventas_ppto=D("20"), costo_ventas_real_con_ppto=D("10"),
+        a = _m(costo_ventas_real=D("10"), costo_ventas_ppto=D("20"), costo_ventas_real_con_ppto=D("10"), costo_ventas_ppto_con_real=D("20"),
                n_con_presupuesto=1, venta_por_dia={date(2026, 9, 21): D("100")})
         b = _m(venta_bruta=D("500"), dias_con_detalle=0, canal={}, mix={}, venta_por_dia={date(2026, 9, 21): D("50")})
         t = consolidar([a, b], SEM)
@@ -52,11 +52,22 @@ class MetricasTests(SimpleTestCase):
         self.assertEqual((t.costo_ventas_real, t.costo_ventas_ppto, t.n_con_presupuesto), (D("10"), D("20"), 1))
 
     def test_ejercido_no_mezcla_sucursales_con_y_sin_presupuesto(self):
-        con = _m(costo_ventas_real=D("90"), costo_ventas_ppto=D("100"), costo_ventas_real_con_ppto=D("90"), n_con_presupuesto=1)
+        con = _m(costo_ventas_real=D("90"), costo_ventas_ppto=D("100"), costo_ventas_real_con_ppto=D("90"), costo_ventas_ppto_con_real=D("100"), n_con_presupuesto=1)
         sin = _m(costo_ventas_real=D("500"))  # spends 500 but has no budget
         t = consolidar([con, sin], SEM)
         self.assertEqual(t.costo_ventas_real, D("590"))
         self.assertEqual(t.ejercido_costo_ventas, D("0.9"))  # 90/100, the branch without budget is excluded
+
+    def test_presupuesto_sin_gasto_real_registrado_aun(self):
+        # e.g. La Esquina Coyoacán, week 39: budget captured, no Costo de Ventas invoice recorded yet
+        solo_ppto = _m(costo_ventas_ppto=D("114"), n_con_presupuesto=1)
+        self.assertEqual(solo_ppto.costo_ventas_ppto, D("114"))  # the budget is shown
+        self.assertIsNone(solo_ppto.ejercido_costo_ventas)  # no "0% ejercido"
+        con = _m(costo_ventas_real=D("90"), costo_ventas_ppto=D("100"), costo_ventas_real_con_ppto=D("90"),
+                 costo_ventas_ppto_con_real=D("100"), n_con_presupuesto=1)
+        t = consolidar([con, solo_ppto], SEM)
+        self.assertEqual((t.costo_ventas_ppto, t.n_con_presupuesto), (D("214"), 2))  # both budgets shown
+        self.assertEqual(t.ejercido_costo_ventas, D("0.9"))  # ratio only where both exist
 
     def test_consolidar_sin_ninguna_sucursal_con_presupuesto_deja_none(self):
         t = consolidar([_m(), _m()], SEM)
@@ -114,7 +125,7 @@ class TablaTests(SimpleTestCase):
         self.assertIsNone(_fila(filas, "costo_ventas_ejercido").actual)
 
     def test_costo_de_ventas_ejercido(self):
-        m = _m(costo_ventas_real=D("90"), costo_ventas_ppto=D("100"), costo_ventas_real_con_ppto=D("90"), n_con_presupuesto=1)
+        m = _m(costo_ventas_real=D("90"), costo_ventas_ppto=D("100"), costo_ventas_real_con_ppto=D("90"), costo_ventas_ppto_con_real=D("100"), n_con_presupuesto=1)
         f = _fila(construir_tabla(m, None, None), "costo_ventas_ejercido")
         self.assertEqual(f.actual, D("0.9"))
         self.assertEqual(f.indicador.formato, PORCENTAJE)

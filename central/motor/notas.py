@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from . import lectura
 from .comparativos import UMBRAL_COBERTURA_FIABLE, UMBRAL_IGUAL, cobertura_fiable
+from .fuentes import presupuestos
 from .fuentes.wansoft import HORA_CORTE_DIA
 from .metricas import Comparacion, Metricas, como_comparacion
 from .periodo import Periodo, TipoPeriodo
@@ -68,7 +69,22 @@ def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Comparacion | 
         elif not cobertura_fiable(m.dias_con_detalle, m.dias_esperados) and m.dias_con_detalle:
             notas.append(f"Mezcla y canal s/cf contra {nombre}: el detalle de tickets cubre "
                          f"{m.dias_con_detalle} de {m.dias_esperados} días.")
+    notas += _notas_costo_preliminar(periodo, actual, comparaciones)
     return notas
+
+
+def _notas_costo_preliminar(periodo: Periodo, actual: Metricas, comparaciones) -> list[str]:
+    if actual.costo_preliminar:
+        definitivo = presupuestos.fecha_definitiva(periodo.hasta)
+        if actual.costo_ventas_real is None:
+            return [f"Costo de Ventas real: aún no hay facturas registradas del periodo en Odoo; "
+                    f"será definitivo a partir del {definitivo:%d/%m/%Y}."]
+        return [f"Costo de Ventas real preliminar: las facturas del periodo se siguen registrando en Odoo; "
+                f"será definitivo a partir del {definitivo:%d/%m/%Y}. Sus comparativos son s/cf."]
+    previos = [nombre for comp, nombre in comparaciones if comp.base is not None and comp.base.costo_preliminar]
+    if previos:
+        return [f"Costo de Ventas real de {_lista(previos)} aún preliminar: su comparativo es s/cf."]
+    return []
 
 
 def notas_reglas(periodo: Periodo | None = None) -> list[str]:
@@ -86,6 +102,8 @@ def notas_reglas(periodo: Periodo | None = None) -> list[str]:
         f"Lectura: controles solo si suben y pesan al menos {_pct(lectura.UMBRAL_PESO_CONTROL)} de la venta neta; "
         f"mezcla y canal solo si se mueven más de {_pp(lectura.UMBRAL_PUNTOS_MEZCLA)}; Costo de Ventas solo si "
         "supera el presupuesto prorrateado por días.",
+        f"Costo de Ventas real (Presupuestos AP): es preliminar, sin comparativo, hasta {presupuestos.DIAS_CIERRE_MES} "
+        "días después del cierre del mes en que termina el periodo, porque las facturas se siguen capturando en Odoo.",
     ]
     if periodo is None or periodo.tipo == TipoPeriodo.SEMANA:
         reglas.insert(4, "Semana de lunes a domingo; la misma semana del año anterior es la misma semana ISO "

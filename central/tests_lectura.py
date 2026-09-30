@@ -75,11 +75,11 @@ class LecturaTests(SimpleTestCase):
         self.assertNotIn("Alimentos", mezcla.texto)  # food mix did not move
 
     def test_costo_ventas_sobre_presupuesto(self):
-        actual = _m(costo_ventas_real=D("1200"), costo_ventas_ppto=D("1000"), costo_ventas_real_con_ppto=D("1200"),
+        actual = _m(costo_ventas_real=D("1200"), costo_ventas_ppto=D("1000"), costo_ventas_real_con_ppto=D("1200"), costo_ventas_ppto_con_real=D("1000"),
                     n_con_presupuesto=1)
         texto = " ".join(_textos(construir_lectura(SEM, actual, _m(), None)))
         self.assertIn("120.0% ejercido", texto)
-        dentro = _m(costo_ventas_real=D("900"), costo_ventas_ppto=D("1000"), costo_ventas_real_con_ppto=D("900"),
+        dentro = _m(costo_ventas_real=D("900"), costo_ventas_ppto=D("1000"), costo_ventas_real_con_ppto=D("900"), costo_ventas_ppto_con_real=D("1000"),
                     n_con_presupuesto=1)
         self.assertNotIn("ejercido", " ".join(_textos(construir_lectura(SEM, dentro, _m(), None))))
 

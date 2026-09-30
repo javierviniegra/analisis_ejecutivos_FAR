@@ -2,6 +2,14 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-30 — Costo de Ventas: budget without spend, preliminary real spend
+
+Found by the owner testing week 39 (21-27 Sep 2026) on `wansoft_prueba`:
+- **Fix: a budget is shown even before any real spend is recorded.** La Esquina Coyoacán had its September budget ($114,315 prorated for the week) but no Costo de Ventas invoice recorded yet; the engine only kept the budget when real spend existed, so the whole section disappeared. Now the budget is shown and "% ejercido" is computed only over branches with BOTH budget and real spend (`costo_ventas_ppto_con_real`), so a budget awaiting its invoices never reads as "0% ejercido".
+- **Rule (owner): real Costo de Ventas is PRELIMINARY until 10 days after the close of the month in which the period ends** (`presupuestos.DIAS_CIERRE_MES`, `fecha_definitiva`). Why: supplier invoices keep being captured in Odoo after the week (Acoxpa week 39: 12 invoices, $16,775, vs 119-247 in the previous weeks, with the sync up to date), so the table read "▼ -92.8%" in green. While preliminary on either side, Costo de Ventas real and % ejercido comparisons are `s/cf`; the value is still shown; a footnote says from which date it is final (or that no invoice is recorded yet); the rule is listed in the report's rules; an over-budget Lectura sentence says the figure is preliminary. The capture lag itself could not be measured (the table keeps the invoice date, not the capture date); the owner chose month close + 10 days.
+- **The generation screen shows which databases the reports read** ("Datos de: Wansoft `wansoft_prueba` · Presupuestos AP `presupuestos_ap`"), from `conexiones.bases()` (names only, never credentials), so a user can check the source.
+- The report text (Lectura, footnotes) is produced by fixed rules in Python (`lectura.py`, `notas.py`) from the report's own numbers; no AI or external service is involved.
+
 ## 2026-09-28 — Ready for the 2026-10-01 Wansoft cutover
 
 - **Context:** on Thursday 2026-10-01 the live `wansoft` receives the new pipeline's schema (41 tables + 2 views of the Odoo/unified layer, unique keys, dedup) and the new daily pipeline replaces the legacy loaders. Rehearsed on `wansoft_prueba` (Wansoft repo: `docs/production-cutover-runbook.md`; consumer rules in `docs/data-access-guide/`). The database keeps its name, so this app's configuration does not change.

@@ -39,6 +39,7 @@ class Indicador:
     mejor_si_sube: bool | None  # None = no good/bad direction (arrow always grey)
     requiere_detalle: bool = False  # needs ticket detail (channel / mix)
     usa_cierres: bool = True  # False: not built from cash closings (budget rows), no coverage rule
+    usa_gasto_real: bool = False  # built from real Costo de Ventas spend: not comparable while preliminary
 
 
 def _pct_canal(canal):
@@ -65,11 +66,11 @@ INDICADORES = [
     Indicador("cortesias", "Cortesías", "Control (a precio de venta)", MONEDA, lambda m: m.cortesias, False),
     Indicador("descuentos", "Descuentos", "Control (a precio de venta)", MONEDA, lambda m: m.descuentos, False),
     Indicador("costo_ventas_real", "Costo de Ventas real", "Costo de Ventas vs presupuesto", MONEDA,
-              lambda m: m.costo_ventas_real, False, usa_cierres=False),
+              lambda m: m.costo_ventas_real, False, usa_cierres=False, usa_gasto_real=True),
     Indicador("costo_ventas_ppto", "Costo de Ventas presupuestado", "Costo de Ventas vs presupuesto", MONEDA,
               lambda m: m.costo_ventas_ppto, None, usa_cierres=False),
     Indicador("costo_ventas_ejercido", "% ejercido del presupuesto", "Costo de Ventas vs presupuesto", PORCENTAJE,
-              lambda m: m.ejercido_costo_ventas, None, usa_cierres=False),
+              lambda m: m.ejercido_costo_ventas, None, usa_cierres=False, usa_gasto_real=True),
 ]
 
 
@@ -107,7 +108,11 @@ def _valor(ind: Indicador, m: Metricas | None) -> Decimal | None:
 
 def fiable(ind: Indicador, m: Metricas | None) -> bool:
     """Whether period `m` has enough coverage for this indicator's comparisons."""
-    if not ind.usa_cierres or m is None:
+    if m is None:
+        return True
+    if ind.usa_gasto_real:
+        return not m.costo_preliminar  # invoices of the period are still being captured
+    if not ind.usa_cierres:
         return True
     dias = m.dias_con_detalle if ind.requiere_detalle else m.dias_con_cierre
     return cobertura_fiable(dias, m.dias_esperados)

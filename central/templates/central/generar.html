@@ -23,6 +23,9 @@
 
 <p><a href="{% url 'reporte_detalle' reporte.clave %}" class="muted">&larr; {{ reporte.nombre }}</a></p>
 <h1>Generar reporte</h1>
+<p class="muted" style="margin:-8px 0 14px">Datos de:
+  {% for nombre, base in bases.items %}<strong>{{ nombre }}</strong> <code>{{ base }}</code>{% if not forloop.last %} · {% endif %}{% endfor %}
+</p>
 
 <form method="post" class="card" id="generar">
   {% csrf_token %}

@@ -172,9 +172,11 @@ def _costo_ventas(actual: Metricas) -> Observacion | None:
     if ejercido is None or ejercido <= 1:
         return None
     texto = (f"El Costo de Ventas real ({_pesos(actual.costo_ventas_real_con_ppto)}) supera el presupuesto "
-             f"prorrateado ({_pesos(actual.costo_ventas_ppto)}): {ejercido * 100:.1f}% ejercido")
+             f"prorrateado ({_pesos(actual.costo_ventas_ppto_con_real)}): {ejercido * 100:.1f}% ejercido")
     if actual.n_sucursales > 1:
         texto += f" ({actual.n_con_presupuesto} de {actual.n_sucursales} sucursales tienen presupuesto)"
+    if actual.costo_preliminar:  # already over budget with invoices still arriving: it can only grow
+        texto += "; cifra preliminar, las facturas del periodo se siguen registrando"
     return Observacion(texto + ".", NEGATIVO)
 
 

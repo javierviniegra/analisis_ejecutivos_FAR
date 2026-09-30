@@ -45,11 +45,15 @@ class Metricas:
     dias_con_cierre: int = 0  # summed over branches
     dias_con_detalle: int = 0  # summed over branches
     costo_ventas_real: Decimal | None = None  # None = not available (never zero)
-    costo_ventas_ppto: Decimal | None = None
-    # Real spend only of the branches that also have a budget: the base for
-    # "% ejercido", so the ratio never mixes branches with and without budget.
+    costo_ventas_ppto: Decimal | None = None  # shown even when no real spend is recorded yet
+    # "% ejercido" only over the branches that have BOTH budget and real spend,
+    # so the ratio never mixes branches with and without budget, nor counts a
+    # budget whose spend has not been recorded yet as 0% spent.
     costo_ventas_real_con_ppto: Decimal | None = None
+    costo_ventas_ppto_con_real: Decimal | None = None
     n_con_presupuesto: int = 0
+    # Real spend still being captured (presupuestos.es_preliminar): shown, not compared.
+    costo_preliminar: bool = False
 
     @property
     def dias_esperados(self) -> int:
@@ -72,13 +76,15 @@ class Metricas:
     @property
     def ejercido_costo_ventas(self) -> Decimal | None:
         """Real Costo de Ventas as a share of its budget (1.0 = 100%)."""
-        return _razon(self.costo_ventas_real_con_ppto, self.costo_ventas_ppto)
+        return _razon(self.costo_ventas_real_con_ppto, self.costo_ventas_ppto_con_real)
 
 
-def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo) -> list[Metricas]:
+def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo, hoy: date | None = None) -> list[Metricas]:
     """Read every metric of `periodo` for each branch (`cuentas.Sucursal`),
-    in the same order as `sucursales`."""
+    in the same order as `sucursales`. `hoy` (default today) decides whether
+    the real Costo de Ventas is still preliminary."""
     d, h = periodo.desde, periodo.hasta
+    preliminar = presupuestos.es_preliminar(h, hoy or date.today())
     cierres = wansoft.cierres_por_dia(
         cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None], d, h)
     nombres = [s.wansoft_ticket_nombre for s in sucursales]
@@ -111,8 +117,12 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             real = presupuestos.gasto_real_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
             ppto = presupuestos.presupuesto_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
             m.costo_ventas_real = real
-            if real is not None and ppto is not None:
-                m.costo_ventas_ppto, m.costo_ventas_real_con_ppto, m.n_con_presupuesto = ppto, real, 1
+            # only where there is something to show (spend recorded, or a budget awaiting it)
+            m.costo_preliminar = preliminar and (real is not None or ppto is not None)
+            if ppto is not None:  # a budget is shown even before any real spend is recorded
+                m.costo_ventas_ppto, m.n_con_presupuesto = ppto, 1
+                if real is not None:
+                    m.costo_ventas_real_con_ppto, m.costo_ventas_ppto_con_real = real, ppto
         resultado.append(m)
     return resultado
 
@@ -147,8 +157,11 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
             total.costo_ventas_real = (total.costo_ventas_real or CERO) + m.costo_ventas_real
         if m.costo_ventas_ppto is not None:
             total.costo_ventas_ppto = (total.costo_ventas_ppto or CERO) + m.costo_ventas_ppto
-            total.costo_ventas_real_con_ppto = (total.costo_ventas_real_con_ppto or CERO) + (m.costo_ventas_real_con_ppto or CERO)
             total.n_con_presupuesto += 1
+        if m.costo_ventas_real_con_ppto is not None:
+            total.costo_ventas_real_con_ppto = (total.costo_ventas_real_con_ppto or CERO) + m.costo_ventas_real_con_ppto
+            total.costo_ventas_ppto_con_real = (total.costo_ventas_ppto_con_real or CERO) + m.costo_ventas_ppto_con_real
+        total.costo_preliminar = total.costo_preliminar or m.costo_preliminar
     return total
 
 

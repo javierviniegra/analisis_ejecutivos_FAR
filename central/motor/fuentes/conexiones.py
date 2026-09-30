@@ -55,6 +55,13 @@ def origen() -> str:
     return settings.FUENTES_ENV
 
 
+def bases() -> dict[str, str]:
+    """Database names the reports read from right now (no credentials), shown
+    in the web so a user can see which source a report comes from."""
+    return {"Wansoft": _variable("WANSOFT_DB", "NAME") or "—",
+            "Presupuestos AP": _variable("PRESUPUESTOS_DB", "NAME") or "—"}
+
+
 def abrir_wansoft():
     """Cursor on the Wansoft warehouse (sales, cash closing, order detail)."""
     return _abrir("WANSOFT_DB")
