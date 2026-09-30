@@ -11,13 +11,17 @@ class Reporte(models.Model):
     """
 
     class Categoria(models.TextChoices):
-        COMERCIAL = "comercial", "Comercial"
-        OPERATIVO = "operativo", "Operativo"
-        FINANCIERO = "financiero", "Financiero"
-        COMPRAS = "compras", "Compras"
+        # Owner, 2026-09-30: "Comercial" is called "Marca"; executive,
+        # investors and partners reports are one category, "Inversionistas";
+        # operating reports are branch reports ("Sucursales"); financial
+        # reports go to "Inversionistas" or "Contabilidad" by audience.
+        MARCA = "marca", "Marca"
+        SUCURSALES = "sucursales", "Sucursales (gerentes)"
         INVERSIONISTAS = "inversionistas", "Inversionistas"
-        EJECUTIVO = "ejecutivo", "Ejecutivo"
+        CEDIS = "cedis", "CEDIS (Bodegón)"
         NOMINA = "nomina", "Nómina / RH"
+        CONTABILIDAD = "contabilidad", "Contabilidad"
+        INVENTARIOS = "inventarios", "Inventarios"
 
     class Periodicidad(models.TextChoices):
         DIARIA = "diaria", "Diaria"

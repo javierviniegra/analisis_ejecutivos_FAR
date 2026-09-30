@@ -32,7 +32,7 @@ CATALOGO = [
         nombre="Resumen ejecutivo por sucursal",
         descripcion="Ventas y costos de cada sucursal (plantilla ejecutiva estandar Fonda). "
         "Hoy existe como script (scripts/build_executive_pdf_all.py), 19 sucursales.",
-        categoria=C.EJECUTIVO, periodicidad=P.MENSUAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
+        categoria=C.INVERSIONISTAS, periodicidad=P.MENSUAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
         alcance=A.POR_SUCURSAL, admite_pdf=True, estado=E.DEFINIDO,
         notas="Semanal y anual con comparativos (vs periodo anterior y vs mismo periodo del anio anterior, con flechas) pendientes.",
     ),
@@ -43,10 +43,11 @@ CATALOGO = [
         "o consolidado: ventas (bruta y neta), tickets, clientes, cheque y ticket promedio; mix alimentos/bebidas y por canal; "
         "cancelaciones, cortesias y descuentos; Costo de Ventas real vs presupuesto; lectura por reglas y dos graficas. Cada indicador "
         "se compara contra el periodo anterior y el mismo periodo del anio anterior (sucursales comparables), con columna de flechas.",
-        categoria=C.COMERCIAL, periodicidad=P.SEMANAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
+        categoria=C.SUCURSALES, periodicidad=P.SEMANAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
         alcance=A.AMBOS, admite_pdf=True, admite_excel=True, estado=E.IMPLEMENTADO,
         notas="Definido 2026-09-23. Semana lunes-domingo; canal = tipo de orden de Wansoft; sin meta de venta por ahora (llegara de un KPI por definir); "
         "bloque extra de Costo de Ventas real vs presupuesto de Presupuestos AP prorrateado por dias. Fuentes: Wansoft y Presupuestos AP (solo lectura).",
+        perfiles_iniciales=["Gerente"],
     ),
     dict(
         clave="inversionistas-corto-mensual",
@@ -61,7 +62,7 @@ CATALOGO = [
         clave="financiero-operativo-socios-mensual",
         nombre="Informe financiero y operativo para socios",
         descripcion="Informe mensual en PDF para los socios.",
-        categoria=C.FINANCIERO, periodicidad=P.MENSUAL, plantilla=F.FINANCIERA, fuente=S.MIXTA,
+        categoria=C.INVERSIONISTAS, periodicidad=P.MENSUAL, plantilla=F.FINANCIERA, fuente=S.MIXTA,
         alcance=A.CONSOLIDADO, admite_pdf=True, estado=E.PENDIENTE,
         notas="Requiere disenar la plantilla nueva (colores y logo Fonda Argentina). Contenido por definir.",
     ),
@@ -70,24 +71,26 @@ CATALOGO = [
         nombre="OC Bodegon/Empanadas: modificaciones",
         descripcion="Ordenes de compra a proveedores internos modificadas despues de confirmar: cambios de cantidad, "
         "lineas extra y cambios de monto, por sucursal.",
-        categoria=C.COMPRAS, periodicidad=P.SEMANAL, plantilla=F.TABULAR, fuente=S.ODOO,
+        categoria=C.CEDIS, periodicidad=P.SEMANAL, plantilla=F.TABULAR, fuente=S.ODOO,
         alcance=A.CONSOLIDADO, admite_excel=True, estado=E.DEFINIDO,
         notas="Ejemplo generado en el repo Wansoft (reports/ordenes_compra_proveedores_internos).",
+        perfiles_iniciales=["CEDIS"],
     ),
     dict(
         clave="oc-bodegon-empanadas-por-hora",
         nombre="OC Bodegon/Empanadas: ordenes por hora",
         descripcion="Ordenes de compra a proveedores internos por hora de creacion y porcentaje de modificaciones, por sucursal.",
-        categoria=C.COMPRAS, periodicidad=P.SEMANAL, plantilla=F.TABULAR, fuente=S.ODOO,
+        categoria=C.CEDIS, periodicidad=P.SEMANAL, plantilla=F.TABULAR, fuente=S.ODOO,
         alcance=A.CONSOLIDADO, admite_excel=True, estado=E.DEFINIDO,
         notas="Ejemplo generado en el repo Wansoft (reports/ordenes_compra_proveedores_internos).",
+        perfiles_iniciales=["CEDIS"],
     ),
     dict(
         clave="rentabilidad-plataformas-mensual",
         nombre="Rentabilidad por plataforma (Uber, Didi y demas)",
         descripcion="Reporte mensual para saber si cada plataforma de reparto (Uber, Didi y las demas) es rentable "
         "despues de comisiones y costos.",
-        categoria=C.COMERCIAL, periodicidad=P.MENSUAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
+        categoria=C.MARCA, periodicidad=P.MENSUAL, plantilla=F.EJECUTIVA, fuente=S.MIXTA,
         alcance=A.CONSOLIDADO, admite_pdf=True, admite_excel=True, estado=E.PENDIENTE,
         notas="Por definir: lista de plataformas; de donde salen ventas por plataforma (Wansoft: canal de la orden) y "
         "comisiones/costos (Odoo); si se calcula por sucursal o consolidado; formula de rentabilidad (comisiones, "
@@ -97,9 +100,10 @@ CATALOGO = [
         clave="indicadores-operativos-semanal",
         nombre="Indicadores operativos semanal",
         descripcion="Tabla semanal de indicadores operativos (tabla de Carlos en Power BI) con semaforos.",
-        categoria=C.OPERATIVO, periodicidad=P.SEMANAL, plantilla=F.SEMAFOROS, fuente=S.MYSQL_PROD,
+        categoria=C.SUCURSALES, periodicidad=P.SEMANAL, plantilla=F.SEMAFOROS, fuente=S.MYSQL_PROD,
         alcance=A.POR_SUCURSAL, admite_pdf=True, admite_excel=True, estado=E.PENDIENTE,
         notas="Faltan: estructura de la tabla, metricas y reglas de los semaforos (umbrales y colores) del Power BI.",
+        perfiles_iniciales=["Gerente"],
     ),
 ]
 

@@ -21,7 +21,7 @@ class GenerarTests(TestCase):
         self.gerentes = Group.objects.create(name="Gerente")
         self.gerentes.permissions.add(Permission.objects.get(codename="generar_reportes"))
         self.reporte = Reporte.objects.create(
-            clave=CLAVE, nombre="Comercial", categoria="comercial", periodicidad="semanal",
+            clave=CLAVE, nombre="Comercial", categoria="marca", periodicidad="semanal",
             plantilla="ejecutiva", fuente="mixta", alcance=Reporte.Alcance.AMBOS, admite_pdf=True, admite_excel=True)
         self.reporte.perfiles.add(self.gerentes)
         self.puebla = Sucursal.objects.create(clave="puebla", nombre="Puebla", wansoft_subsidiary_id=1)
@@ -93,7 +93,7 @@ class GenerarTests(TestCase):
         self.assertNotContains(self.client.get(reverse("reporte_detalle", args=[CLAVE])), "Generar reporte")
 
     def test_reporte_sin_generador_es_404(self):
-        otro = Reporte.objects.create(clave="otro", nombre="Otro", categoria="comercial", periodicidad="semanal",
+        otro = Reporte.objects.create(clave="otro", nombre="Otro", categoria="marca", periodicidad="semanal",
                                       plantilla="tabular", fuente="odoo", alcance="consolidado")
         otro.perfiles.add(self.gerentes)
         self.assertEqual(self.client.get(reverse("reporte_generar", args=["otro"])).status_code, 404)

@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-30 — Catalog organized by area: categories and area profiles
+
+- **Category = what the report is about (organizes the catalog); profile (group) = who sees it (access).**
+- **Categories (owner):** **Marca** (formerly "Comercial"), **Sucursales (gerentes)** (branch reports, operating ones included: "Operativo" no longer exists), **Inversionistas** (the executive, investors and partners reports together; "Ejecutivo" and "Socios" no longer exist), **CEDIS (Bodegón)**, Nómina / RH, **Contabilidad** and **Inventarios** (no reports yet), and nothing else: **no "Compras" category** (its reports moved to CEDIS) and **no "Financiero" category:** financial reports go to Inversionistas or Contabilidad depending on who reads them. Migrations 0004-0008; 0005 and 0006 convert existing rows (comercial -> marca, ejecutivo/socios -> inversionistas, operativo -> sucursales) before changing the choices.
+- **New area profiles CEDIS and Contabilidad** (`crear_perfiles`: ver_reportes, generar_reportes), like Nominista: each sees only what is assigned to it (deny-by-default per group). CEDIS is El Bodegón.
+- Placement and audience in the seed (audience assigned once on creation, `perfiles_iniciales`): commercial report and weekly operating indicators -> Sucursales, profile Gerente (branch scope still applies); the two Bodegón/Empanadas purchase-order Excel reports -> CEDIS (Bodegón), profile CEDIS (the owner's first CEDIS reports); executive summary, short investor report and partners' financial report -> Inversionistas (no profile yet); platform profitability -> Marca. Applied to the dev database (the seed never modifies existing rows); production will be created from the seed.
+
 ## 2026-09-30 — Payroll incidents report (Buk) and the Nominista group
 
 - **New report `incidencias-nomina`** for the payroll staff: employee incidents taken from **Buk** through its API and sent as Buk provides them (owner: what matters now is the information Buk gives). Per branch and consolidated, Excel and a report (PDF). Today the payroll staff builds it by hand; there is no example to replicate.

@@ -51,9 +51,9 @@ Initial reports planned: weekly commercial report for managers (not yet defined)
 
 ## Roles and permissions
 
-A user's role is a Django **Group**; what each role may do is editable from the admin (Groups) without code changes. Custom permissions: `ver_reportes`, `generar_reportes`, `gestionar_envios`, `gestionar_usuarios`. `PerfilUsuario` adds branch scope (a manager only sees their branches unless `todas_las_sucursales`). The **Nominista** group (payroll staff) only sees the reports assigned to it -- the payroll ones.
+A user's role is a Django **Group**; what each role may do is editable from the admin (Groups) without code changes. Custom permissions: `ver_reportes`, `generar_reportes`, `gestionar_envios`, `gestionar_usuarios`. `PerfilUsuario` adds branch scope (a manager only sees their branches unless `todas_las_sucursales`). Area groups -- **Nominista** (payroll), **CEDIS** (El Bodegón) and **Contabilidad** -- only see the reports assigned to them.
 
-Create the base roles -- Director, Administrador general, Gerente, Usuario, Nominista (idempotent, never overwrites admin edits to existing groups):
+Create the base roles -- Director, Administrador general, Gerente, Usuario, Nominista, CEDIS, Contabilidad (idempotent, never overwrites admin edits to existing groups):
 
 ```
 python manage.py crear_perfiles

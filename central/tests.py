@@ -19,7 +19,7 @@ PLAIN_STATIC = override_settings(
 
 def _reporte(clave, **kw):
     datos = dict(
-        clave=clave, nombre=clave, categoria="comercial", periodicidad="semanal",
+        clave=clave, nombre=clave, categoria="marca", periodicidad="semanal",
         plantilla="tabular", fuente="odoo", alcance="consolidado",
     )
     datos.update(kw)
@@ -80,7 +80,23 @@ class CargarCatalogoTests(TestCase):
 
     def test_reportes_nuevos_nacen_sin_perfiles(self):
         call_command("cargar_catalogo", stdout=StringIO())
-        self.assertFalse(Reporte.objects.exclude(clave="incidencias-nomina").filter(perfiles__isnull=False).exists())
+        from central.management.commands.cargar_catalogo import CATALOGO
+        con_perfil = {d["clave"] for d in CATALOGO if d.get("perfiles_iniciales")}
+        self.assertFalse(Reporte.objects.exclude(clave__in=con_perfil).filter(perfiles__isnull=False).exists())
+
+    def test_reportes_de_cedis_solo_para_cedis(self):
+        call_command("crear_perfiles", stdout=StringIO())
+        call_command("cargar_catalogo", stdout=StringIO())
+        cedis = User.objects.create_user("c", password="x")
+        cedis.groups.add(Group.objects.get(name="CEDIS"))
+        self.assertEqual(set(Reporte.visibles_para(cedis).values_list("clave", flat=True)),
+                         {"oc-bodegon-empanadas-modificaciones", "oc-bodegon-empanadas-por-hora"})
+        self.assertEqual(set(Reporte.visibles_para(cedis).values_list("categoria", flat=True)), {"cedis"})
+        gerente = User.objects.create_user("g2", password="x")
+        gerente.groups.add(Group.objects.get(name="Gerente"))
+        self.assertEqual(set(Reporte.visibles_para(gerente).values_list("clave", flat=True)),
+                         {"comercial-semanal-gerentes", "indicadores-operativos-semanal"})
+        self.assertEqual(set(Reporte.visibles_para(gerente).values_list("categoria", flat=True)), {"sucursales"})
 
     def test_reporte_de_nomina_solo_para_noministas(self):
         call_command("crear_perfiles", stdout=StringIO())
@@ -91,8 +107,6 @@ class CargarCatalogoTests(TestCase):
         nominista.groups.add(Group.objects.get(name="Nominista"))
         director = User.objects.create_user("d", password="x")
         director.groups.add(Group.objects.get(name="Director"))
-        comercial = Reporte.objects.get(clave="comercial-semanal-gerentes")
-        comercial.perfiles.add(Group.objects.get(name="Director"))
         self.assertEqual(list(Reporte.visibles_para(nominista).values_list("clave", flat=True)), ["incidencias-nomina"])
         self.assertNotIn(nomina, Reporte.visibles_para(director))  # not even the Director, unless assigned
         self.assertTrue(nominista.has_perm("cuentas.generar_reportes"))

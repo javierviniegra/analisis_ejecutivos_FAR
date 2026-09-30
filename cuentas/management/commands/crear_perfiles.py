@@ -16,11 +16,14 @@ PERFILES = {
     # Payroll staff: only sees the reports assigned to this group (the payroll
     # reports), since report access is deny-by-default per group.
     "Nominista": ["ver_reportes", "generar_reportes"],
+    # Area profiles, same idea: each only sees the reports assigned to it.
+    "CEDIS": ["ver_reportes", "generar_reportes"],  # El Bodegón (central kitchen / distribution)
+    "Contabilidad": ["ver_reportes", "generar_reportes"],
 }
 
 
 class Command(BaseCommand):
-    help = "Create the base roles (Director, Administrador general, Gerente, Usuario, Nominista)."
+    help = "Create the base roles (Director, Administrador general, Gerente, Usuario, Nominista, CEDIS, Contabilidad)."
 
     def handle(self, *args, **options):
         for nombre, codenames in PERFILES.items():
