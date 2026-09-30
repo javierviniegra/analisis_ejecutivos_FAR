@@ -20,7 +20,7 @@ Report data comes from Odoo and the productive Wansoft MySQL. Executive reports 
 | 6 | Analysis with Copilot (paid account) | Deferred to last, feasibility unverified |
 | 7 | Production deployment | Not started |
 
-Initial reports planned: weekly commercial report for managers (not yet defined), monthly short investor report, monthly Financial & Operational report for partners (PDF), the two weekly purchase-order Excel reports (Bodegón / Empanadas: modifications and by-hour), the weekly Operating Indicators report (Carlos's Power BI table, with traffic-light rules), the monthly profitability-by-delivery-platform report (Uber, Didi, etc.), and more later.
+Initial reports planned: weekly commercial report for managers (not yet defined), monthly short investor report, monthly Financial & Operational report for partners (PDF), the two weekly purchase-order Excel reports (Bodegón / Empanadas: modifications and by-hour), the weekly Operating Indicators report (Carlos's Power BI table, with traffic-light rules), the monthly profitability-by-delivery-platform report (Uber, Didi, etc.), the payroll incidents report from Buk for the payroll staff (pending: Buk API token and documentation), and more later.
 
 **Rollout:** everything is built and tested locally first (owner's PC, local database). Production comes once a few reports are validated; there it will run a scheduled script that updates the code daily and restarts the app. Users get their own report view and can generate reports by hand. See `docs/DECISIONS.md`.
 
@@ -51,9 +51,9 @@ Initial reports planned: weekly commercial report for managers (not yet defined)
 
 ## Roles and permissions
 
-A user's role is a Django **Group**; what each role may do is editable from the admin (Groups) without code changes. Custom permissions: `ver_reportes`, `generar_reportes`, `gestionar_envios`, `gestionar_usuarios`. `PerfilUsuario` adds branch scope (a manager only sees their branches unless `todas_las_sucursales`).
+A user's role is a Django **Group**; what each role may do is editable from the admin (Groups) without code changes. Custom permissions: `ver_reportes`, `generar_reportes`, `gestionar_envios`, `gestionar_usuarios`. `PerfilUsuario` adds branch scope (a manager only sees their branches unless `todas_las_sucursales`). The **Nominista** group (payroll staff) only sees the reports assigned to it -- the payroll ones.
 
-Create the four base roles (idempotent, never overwrites admin edits to existing groups):
+Create the base roles -- Director, Administrador general, Gerente, Usuario, Nominista (idempotent, never overwrites admin edits to existing groups):
 
 ```
 python manage.py crear_perfiles

@@ -17,10 +17,12 @@ class Reporte(models.Model):
         COMPRAS = "compras", "Compras"
         INVERSIONISTAS = "inversionistas", "Inversionistas"
         EJECUTIVO = "ejecutivo", "Ejecutivo"
+        NOMINA = "nomina", "Nómina / RH"
 
     class Periodicidad(models.TextChoices):
         DIARIA = "diaria", "Diaria"
         SEMANAL = "semanal", "Semanal"
+        QUINCENAL = "quincenal", "Quincenal"
         MENSUAL = "mensual", "Mensual"
         SEMESTRAL = "semestral", "Semestral"
         ANUAL = "anual", "Anual"
@@ -35,6 +37,7 @@ class Reporte(models.Model):
         ODOO = "odoo", "Odoo"
         MYSQL_PROD = "mysql_prod", "MySQL productivo (Wansoft)"
         MIXTA = "mixta", "Mixta (Odoo + MySQL + Presupuestos AP)"
+        BUK = "buk", "Buk (nómina, API)"
 
     class Alcance(models.TextChoices):
         POR_SUCURSAL = "por_sucursal", "Un reporte por sucursal"

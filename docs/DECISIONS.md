@@ -2,6 +2,15 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-09-30 — Payroll incidents report (Buk) and the Nominista group
+
+- **New report `incidencias-nomina`** for the payroll staff: employee incidents taken from **Buk** through its API and sent as Buk provides them (owner: what matters now is the information Buk gives). Per branch and consolidated, Excel and a report (PDF). Today the payroll staff builds it by hand; there is no example to replicate.
+- **New group "Nominista"** (`crear_perfiles`: ver_reportes, generar_reportes). Report access is deny-by-default per group, so noministas only see the reports assigned to them, and the payroll report is assigned only to them (`perfiles_iniciales` in the seed: applied once, when the report is created; a re-run never re-assigns it, so admin edits stand). Not even the Director sees it unless assigned.
+- Catalog: category "Nómina / RH", source "Buk (nómina, API)", periodicity "Quincenal" (migration 0003). State: pending definition.
+- **Buk (public docs, demo.buk.cl/apidocs):** employees (hire, update, termination, movements), areas, vacations, absences (inasistencias), licences, permissions; the platform also records overtime and hours not worked. The instance's API details come with the token and documentation the owner is requesting.
+- **Personal data:** read from Buk when the report is generated, no copy kept in this app's database; access restricted to the Nominista group; the token only in `config/.env`.
+- **Pending (owner):** Buk API token and documentation; which incidents Buk returns; the mapping of Buk areas to branches; the cut-off dates of the payroll periods (weekly paid on Fridays; biweekly paid the 14th and the day before month end: 30, 29 or 27) -- the owner will investigate how the weeks are handled.
+
 ## 2026-09-30 — Costo de Ventas: budget without spend, preliminary real spend
 
 Found by the owner testing week 39 (21-27 Sep 2026) on `wansoft_prueba`:

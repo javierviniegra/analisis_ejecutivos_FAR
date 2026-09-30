@@ -1,4 +1,4 @@
-"""Create/update the four base roles as Django Groups with default permissions.
+"""Create/update the base roles as Django Groups with default permissions.
 
 Idempotent: safe to re-run. Permissions granted here are only the starting
 point -- edit them afterwards from the admin (Groups) without touching code.
@@ -13,11 +13,14 @@ PERFILES = {
     "Administrador general": ["ver_reportes", "generar_reportes", "gestionar_envios", "gestionar_usuarios"],
     "Gerente": ["ver_reportes", "generar_reportes"],
     "Usuario": ["ver_reportes"],
+    # Payroll staff: only sees the reports assigned to this group (the payroll
+    # reports), since report access is deny-by-default per group.
+    "Nominista": ["ver_reportes", "generar_reportes"],
 }
 
 
 class Command(BaseCommand):
-    help = "Create the base roles (Director, Administrador general, Gerente, Usuario)."
+    help = "Create the base roles (Director, Administrador general, Gerente, Usuario, Nominista)."
 
     def handle(self, *args, **options):
         for nombre, codenames in PERFILES.items():

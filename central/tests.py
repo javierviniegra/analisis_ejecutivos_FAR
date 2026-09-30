@@ -80,4 +80,27 @@ class CargarCatalogoTests(TestCase):
 
     def test_reportes_nuevos_nacen_sin_perfiles(self):
         call_command("cargar_catalogo", stdout=StringIO())
-        self.assertFalse(Reporte.objects.filter(perfiles__isnull=False).exists())
+        self.assertFalse(Reporte.objects.exclude(clave="incidencias-nomina").filter(perfiles__isnull=False).exists())
+
+    def test_reporte_de_nomina_solo_para_noministas(self):
+        call_command("crear_perfiles", stdout=StringIO())
+        call_command("cargar_catalogo", stdout=StringIO())
+        nomina = Reporte.objects.get(clave="incidencias-nomina")
+        self.assertEqual(list(nomina.perfiles.values_list("name", flat=True)), ["Nominista"])
+        nominista = User.objects.create_user("n", password="x")
+        nominista.groups.add(Group.objects.get(name="Nominista"))
+        director = User.objects.create_user("d", password="x")
+        director.groups.add(Group.objects.get(name="Director"))
+        comercial = Reporte.objects.get(clave="comercial-semanal-gerentes")
+        comercial.perfiles.add(Group.objects.get(name="Director"))
+        self.assertEqual(list(Reporte.visibles_para(nominista).values_list("clave", flat=True)), ["incidencias-nomina"])
+        self.assertNotIn(nomina, Reporte.visibles_para(director))  # not even the Director, unless assigned
+        self.assertTrue(nominista.has_perm("cuentas.generar_reportes"))
+
+    def test_perfil_inicial_solo_al_crear(self):
+        call_command("crear_perfiles", stdout=StringIO())
+        call_command("cargar_catalogo", stdout=StringIO())
+        nomina = Reporte.objects.get(clave="incidencias-nomina")
+        nomina.perfiles.clear()  # the admin removes it
+        call_command("cargar_catalogo", stdout=StringIO())
+        self.assertFalse(nomina.perfiles.exists())  # a re-run never re-assigns

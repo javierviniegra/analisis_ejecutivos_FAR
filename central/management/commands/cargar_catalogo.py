@@ -6,6 +6,7 @@ never overwritten. New keys are created with no profiles assigned, meaning
 nobody but staff sees them until access is granted in the admin.
 """
 
+from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
 
 from central.models import Reporte
@@ -14,6 +15,18 @@ C, P, F, S = Reporte.Categoria, Reporte.Periodicidad, Reporte.Plantilla, Reporte
 A, E = Reporte.Alcance, Reporte.Estado
 
 CATALOGO = [
+    dict(
+        clave="incidencias-nomina",
+        nombre="Incidencias de nómina (Buk)",
+        descripcion="Incidencias de los empleados traídas de Buk por su API (inasistencias, licencias, permisos, "
+        "vacaciones y lo que Buk entregue) para los noministas, por sucursal y periodo de nómina.",
+        categoria=C.NOMINA, periodicidad=P.SEMANAL, plantilla=F.TABULAR, fuente=S.BUK,
+        alcance=A.AMBOS, admite_pdf=True, admite_excel=True, estado=E.PENDIENTE,
+        notas="Pendiente: token y documentacion de la API de Buk, catalogo de incidencias disponible, mapeo de "
+        "areas de Buk a sucursales y cortes de los periodos de nomina (semanal, quincenal, mensual). Datos personales: "
+        "se leen de Buk al generar, sin guardar copia. Visible solo para el grupo Nominista.",
+        perfiles_iniciales=["Nominista"],
+    ),
     dict(
         clave="resumen-ejecutivo-sucursal",
         nombre="Resumen ejecutivo por sucursal",
@@ -96,6 +109,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         for datos in CATALOGO:
-            _, creado = Reporte.objects.get_or_create(clave=datos["clave"], defaults=datos)
+            datos = dict(datos)
+            perfiles = datos.pop("perfiles_iniciales", [])
+            reporte, creado = Reporte.objects.get_or_create(clave=datos["clave"], defaults=datos)
+            if creado and perfiles:
+                reporte.perfiles.set(Group.objects.filter(name__in=perfiles))
             estado = "Creado" if creado else "Ya existia (sin cambios)"
             self.stdout.write(f"{estado}: {datos['nombre']}")
