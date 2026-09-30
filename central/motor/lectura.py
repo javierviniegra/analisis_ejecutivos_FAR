@@ -182,17 +182,24 @@ def _costo_ventas(actual: Metricas) -> Observacion | None:
 
 
 def _costo_meta(actual: Metricas) -> Observacion | None:
-    """Invoiced cost vs the 38.0%-39.9% target (business rule, per week and month)."""
-    pct = actual.pct_costo_ventas
-    color = semaforo_costo(pct)
-    if color is None:
+    """Both costs vs the 38.0%-39.9% target (business rule, per week and month):
+    total cost (Wansoft/Odoo) and invoiced cost (Presupuestos AP)."""
+    donde = {VERDE: "dentro de la meta", NARANJA: "abajo de la meta", ROJO: "arriba de la meta"}
+    partes, colores = [], []
+    for nombre, pct in (("total", actual.pct_costo_total), ("facturado", actual.pct_costo_ventas)):
+        color = semaforo_costo(pct)
+        if color is None:
+            continue
+        colores.append(color)
+        texto = f"{nombre} {pct * 100:.1f}%, {donde[color]}"
+        if nombre == "facturado" and actual.costo_preliminar:
+            texto += " (preliminar, pueden faltar facturas)"
+        partes.append(texto)
+    if not partes:
         return None
     rango = f"{META_COSTO_MIN * 100:.1f}-{(META_COSTO_TOPE * 100) - Decimal('0.1'):.1f}%"
-    donde = {VERDE: "dentro de la meta", NARANJA: "abajo de la meta", ROJO: "arriba de la meta"}[color]
-    texto = f"El costo facturado fue {pct * 100:.1f}% de la venta neta: {donde} ({rango})"
-    if actual.costo_preliminar:
-        texto += "; cifra preliminar, pueden faltar facturas del periodo"
-    return Observacion(texto + ".", POSITIVO if color == VERDE else NEGATIVO)
+    return Observacion(f"Costo sobre la venta neta (meta {rango}): " + "; ".join(partes) + ".",
+                       POSITIVO if all(c == VERDE for c in colores) else NEGATIVO)
 
 
 def construir_lectura(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,

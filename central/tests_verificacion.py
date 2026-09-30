@@ -31,5 +31,6 @@ class VerificacionTests(SimpleTestCase):
     def test_columnas_declaradas(self):
         # the declared requirements cover the tables each source module queries
         self.assertEqual(set(wansoft.COLUMNAS_REQUERIDAS),
-                         {"getglobalcashclosing", "getallordenesbyday_new_venta", "getallordenesbyday_new_detalleventa"})
+                         {"getglobalcashclosing", "getallordenesbyday_new_venta", "getallordenesbyday_new_detalleventa",
+                          "costeomensual", "costeomensual_semanapyq"})
         self.assertIn("presupuestos_gastoreal", presupuestos.COLUMNAS_REQUERIDAS)

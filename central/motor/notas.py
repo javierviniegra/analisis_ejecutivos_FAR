@@ -70,6 +70,8 @@ def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Comparacion | 
             notas.append(f"Mezcla y canal s/cf contra {nombre}: el detalle de tickets cubre "
                          f"{m.dias_con_detalle} de {m.dias_esperados} días.")
     notas += _notas_costo_preliminar(periodo, actual, comparaciones)
+    if periodo.tipo == TipoPeriodo.RANGO:
+        notas.append("Costo total: no disponible en un rango libre (solo semana, mes o bloques de meses).")
     return notas
 
 
@@ -103,8 +105,9 @@ def notas_reglas(periodo: Periodo | None = None) -> list[str]:
         f"Costo de Ventas real: preliminar (s/cf) hasta {presupuestos.DIAS_CIERRE_MES} días después del cierre del "
         "mes del periodo, porque las facturas se siguen capturando en Odoo.",
         f"Meta de costo: {_pct(META_COSTO_MIN)} a {_num(META_COSTO_TOPE - Decimal('0.001'))}% de la venta neta (verde); "
-        f"abajo de {_pct(META_COSTO_MIN)} naranja, {_pct(META_COSTO_TOPE)} o más rojo. Costo facturado = facturas de "
-        "Presupuestos AP (el flujo); la medición por mercancía recibida está pendiente.",
+        f"abajo de {_pct(META_COSTO_MIN)} naranja, {_pct(META_COSTO_TOPE)} o más rojo. Costo total = reporte de costos "
+        "de Wansoft u Odoo (costo total menos consumo; el consumo se registra de forma irregular); costo facturado = "
+        "facturas de Presupuestos AP (el flujo); la medición por mercancía recibida está pendiente.",
     ]
     if periodo is None or periodo.tipo == TipoPeriodo.SEMANA:
         reglas.insert(4, "Semana de lunes a domingo; la misma semana del año anterior es la misma semana ISO "

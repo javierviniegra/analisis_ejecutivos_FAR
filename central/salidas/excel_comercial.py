@@ -169,7 +169,8 @@ def _detalle(ws, r: ReporteComercial):
     ws["A1"] = "Detalle por sucursal" if r.por_sucursal else "Detalle por periodo"
     ws["A1"].font = SECCION_F
     if r.por_sucursal:
-        _encabezado(ws, 3, ["Sucursal", "Venta bruta", "Var.", "", "Clientes", "Cheque prom.", "Costo facturado"])
+        _encabezado(ws, 3, ["Sucursal", "Venta bruta", "Var.", "", "Clientes", "Cheque prom.", "Costo total",
+                            "Costo facturado"])
         filas, total = detalle.por_sucursal(r)
         for i, f in enumerate(filas + [total], start=4):
             ws.cell(i, 1, f.nombre).font = Font(bold=f is total)
@@ -177,10 +178,11 @@ def _detalle(ws, r: ReporteComercial):
             _variacion(ws, i, 3, f.var_anterior, MONEDA)
             _numero(ws, i, 5, f.clientes, ENTERO)
             _numero(ws, i, 6, f.cheque_promedio, MONEDA)
-            _numero(ws, i, 7, f.pct_costo, PORCENTAJE)
-            if f.semaforo:
-                ws.cell(i, 7).fill = PatternFill("solid", fgColor=FONDO_SEMAFORO[f.semaforo])
-        anchos = (32, 18, 10, 4, 12, 14, 16)
+            for col, pct, color in ((7, f.pct_costo_total, f.semaforo_total), (8, f.pct_costo, f.semaforo)):
+                _numero(ws, i, col, pct, PORCENTAJE)
+                if color:
+                    ws.cell(i, col).fill = PatternFill("solid", fgColor=FONDO_SEMAFORO[color])
+        anchos = (32, 18, 10, 4, 12, 14, 14, 16)
     else:
         compara = detalle.compara_con_anterior(r)
         _encabezado(ws, 3, ["Periodo", "Venta bruta", "Tickets", "Clientes", "Cheque prom."]

@@ -81,6 +81,10 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool) -> list[Reporte
                  metricas.comparables(nombres, ma, mp, periodo, anterior),
                  metricas.comparables(nombres, ma, my, periodo, anio_ant), diario)
         r.por_sucursal = [(n, ma[i], mp[i]) for i, n in enumerate(nombres)]
+        sin_costo = [n for n, m, _ in r.por_sucursal if m.costo_total is None and m.dias_con_cierre]
+        if sin_costo and periodo.tipo != TipoPeriodo.RANGO:
+            r.cobertura.append("Costo total sin dato en el reporte de costos (fuera de su porcentaje): "
+                               + ", ".join(sin_costo) + ".")
         return [r]
     return [
         _uno(n, [n], periodo, ma[i],

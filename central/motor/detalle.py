@@ -36,7 +36,9 @@ class FilaSucursal:
     var_anterior: Variacion
     clientes: Decimal
     cheque_promedio: Decimal | None
-    pct_costo: Decimal | None
+    pct_costo_total: Decimal | None  # total cost (Wansoft/Odoo) / net sales
+    semaforo_total: str | None
+    pct_costo: Decimal | None  # invoiced cost (Presupuestos AP) / net sales
     semaforo: str | None
 
 
@@ -53,6 +55,7 @@ class FilaPeriodo:
 
 def _fila_sucursal(nombre: str, m: Metricas, var: Variacion) -> FilaSucursal:
     return FilaSucursal(nombre, m.venta_bruta, var, m.clientes, m.cheque_promedio,
+                        m.pct_costo_total, semaforo_costo(m.pct_costo_total),
                         m.pct_costo_ventas, semaforo_costo(m.pct_costo_ventas))
 
 

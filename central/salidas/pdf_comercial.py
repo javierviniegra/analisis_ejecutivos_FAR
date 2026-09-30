@@ -279,10 +279,22 @@ def _columnas(anchos: list[float]) -> list[float]:
     return x
 
 
+def _pct_con_punto(c, x_der: float, base: float, pct, color, negrita: bool):
+    texto = formato.valor(pct, PORCENTAJE) if pct is not None else "—"
+    fuente = FB if negrita else F
+    c.setFillColor(TEXTO)
+    c.setFont(fuente, 7.6)
+    c.drawRightString(x_der, base, texto)
+    if color:
+        c.setFillColor(COLOR_SEMAFORO[color])
+        c.circle(x_der - c.stringWidth(texto, fuente, 7.6) - 6, base + 2.6, 2.4, fill=1, stroke=0)
+
+
 def _detalle_sucursales(c, r: ReporteComercial, y: float) -> float:
     alto = 11.0
-    x = _columnas([170, 92, 62, 66, 66, 60])  # = ANCHO_UTIL
-    y = _encabezado_tabla(c, x, y, ["Sucursal", "Venta bruta", "Var.", "Clientes", "Cheque prom.", "Costo fact."], alto)
+    x = _columnas([138, 86, 56, 58, 72, 53, 53])  # = ANCHO_UTIL
+    y = _encabezado_tabla(c, x, y, ["Sucursal", "Venta bruta", "Var.", "Clientes", "Cheque prom.",
+                                    "Costo total", "Costo fact."], alto)
     filas, total = detalle.por_sucursal(r)
     for i, f in enumerate(filas + [total]):
         es_total = f is total
@@ -293,13 +305,11 @@ def _detalle_sucursales(c, r: ReporteComercial, y: float) -> float:
             c.setFillColor(FONDO_CAJA)
             c.rect(MARGEN, y - alto + 2.5, ANCHO_UTIL, alto, fill=1, stroke=0)
         base = y - 6.5
-        pct = formato.valor(f.pct_costo, PORCENTAJE) if f.pct_costo is not None else "—"
         _celdas(c, x, base, [f.nombre, formato.valor(f.venta_bruta, MONEDA), None, formato.valor(f.clientes, ENTERO),
-                             formato.valor(f.cheque_promedio, MONEDA), pct], negrita=es_total)
+                             formato.valor(f.cheque_promedio, MONEDA), None, None], negrita=es_total)
         _variacion(c, x[3] - 5, base, f.var_anterior, MONEDA)
-        if f.semaforo:
-            c.setFillColor(COLOR_SEMAFORO[f.semaforo])
-            c.circle(x[6] - 5 - c.stringWidth(pct, FB if es_total else F, 7.6) - 6, base + 2.6, 2.4, fill=1, stroke=0)
+        _pct_con_punto(c, x[6] - 5, base, f.pct_costo_total, f.semaforo_total, es_total)
+        _pct_con_punto(c, x[7] - 5, base, f.pct_costo, f.semaforo, es_total)
         y -= alto
     return y - 6
 

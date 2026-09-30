@@ -10,12 +10,12 @@ presenting a partial sum as if it were complete.
 """
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from .comparativos import cobertura_fiable
 from .fuentes import presupuestos, wansoft
-from .periodo import Periodo
+from .periodo import Periodo, TipoPeriodo
 
 CERO = Decimal("0")
 
@@ -59,6 +59,10 @@ class Metricas:
     # Net sales of the branches that have real Costo de Ventas: the base of
     # "cost % of net sales", so branches without cost data never dilute it.
     venta_neta_con_costo: Decimal | None = None
+    # Total cost (Wansoft or Odoo cost report, the data guide's "Costo Total":
+    # CostoTotal - consumption), with the net sales of the branches that have it.
+    costo_total: Decimal | None = None
+    venta_neta_con_costo_total: Decimal | None = None
 
     @property
     def dias_esperados(self) -> int:
@@ -84,10 +88,43 @@ class Metricas:
         return _razon(self.costo_ventas_real_con_ppto, self.costo_ventas_ppto_con_real)
 
     @property
+    def pct_costo_total(self) -> Decimal | None:
+        """Total cost (Wansoft/Odoo) as a share of the net sales of the same branches."""
+        return _razon(self.costo_total, self.venta_neta_con_costo_total)
+
+    @property
     def pct_costo_ventas(self) -> Decimal | None:
         """Real (invoiced) Costo de Ventas as a share of the net sales of the
         same branches (0.385 = 38.5%)."""
         return _razon(self.costo_ventas_real, self.venta_neta_con_costo)
+
+
+def _meses(desde: date, hasta: date) -> list[tuple[date, date]]:
+    tramos, d = [], desde.replace(day=1)
+    while d <= hasta:
+        siguiente = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+        tramos.append((d, siguiente - timedelta(days=1)))
+        d = siguiente
+    return tramos
+
+
+def costos_totales(cur_wansoft, subsidiary_ids: list[int], periodo: Periodo) -> dict[int, Decimal] | None:
+    """Total cost per branch for the period, from the cost snapshots: a week
+    from the weekly table, a month from the monthly table, a bimester / quarter
+    / semester / year as the sum of its months. A free range cannot be built
+    without mixing definitions (the daily table includes consumption): None.
+    A branch whose cost is 0 has no data (e.g. a branch born on Odoo before its
+    cost history is loaded), never a 0% cost."""
+    if periodo.tipo == TipoPeriodo.RANGO:
+        return None
+    if periodo.tipo == TipoPeriodo.SEMANA:
+        costos = wansoft.costo_total_semana(cur_wansoft, subsidiary_ids, periodo.desde)
+    else:
+        costos: dict[int, Decimal] = {}
+        for primero, ultimo in _meses(periodo.desde, periodo.hasta):
+            for sid, v in wansoft.costo_total_mes(cur_wansoft, subsidiary_ids, primero, ultimo).items():
+                costos[sid] = costos.get(sid, CERO) + v
+    return {sid: v for sid, v in costos.items() if v}
 
 
 def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo, hoy: date | None = None) -> list[Metricas]:
@@ -101,6 +138,8 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
     nombres = [s.wansoft_ticket_nombre for s in sucursales]
     detalle = wansoft.detalle_por_sucursal(cur_wansoft, nombres, d, h)
     mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h)
+    costos = costos_totales(cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales
+                                          if s.wansoft_subsidiary_id is not None], periodo) or {}
 
     resultado = []
     for sucursal in sucursales:
@@ -120,6 +159,9 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
         m.tickets_por_dia = {dia: t["tickets"] for dia, t in dias.items()}
         m.clientes_por_dia = {dia: t["clientes"] for dia, t in dias.items()}
         m.dias_con_cierre = len(dias)
+        if sucursal.wansoft_subsidiary_id in costos:
+            m.costo_total = costos[sucursal.wansoft_subsidiary_id]
+            m.venta_neta_con_costo_total = m.venta_neta
 
         nombre = sucursal.wansoft_ticket_nombre
         if nombre in detalle:
@@ -173,6 +215,9 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
         if m.costo_ventas_real is not None:
             total.costo_ventas_real = (total.costo_ventas_real or CERO) + m.costo_ventas_real
             total.venta_neta_con_costo = (total.venta_neta_con_costo or CERO) + (m.venta_neta_con_costo or CERO)
+        if m.costo_total is not None:
+            total.costo_total = (total.costo_total or CERO) + m.costo_total
+            total.venta_neta_con_costo_total = (total.venta_neta_con_costo_total or CERO) + (m.venta_neta_con_costo_total or CERO)
         if m.costo_ventas_ppto is not None:
             total.costo_ventas_ppto = (total.costo_ventas_ppto or CERO) + m.costo_ventas_ppto
             total.n_con_presupuesto += 1

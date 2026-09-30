@@ -28,13 +28,16 @@ class DetalleTests(SimpleTestCase):
     def test_por_sucursal_ordena_y_respeta_comparables(self):
         ant = self.SEM.anterior()
         vieja, nueva = _m(self.SEM, "1000", costo="2730"), _m(self.SEM, "3000")
+        vieja.costo_total, vieja.venta_neta_con_costo_total = D("2800"), D("7000")
         r = _uno("Consolidado", ["Vieja", "Nueva"], self.SEM, consolidar([vieja, nueva], self.SEM),
                  Comparacion(vieja, _m(ant, "900")), Comparacion(vieja, None), None)
         r.por_sucursal = [("Vieja", vieja, _m(ant, "900")), ("Nueva", nueva, _m(ant, "900", dias=2))]
         filas, total = detalle.por_sucursal(r)
         self.assertEqual([f.nombre for f in filas], ["Nueva", "Vieja"])  # largest sales first
         self.assertEqual(filas[0].var_anterior.direccion, c.SIN_DATO)  # new branch: 2 of 7 days before, no comparison
-        self.assertEqual(filas[1].semaforo, c.VERDE)  # 2730 / 7000 = 39%
+        self.assertEqual(filas[1].semaforo, c.VERDE)  # invoiced 2730 / 7000 = 39%
+        self.assertEqual((filas[1].pct_costo_total, filas[1].semaforo_total), (D("0.4"), c.ROJO))  # total 2800 / 7000
+        self.assertIsNone(filas[0].semaforo_total)  # no cost data: no light
         self.assertEqual(total.venta_bruta, D("28000"))
         self.assertEqual(total.var_anterior, next(f for f in r.filas if f.indicador.clave == "venta_bruta").var_anterior)
 
