@@ -11,7 +11,7 @@ Two kinds, both printed at the foot of every report (owner, 2026-09-24):
 from decimal import Decimal
 
 from . import lectura
-from .comparativos import UMBRAL_COBERTURA_FIABLE, UMBRAL_IGUAL, cobertura_fiable
+from .comparativos import META_COSTO_MIN, META_COSTO_TOPE, UMBRAL_COBERTURA_FIABLE, UMBRAL_IGUAL, cobertura_fiable
 from .fuentes import presupuestos
 from .fuentes.wansoft import HORA_CORTE_DIA
 from .metricas import Comparacion, Metricas, como_comparacion
@@ -77,10 +77,9 @@ def _notas_costo_preliminar(periodo: Periodo, actual: Metricas, comparaciones) -
     if actual.costo_preliminar:
         definitivo = presupuestos.fecha_definitiva(periodo.hasta)
         if actual.costo_ventas_real is None:
-            return [f"Costo de Ventas real: aún no hay facturas registradas del periodo en Odoo; "
+            return [f"Costo de Ventas real: aún no hay facturas registradas del periodo; "
                     f"será definitivo a partir del {definitivo:%d/%m/%Y}."]
-        return [f"Costo de Ventas real preliminar: las facturas del periodo se siguen registrando en Odoo; "
-                f"será definitivo a partir del {definitivo:%d/%m/%Y}. Sus comparativos son s/cf."]
+        return [f"Costo de Ventas real preliminar (s/cf): será definitivo a partir del {definitivo:%d/%m/%Y}."]
     previos = [nombre for comp, nombre in comparaciones if comp.base is not None and comp.base.costo_preliminar]
     if previos:
         return [f"Costo de Ventas real de {_lista(previos)} aún preliminar: su comparativo es s/cf."]
@@ -94,16 +93,18 @@ def notas_reglas(periodo: Periodo | None = None) -> list[str]:
         "Mezcla, canal y presupuesto se muestran siempre en gris.",
         f"s/c: sin comparativo (no hay datos). s/cf: sin comparativo fiable, cuando alguno de los periodos "
         f"tiene datos en menos del {_pct(UMBRAL_COBERTURA_FIABLE)} de los días esperados.",
-        f"Sucursales comparables: una sucursal sin datos en al menos el {_pct(UMBRAL_COBERTURA_FIABLE)} de los "
-        "días del periodo de comparación (nueva o sin operación) se excluye de ambos lados de esa comparación; "
-        "la columna del periodo muestra siempre el total de todas las sucursales elegidas.",
+        f"Sucursales comparables: la que no tiene datos en el {_pct(UMBRAL_COBERTURA_FIABLE)} de los días del "
+        "periodo de comparación (nueva o sin operación) sale de ambos lados; la columna del periodo es el total.",
         f"Día operativo: un cierre de caja hecho antes de las {HORA_CORTE_DIA}:00 cuenta para el día anterior; "
         "los cierres duplicados (mismo día y mismos totales) se cuentan una sola vez.",
         f"Lectura: controles solo si suben y pesan al menos {_pct(lectura.UMBRAL_PESO_CONTROL)} de la venta neta; "
         f"mezcla y canal solo si se mueven más de {_pp(lectura.UMBRAL_PUNTOS_MEZCLA)}; Costo de Ventas solo si "
         "supera el presupuesto prorrateado por días.",
-        f"Costo de Ventas real (Presupuestos AP): es preliminar, sin comparativo, hasta {presupuestos.DIAS_CIERRE_MES} "
-        "días después del cierre del mes en que termina el periodo, porque las facturas se siguen capturando en Odoo.",
+        f"Costo de Ventas real: preliminar (s/cf) hasta {presupuestos.DIAS_CIERRE_MES} días después del cierre del "
+        "mes del periodo, porque las facturas se siguen capturando en Odoo.",
+        f"Meta de costo: {_pct(META_COSTO_MIN)} a {_num(META_COSTO_TOPE - Decimal('0.001'))}% de la venta neta (verde); "
+        f"abajo de {_pct(META_COSTO_MIN)} naranja, {_pct(META_COSTO_TOPE)} o más rojo. Costo facturado = facturas de "
+        "Presupuestos AP (el flujo); la medición por mercancía recibida está pendiente.",
     ]
     if periodo is None or periodo.tipo == TipoPeriodo.SEMANA:
         reglas.insert(4, "Semana de lunes a domingo; la misma semana del año anterior es la misma semana ISO "

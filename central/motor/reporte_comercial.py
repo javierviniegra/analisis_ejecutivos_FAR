@@ -8,14 +8,14 @@ PDF, the web screen and the automations all show exactly the same thing.
 returns one `ReporteComercial` per branch, or a single consolidated one.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from . import metricas
 from .fuentes import conexiones
 from .graficas import Grafica, construir_graficas, ventana_tendencia
 from .lectura import Lectura, construir_lectura
 from .metricas import Comparacion, Metricas
-from .notas import notas_pie
+from .notas import notas_cobertura, notas_reglas
 from .periodo import Periodo, TipoPeriodo
 from .tabla_comercial import Fila, construir_tabla
 
@@ -33,7 +33,14 @@ class ReporteComercial:
     lectura: Lectura
     filas: list[Fila]
     graficas: list[Grafica]
-    notas: list[str]
+    cobertura: list[str]  # footnotes about this period's data
+    reglas: list[str]  # the rules and thresholds the report applies
+    # Consolidated only: each branch's own period and previous period, for the detail page.
+    por_sucursal: list[tuple[str, Metricas, Metricas | None]] = field(default_factory=list)
+
+    @property
+    def notas(self) -> list[str]:
+        return self.cobertura + self.reglas
 
 
 def _uno(nombre, sucursales, periodo, actual, anterior, anio_anterior, diario) -> ReporteComercial:
@@ -47,7 +54,8 @@ def _uno(nombre, sucursales, periodo, actual, anterior, anio_anterior, diario) -
         lectura=construir_lectura(periodo, actual, anterior, anio_anterior),
         filas=construir_tabla(actual, anterior, anio_anterior),
         graficas=construir_graficas(periodo, actual, anterior, anio_anterior, diario),
-        notas=notas_pie(periodo, actual, anterior, anio_anterior),
+        cobertura=notas_cobertura(periodo, actual, anterior, anio_anterior),
+        reglas=notas_reglas(periodo),
     )
 
 
@@ -69,9 +77,11 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool) -> list[Reporte
 
     nombres = [s.nombre for s in sucursales]
     if consolidado:
-        return [_uno("Consolidado", nombres, periodo, metricas.consolidar(ma, periodo),
-                     metricas.comparables(nombres, ma, mp, periodo, anterior),
-                     metricas.comparables(nombres, ma, my, periodo, anio_ant), diario)]
+        r = _uno("Consolidado", nombres, periodo, metricas.consolidar(ma, periodo),
+                 metricas.comparables(nombres, ma, mp, periodo, anterior),
+                 metricas.comparables(nombres, ma, my, periodo, anio_ant), diario)
+        r.por_sucursal = [(n, ma[i], mp[i]) for i, n in enumerate(nombres)]
+        return [r]
     return [
         _uno(n, [n], periodo, ma[i],
              metricas.comparables([n], [ma[i]], [mp[i]], periodo, anterior),

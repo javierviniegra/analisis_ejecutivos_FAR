@@ -1,8 +1,9 @@
 """Excel workbook of the commercial report (openpyxl).
 
-Per report, four sheets: Resumen (header, Lectura, indicators table with real
-numbers so they can be worked on), the data behind each chart with a native
-Excel chart, and Notas (coverage, branches left out, rules and thresholds).
+Per report: Resumen (header, Lectura, indicators table with real numbers so
+they can be worked on), the data behind each chart with a native Excel chart,
+Detalle (per branch or per day/block, as the PDF's second page) and Notas
+(coverage, branches left out, rules and thresholds).
 With several reports in one workbook, each sheet name starts with the branch.
 """
 
@@ -13,7 +14,8 @@ from openpyxl.chart import BarChart, Reference
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from ..motor.comparativos import BAJA, IGUAL, ROJO, SUBE, VERDE
+from ..motor.comparativos import BAJA, IGUAL, NARANJA, ROJO, SUBE, VERDE
+from ..motor import detalle
 from ..motor.periodo import TipoPeriodo
 from ..motor.reporte_comercial import TITULO, ReporteComercial, filas_visibles, nombre_base
 from ..motor.tabla_comercial import ENTERO, MONEDA, PORCENTAJE
@@ -23,6 +25,7 @@ VERDE_CLARO = "A7C2BC"
 COLOR_VAR = {VERDE: "1E7B4F", ROJO: "B3261E"}
 GRIS = "8A8A8A"
 FONDO_CAJA = "F2F5F4"
+FONDO_SEMAFORO = {VERDE: "CDEBD9", NARANJA: "FBE0C3", ROJO: "F6CFCB"}  # light fills behind the value
 
 FORMATO_VALOR = {MONEDA: '"$"#,##0.00', ENTERO: "#,##0", PORCENTAJE: "0.0%"}
 FORMATO_VAR_RELATIVA = '+0.0%;-0.0%;0.0%'
@@ -99,11 +102,14 @@ def _resumen(ws, r: ReporteComercial):
             c.number_format = FORMATO_VALOR[fmt]
             c.alignment = Alignment(horizontal="right")
         ws.cell(fila, 2).font = Font(bold=True)
+        if f.semaforo:  # target indicator: the period's value on its traffic-light colour
+            ws.cell(fila, 2).fill = PatternFill("solid", fgColor=FONDO_SEMAFORO[f.semaforo])
         _variacion(ws, fila, 4, f.var_anterior, fmt)
         _variacion(ws, fila, 7, f.var_anio, fmt)
         if par:
             for col in range(1, 9):
-                ws.cell(fila, col).fill = PAR_R
+                if not (col == 2 and f.semaforo):  # keep the traffic-light colour
+                    ws.cell(fila, col).fill = PAR_R
         par = not par
     for col, ancho in zip("ABCDEFGH", (38, 18, 18, 10, 4, 18, 10, 4)):
         ws.column_dimensions[col].width = ancho
@@ -147,6 +153,52 @@ def _datos_grafica(ws, g):
     ws.add_chart(grafica, f"{get_column_letter(columnas + 2)}3")
 
 
+def _encabezado(ws, fila: int, titulos: list[str]):
+    for col, texto in enumerate(titulos, start=1):
+        c = ws.cell(fila, col, texto)
+        c.font, c.fill = ENCABEZADO_F, ENCABEZADO_R
+
+
+def _numero(ws, fila: int, col: int, valor, fmt: str):
+    c = ws.cell(fila, col, float(valor) if valor is not None else None)
+    c.number_format = FORMATO_VALOR[fmt]
+
+
+def _detalle(ws, r: ReporteComercial):
+    """Same detail as the PDF's second page: per branch, or per day/block."""
+    ws["A1"] = "Detalle por sucursal" if r.por_sucursal else "Detalle por periodo"
+    ws["A1"].font = SECCION_F
+    if r.por_sucursal:
+        _encabezado(ws, 3, ["Sucursal", "Venta bruta", "Var.", "", "Clientes", "Cheque prom.", "Costo facturado"])
+        filas, total = detalle.por_sucursal(r)
+        for i, f in enumerate(filas + [total], start=4):
+            ws.cell(i, 1, f.nombre).font = Font(bold=f is total)
+            _numero(ws, i, 2, f.venta_bruta, MONEDA)
+            _variacion(ws, i, 3, f.var_anterior, MONEDA)
+            _numero(ws, i, 5, f.clientes, ENTERO)
+            _numero(ws, i, 6, f.cheque_promedio, MONEDA)
+            _numero(ws, i, 7, f.pct_costo, PORCENTAJE)
+            if f.semaforo:
+                ws.cell(i, 7).fill = PatternFill("solid", fgColor=FONDO_SEMAFORO[f.semaforo])
+        anchos = (32, 18, 10, 4, 12, 14, 16)
+    else:
+        compara = detalle.compara_con_anterior(r)
+        _encabezado(ws, 3, ["Periodo", "Venta bruta", "Tickets", "Clientes", "Cheque prom."]
+                    + (["Anterior", "Var.", ""] if compara else []))
+        for i, f in enumerate(detalle.por_periodo(r), start=4):
+            ws.cell(i, 1, f.etiqueta.replace(chr(10), " "))
+            _numero(ws, i, 2, f.venta_bruta, MONEDA)
+            _numero(ws, i, 3, f.tickets, ENTERO)
+            _numero(ws, i, 4, f.clientes, ENTERO)
+            _numero(ws, i, 5, f.cheque_promedio, MONEDA)
+            if compara:
+                _numero(ws, i, 6, f.venta_anterior, MONEDA)
+                _variacion(ws, i, 7, f.var_anterior, MONEDA)
+        anchos = (14, 18, 10, 10, 14, 18, 10, 4)
+    for col, ancho in zip("ABCDEFGH", anchos):
+        ws.column_dimensions[col].width = ancho
+
+
 def _notas(ws, r: ReporteComercial):
     ws["A1"] = "Notas"
     ws["A1"].font = SECCION_F
@@ -169,6 +221,7 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
             nombres = ["Vs periodo anterior", "Vs año anterior"]
         for g, nombre in zip(r.graficas, nombres):
             _datos_grafica(_hoja(wb, r, nombre, varios), g)
+        _detalle(_hoja(wb, r, "Detalle", varios), r)
         _notas(_hoja(wb, r, "Notas", varios), r)
     salida = io.BytesIO()
     wb.save(salida)

@@ -75,6 +75,7 @@ class Command(BaseCommand):
                     f"    {f.indicador.etiqueta:<36} {formato.valor(f.actual, fm):>16} | "
                     f"ant {formato.valor(f.anterior, fm):>16} {formato.variacion(f.var_anterior, fm):>12} | "
                     f"a.ant {formato.valor(f.anio_anterior, fm):>16} {formato.variacion(f.var_anio, fm):>12}"
+                    + (f"  [{f.semaforo}]" if f.semaforo else "")
                 )
             self.stdout.write("  -- Notas")
             for n in r.notas:

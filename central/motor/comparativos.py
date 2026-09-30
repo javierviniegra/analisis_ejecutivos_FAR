@@ -15,7 +15,22 @@ UMBRAL_IGUAL = Decimal("0.01")
 UMBRAL_COBERTURA_FIABLE = Decimal("0.90")
 
 SUBE, BAJA, IGUAL, SIN_DATO, NO_FIABLE = "sube", "baja", "igual", "sin_dato", "no_fiable"
-VERDE, ROJO, GRIS = "verde", "rojo", "gris"
+VERDE, ROJO, GRIS, NARANJA = "verde", "rojo", "gris", "naranja"
+
+# Business rule (owner, 2026-09-30): Costo de Ventas must be 38.0%-39.9% of
+# net sales, per week and per month. Below 38% orange (bought too little or
+# did not capture purchases); 40% or more red (bought too much).
+META_COSTO_MIN = Decimal("0.38")
+META_COSTO_TOPE = Decimal("0.40")
+
+
+def semaforo_costo(pct: Decimal | None) -> str | None:
+    """Traffic light of Costo de Ventas as a share of net sales."""
+    if pct is None:
+        return None
+    if pct < META_COSTO_MIN:
+        return NARANJA
+    return VERDE if pct < META_COSTO_TOPE else ROJO
 SIMBOLOS = {SUBE: "▲", BAJA: "▼", IGUAL: "=", SIN_DATO: "s/c", NO_FIABLE: "s/cf"}
 NO_COMPARABLE = (SIN_DATO, NO_FIABLE)
 

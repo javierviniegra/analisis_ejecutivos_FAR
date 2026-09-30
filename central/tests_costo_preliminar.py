@@ -47,7 +47,7 @@ class CostoPreliminarTests(SimpleTestCase):
         self.assertIn("será definitivo a partir del 11/10/2026", " ".join(notas))
         notas = notas_cobertura(SEM39, _m(), _m(SEM39.anterior(), preliminar=True), None)
         self.assertIn("Costo de Ventas real de la semana anterior aún preliminar", " ".join(notas))
-        self.assertIn("10 días después del cierre del mes", " ".join(notas_reglas()))
+        self.assertIn("10 días después del cierre del mes del periodo", " ".join(notas_reglas()))
         sin_facturas = Metricas(periodo=SEM39, dias_con_cierre=7, dias_con_detalle=7, costo_ventas_ppto=D("114315"),
                                 n_con_presupuesto=1, costo_preliminar=True)  # La Esquina Coyoacán, week 39
         self.assertIn("aún no hay facturas registradas del periodo", " ".join(notas_cobertura(SEM39, sin_facturas, None, None)))

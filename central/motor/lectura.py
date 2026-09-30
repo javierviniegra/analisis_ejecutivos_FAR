@@ -22,7 +22,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from . import formato
-from .comparativos import BAJA, NO_FIABLE, SUBE
+from .comparativos import (BAJA, META_COSTO_MIN, META_COSTO_TOPE, NARANJA, NO_FIABLE, ROJO, SUBE, VERDE,
+                           semaforo_costo)
 from .metricas import Comparacion, Metricas, como_comparacion
 from .periodo import Periodo, TipoPeriodo
 from .tabla_comercial import Fila, construir_tabla
@@ -180,6 +181,20 @@ def _costo_ventas(actual: Metricas) -> Observacion | None:
     return Observacion(texto + ".", NEGATIVO)
 
 
+def _costo_meta(actual: Metricas) -> Observacion | None:
+    """Invoiced cost vs the 38.0%-39.9% target (business rule, per week and month)."""
+    pct = actual.pct_costo_ventas
+    color = semaforo_costo(pct)
+    if color is None:
+        return None
+    rango = f"{META_COSTO_MIN * 100:.1f}-{(META_COSTO_TOPE * 100) - Decimal('0.1'):.1f}%"
+    donde = {VERDE: "dentro de la meta", NARANJA: "abajo de la meta", ROJO: "arriba de la meta"}[color]
+    texto = f"El costo facturado fue {pct * 100:.1f}% de la venta neta: {donde} ({rango})"
+    if actual.costo_preliminar:
+        texto += "; cifra preliminar, pueden faltar facturas del periodo"
+    return Observacion(texto + ".", POSITIVO if color == VERDE else NEGATIVO)
+
+
 def construir_lectura(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,
                       anio_anterior: Comparacion | Metricas | None) -> Lectura:
     ant, anio = como_comparacion(actual, anterior), como_comparacion(actual, anio_anterior)
@@ -189,6 +204,7 @@ def construir_lectura(periodo: Periodo, actual: Metricas, anterior: Comparacion 
         _causa(periodo, filas),
         _controles(periodo, filas),
         _mezcla(periodo, filas),
+        _costo_meta(actual),
         _costo_ventas(actual),
     ]
     obs = [o for o in candidatas if o is not None]

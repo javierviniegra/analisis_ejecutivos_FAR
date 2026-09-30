@@ -42,6 +42,8 @@ class Metricas:
     canal: dict[str, Decimal] = field(default_factory=dict)  # salon / llevar / plataformas / otros
     mix: dict[str, Decimal] = field(default_factory=dict)  # Alimentos / Bebidas
     venta_por_dia: dict[date, Decimal] = field(default_factory=dict)  # gross sales (con IVA) per operating day, for the charts
+    tickets_por_dia: dict[date, Decimal] = field(default_factory=dict)  # for the detail page
+    clientes_por_dia: dict[date, Decimal] = field(default_factory=dict)
     dias_con_cierre: int = 0  # summed over branches
     dias_con_detalle: int = 0  # summed over branches
     costo_ventas_real: Decimal | None = None  # None = not available (never zero)
@@ -54,6 +56,9 @@ class Metricas:
     n_con_presupuesto: int = 0
     # Real spend still being captured (presupuestos.es_preliminar): shown, not compared.
     costo_preliminar: bool = False
+    # Net sales of the branches that have real Costo de Ventas: the base of
+    # "cost % of net sales", so branches without cost data never dilute it.
+    venta_neta_con_costo: Decimal | None = None
 
     @property
     def dias_esperados(self) -> int:
@@ -77,6 +82,12 @@ class Metricas:
     def ejercido_costo_ventas(self) -> Decimal | None:
         """Real Costo de Ventas as a share of its budget (1.0 = 100%)."""
         return _razon(self.costo_ventas_real_con_ppto, self.costo_ventas_ppto_con_real)
+
+    @property
+    def pct_costo_ventas(self) -> Decimal | None:
+        """Real (invoiced) Costo de Ventas as a share of the net sales of the
+        same branches (0.385 = 38.5%)."""
+        return _razon(self.costo_ventas_real, self.venta_neta_con_costo)
 
 
 def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo, hoy: date | None = None) -> list[Metricas]:
@@ -106,6 +117,8 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             m.anulaciones += t["anulaciones"]
             m.descuentos += t["descuentos"]
         m.venta_por_dia = {dia: t["venta_bruta"] for dia, t in dias.items()}
+        m.tickets_por_dia = {dia: t["tickets"] for dia, t in dias.items()}
+        m.clientes_por_dia = {dia: t["clientes"] for dia, t in dias.items()}
         m.dias_con_cierre = len(dias)
 
         nombre = sucursal.wansoft_ticket_nombre
@@ -117,6 +130,8 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             real = presupuestos.gasto_real_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
             ppto = presupuestos.presupuesto_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
             m.costo_ventas_real = real
+            if real is not None:
+                m.venta_neta_con_costo = m.venta_neta
             # only where there is something to show (spend recorded, or a budget awaiting it)
             m.costo_preliminar = preliminar and (real is not None or ppto is not None)
             if ppto is not None:  # a budget is shown even before any real spend is recorded
@@ -149,12 +164,15 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
             total.canal[k] = total.canal.get(k, CERO) + v
         for k, v in m.mix.items():
             total.mix[k] = total.mix.get(k, CERO) + v
-        for dia, v in m.venta_por_dia.items():
-            total.venta_por_dia[dia] = total.venta_por_dia.get(dia, CERO) + v
+        for campo in ("venta_por_dia", "tickets_por_dia", "clientes_por_dia"):
+            suma = getattr(total, campo)
+            for dia, v in getattr(m, campo).items():
+                suma[dia] = suma.get(dia, CERO) + v
         total.dias_con_cierre += m.dias_con_cierre
         total.dias_con_detalle += m.dias_con_detalle
         if m.costo_ventas_real is not None:
             total.costo_ventas_real = (total.costo_ventas_real or CERO) + m.costo_ventas_real
+            total.venta_neta_con_costo = (total.venta_neta_con_costo or CERO) + (m.venta_neta_con_costo or CERO)
         if m.costo_ventas_ppto is not None:
             total.costo_ventas_ppto = (total.costo_ventas_ppto or CERO) + m.costo_ventas_ppto
             total.n_con_presupuesto += 1

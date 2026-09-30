@@ -23,7 +23,7 @@ from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Callable
 
-from .comparativos import GRIS, IGUAL, cobertura_fiable, no_fiable, SIMBOLOS, SIN_DATO, SUBE, BAJA, VERDE, ROJO, UMBRAL_IGUAL, Variacion, variacion
+from .comparativos import GRIS, IGUAL, cobertura_fiable, no_fiable, semaforo_costo, SIMBOLOS, SIN_DATO, SUBE, BAJA, VERDE, ROJO, UMBRAL_IGUAL, Variacion, variacion
 from .metricas import Comparacion, Metricas, como_comparacion
 
 MONEDA, ENTERO, PORCENTAJE = "moneda", "entero", "porcentaje"
@@ -40,6 +40,7 @@ class Indicador:
     requiere_detalle: bool = False  # needs ticket detail (channel / mix)
     usa_cierres: bool = True  # False: not built from cash closings (budget rows), no coverage rule
     usa_gasto_real: bool = False  # built from real Costo de Ventas spend: not comparable while preliminary
+    semaforo: Callable[[Decimal | None], str | None] | None = None  # traffic light of the period's value
 
 
 def _pct_canal(canal):
@@ -67,6 +68,9 @@ INDICADORES = [
     Indicador("descuentos", "Descuentos", "Control (a precio de venta)", MONEDA, lambda m: m.descuentos, False),
     Indicador("costo_ventas_real", "Costo de Ventas real", "Costo de Ventas vs presupuesto", MONEDA,
               lambda m: m.costo_ventas_real, False, usa_cierres=False, usa_gasto_real=True),
+    # Invoiced cost (the cash flow) over net sales; the business target is 38.0%-39.9%.
+    Indicador("costo_ventas_pct", "Costo facturado / venta neta", "Costo de Ventas vs presupuesto", PORCENTAJE,
+              lambda m: m.pct_costo_ventas, None, usa_cierres=False, usa_gasto_real=True, semaforo=semaforo_costo),
     Indicador("costo_ventas_ppto", "Costo de Ventas presupuestado", "Costo de Ventas vs presupuesto", MONEDA,
               lambda m: m.costo_ventas_ppto, None, usa_cierres=False),
     Indicador("costo_ventas_ejercido", "% ejercido del presupuesto", "Costo de Ventas vs presupuesto", PORCENTAJE,
@@ -82,6 +86,7 @@ class Fila:
     var_anterior: Variacion
     anio_anterior: Decimal | None
     var_anio: Variacion
+    semaforo: str | None = None  # verde / naranja / rojo, for indicators with a target
 
 
 def variacion_puntos(actual, base, *, mejor_si_sube: bool = True, umbral: Decimal = UMBRAL_IGUAL) -> Variacion:
@@ -144,5 +149,6 @@ def construir_tabla(actual: Metricas, anterior: Comparacion | Metricas | None,
     for ind in INDICADORES:
         p, var_p = _columna(ind, ant)
         y, var_y = _columna(ind, anio)
-        filas.append(Fila(ind, _valor(ind, actual), p, var_p, y, var_y))
+        valor = _valor(ind, actual)
+        filas.append(Fila(ind, valor, p, var_p, y, var_y, ind.semaforo(valor) if ind.semaforo else None))
     return filas
