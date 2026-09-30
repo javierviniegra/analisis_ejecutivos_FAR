@@ -47,6 +47,7 @@ COLUMNAS_REQUERIDAS = {
     "getallordenesbyday_new_detalleventa": ["Movimiento_Id", "Sucursal", "TipoGrupo", "Total"],
     "costeomensual": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo"],
     "costeomensual_semanapyq": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo"],
+    "dim_company_analytical": ["company_source_key", "purchases_source_system", "operational_start_date"],
 }
 
 
@@ -219,3 +220,24 @@ def costo_total_mes(cur, subsidiary_ids: list[int], primero: date, ultimo: date)
     if not subsidiary_ids:
         return {}
     return _costo_ultima_foto(cur, "costeomensual", subsidiary_ids, primero, ultimo)
+
+
+# Purchases systems in `dim_company_analytical` that mean "buys in Odoo".
+COMPRAS_EN_ODOO = ("odoo", "mixed_by_operational_start_date", "pending")
+
+
+def inicio_compras_odoo(cur) -> dict[str, date]:
+    """Date each branch started buying in Odoo, by its short key (the sales
+    `Sucursal`, our `wansoft_ticket_nombre`), from the Wansoft project's
+    governance table. Only branches whose purchases are in Odoo: earlier Odoo
+    activity of the others (e.g. the 2024 pilot) is not real and stays out.
+    Read live on every report, never hard-coded: the pipeline updates it when
+    a branch migrates (Isabel, San Jeronimo and Vallejo on 2026-10-01)."""
+    marcas = ", ".join(["%s"] * len(COMPRAS_EN_ODOO))
+    cur.execute(
+        f"SELECT company_source_key, operational_start_date FROM dim_company_analytical "
+        f"WHERE purchases_source_system IN ({marcas}) AND operational_start_date IS NOT NULL "
+        f"AND is_internal_provider = 0",
+        COMPRAS_EN_ODOO,
+    )
+    return {clave: inicio for clave, inicio in cur.fetchall()}

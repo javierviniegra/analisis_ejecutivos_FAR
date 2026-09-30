@@ -59,6 +59,23 @@ class VisibilidadTests(TestCase):
         self.assertEqual(self.client.get(reverse("reporte_detalle", args=["de-otros"])).status_code, 404)
         self.assertEqual(self.client.get(reverse("reporte_detalle", args=["visible"])).status_code, 200)
 
+    def test_filtro_por_categoria(self):
+        cedis = Group.objects.create(name="CEDIS")
+        self.gerente.groups.add(cedis)
+        _reporte("oc-cedis", categoria="cedis").perfiles.add(cedis)
+        self.client.force_login(self.gerente)
+        r = self.client.get(reverse("catalogo"))
+        self.assertEqual([c for c, _ in r.context["categorias"]], ["cedis", "marca"])  # only what the user sees
+        r = self.client.get(reverse("catalogo"), {"categoria": "cedis"})
+        self.assertEqual([x.clave for x in r.context["reportes"]], ["oc-cedis"])
+        r = self.client.get(reverse("catalogo"), {"categoria": "nomina"})  # not the user's: ignored
+        self.assertEqual(r.context["elegida"], None)
+        self.assertEqual(len(r.context["reportes"]), 2)
+
+    def test_sin_filtro_con_una_sola_categoria(self):
+        self.client.force_login(self.gerente)
+        self.assertEqual(self.client.get(reverse("catalogo")).context["categorias"], [])
+
     def test_catalogo_requiere_login(self):
         resp = self.client.get(reverse("catalogo"))
         self.assertEqual(resp.status_code, 302)

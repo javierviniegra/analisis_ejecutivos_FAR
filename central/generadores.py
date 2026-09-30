@@ -12,9 +12,9 @@ import zipfile
 from dataclasses import dataclass
 from typing import Callable
 
-from .motor import reporte_comercial
+from .motor import reporte_cedis, reporte_comercial
 from .motor.periodo import Periodo
-from .salidas import excel_comercial, pdf_comercial
+from .salidas import excel_cedis, excel_comercial, pdf_comercial
 
 
 @dataclass(frozen=True)
@@ -52,9 +52,23 @@ def _comercial(sucursales: list, periodo: Periodo, consolidado: bool, separados:
     return _zip([(n, c) for n, c, _ in archivos], reporte_comercial.nombre_base(reportes) + ".zip")
 
 
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _cedis(tipo: str, construir):
+    """CEDIS workbooks: one workbook for the selected branches (the report's
+    scope is consolidated), Excel only, reproducing the owner's originals."""
+    def generar(sucursales: list, periodo: Periodo, consolidado: bool, separados: bool, formatos: set[str]) -> Archivo:
+        datos = reporte_cedis.leer(sucursales, periodo.desde, periodo.hasta)
+        return Archivo(construir(datos), excel_cedis.nombre_archivo(tipo, datos), XLSX)
+    return generar
+
+
 # (branches, period, consolidated, one file per branch, formats) -> file to download
 GENERADORES: dict[str, Callable[[list, Periodo, bool, bool, set[str]], Archivo]] = {
     "comercial-semanal-gerentes": _comercial,
+    "oc-bodegon-empanadas-modificaciones": _cedis("modificaciones", excel_cedis.modificaciones),
+    "oc-bodegon-empanadas-por-hora": _cedis("por_hora", excel_cedis.por_hora),
 }
 
 

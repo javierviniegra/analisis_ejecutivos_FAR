@@ -23,7 +23,19 @@ def _visible(request, clave) -> Reporte:
 
 @login_required
 def catalogo(request):
-    return render(request, "central/catalogo.html", {"reportes": Reporte.visibles_para(request.user)})
+    """The user's reports, filterable by category. Only the categories of the
+    reports the user may see are offered (a user who sees one category gets
+    no filter); a category the user cannot see is ignored, never disclosed."""
+    visibles = Reporte.visibles_para(request.user)
+    etiquetas = dict(Reporte.Categoria.choices)
+    presentes = sorted(set(visibles.values_list("categoria", flat=True)), key=lambda c: etiquetas.get(c, c))
+    categorias = [(c, etiquetas.get(c, c)) for c in presentes]
+    elegida = request.GET.get("categoria")
+    if elegida not in presentes:
+        elegida = None
+    reportes = visibles.filter(categoria=elegida) if elegida else visibles
+    return render(request, "central/catalogo.html",
+                  {"reportes": reportes, "categorias": categorias if len(categorias) > 1 else [], "elegida": elegida})
 
 
 @login_required

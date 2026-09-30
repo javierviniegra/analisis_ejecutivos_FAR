@@ -72,7 +72,7 @@ CATALOGO = [
         descripcion="Ordenes de compra a proveedores internos modificadas despues de confirmar: cambios de cantidad, "
         "lineas extra y cambios de monto, por sucursal.",
         categoria=C.CEDIS, periodicidad=P.SEMANAL, plantilla=F.TABULAR, fuente=S.ODOO,
-        alcance=A.CONSOLIDADO, admite_excel=True, estado=E.DEFINIDO,
+        alcance=A.CONSOLIDADO, admite_excel=True, estado=E.IMPLEMENTADO,
         notas="Ejemplo generado en el repo Wansoft (reports/ordenes_compra_proveedores_internos).",
         perfiles_iniciales=["CEDIS"],
     ),
@@ -81,7 +81,7 @@ CATALOGO = [
         nombre="OC Bodegon/Empanadas: ordenes por hora",
         descripcion="Ordenes de compra a proveedores internos por hora de creacion y porcentaje de modificaciones, por sucursal.",
         categoria=C.CEDIS, periodicidad=P.SEMANAL, plantilla=F.TABULAR, fuente=S.ODOO,
-        alcance=A.CONSOLIDADO, admite_excel=True, estado=E.DEFINIDO,
+        alcance=A.CONSOLIDADO, admite_excel=True, estado=E.IMPLEMENTADO,
         notas="Ejemplo generado en el repo Wansoft (reports/ordenes_compra_proveedores_internos).",
         perfiles_iniciales=["CEDIS"],
     ),

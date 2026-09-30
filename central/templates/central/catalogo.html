@@ -3,6 +3,20 @@
 {% block content %}
 <span class="badge">Catálogo</span>
 <h1>Reportes disponibles</h1>
+{% if categorias %}
+<style>
+  .filtros { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px; }
+  .filtro { font-size:13px; padding:6px 14px; border-radius:999px; text-decoration:none; border:1px solid var(--verde);
+            color:var(--verde); background:#fff; }
+  .filtro.activo { background:var(--verde); color:#fff; }
+</style>
+<nav class="filtros" aria-label="Filtrar por categoría">
+  <a class="filtro{% if not elegida %} activo{% endif %}" href="{% url 'catalogo' %}">Todas</a>
+  {% for clave, nombre in categorias %}
+    <a class="filtro{% if elegida == clave %} activo{% endif %}" href="?categoria={{ clave }}">{{ nombre }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
 {% for r in reportes %}
   <div class="card">
     <h2 style="margin:0 0 6px;font-size:18px;color:var(--verde-oscuro)"><a href="{% url 'reporte_detalle' r.clave %}" style="color:inherit;text-decoration:none">{{ r.nombre }}</a></h2>
