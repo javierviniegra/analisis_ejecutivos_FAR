@@ -2,7 +2,7 @@
 
 Master continuity document for this project. Regenerated **in full** (never as patches) whenever the owner asks for a chat handoff. **Read this before anything else if you are picking the project up in a fresh chat.**
 
-Last generated: 2026-09-24. Repo: https://github.com/javierviniegra/analisis_ejecutivos_FAR.git (branch `main`, last commit `dd7278c`).
+Last generated: 2026-09-30. Repo: https://github.com/javierviniegra/analisis_ejecutivos_FAR.git (branch `main`, last code commit `6919853`). 138 tests, all passing.
 
 ---
 
@@ -11,138 +11,144 @@ Last generated: 2026-09-24. Repo: https://github.com/javierviniegra/analisis_eje
 Whenever the owner says the context window is over / asks to move to another chat, do ALL FOUR of these, every time, without being reminded:
 
 1. **Regenerate this `PROJECT_CONTEXT_REPORT.md` in full** (English).
-2. **Write the handoff prompt** (Spanish, to paste into the new chat; keep it also in Section 12).
-3. **Give the new chat's title**, format `FONDA (<short project>): Paso N[-M]: <short description>`. `FONDA` is a fixed prefix; the short project here is **Central de Reportes**; `N` continues the owner's running step count; `-M` is a sub-part when a step spans several chats.
+2. **Write the handoff prompt** (Spanish, to paste into the new chat; keep it also in Section 13).
+3. **Give the new chat's title**, format `FONDA (Central de Reportes): Chat N: <short description>`. The old "Paso N" numbering was inherited from another project and was dropped on 2026-09-30 (owner); this project's chats are counted on their own (the next one is **Chat 4**).
 4. **Commit and push** to git if there is anything uncommitted (English commit message; never push secrets or the owner's real financial files).
 
-Also: **if a web server of the project is running, stop it** (check port 8040 and any `runserver`/`waitress` process of this project).
+Also: **stop the web server** of the project (port 8040; `Get-NetTCPConnection -LocalPort 8040` then stop the owning process). The owner switches chats only when less than ~20% of the context remains; do not push early handoffs.
 
 ---
 
 # 1. What this project is
 
-**Central de Reportes** is a Django web application for Grupo Fonda Argentina: a *library of reports plus automations*, served **on demand** and by schedule. Working name history: "Analisis Ejecutivos" → renamed **Central de Reportes** on 2026-09-24 (Django app `central`). The GitHub repo keeps the old name `analisis_ejecutivos_FAR` (renaming it is the owner's call). The local folder is `...\AnalisisRestaurantesBI\Reportes\Analisis Ejecutivos\`.
+**Central de Reportes** (Django app `central`; repo keeps the old name `analisis_ejecutivos_FAR`) is Grupo Fonda Argentina's *library of reports plus automations*, served **on demand** (the user picks branches — one, several, all — and any period: week, month, bimester, quarter, semester, year or free range) and by **schedule** (each automation bound to exactly ONE period kind). Outputs: **PDF and/or Excel**, downloaded from the web today; scheduled email later (Phase 5). Sources, all **read-only**: the Wansoft MySQL warehouse (now with the unified Odoo layer), the ControlPresupuestos_AP database, Odoo (XML-RPC), and later Buk (payroll API). A Copilot "analyst" is deliberately last.
 
-It does three things:
-1. **Show** report information to authorized users.
-2. **Generate** reports as Excel, PDF or both, for **any branch selection (one, several, all) and any period** (week, month, bimester, quarter, semester, year, or free date range) chosen by the user.
-3. **Send** reports by email to configurable recipients, format and schedule (daily/weekly/monthly/semiannual/annual). **An automation is bound to exactly ONE period kind**, defined per automation.
+**All report text is produced by fixed rules in Python** (`central/motor/lectura.py`, `notas.py`) from the report's own numbers — no AI, no external service (the owner verified this on 2026-09-29).
 
-Data sources: Odoo, the productive Wansoft MySQL, and the ControlPresupuestos_AP database (all **read-only** for reports). A paid Copilot account is meant for an "analyst" feature, deliberately **last** (feasibility of calling a paid Copilot seat from a custom app is unverified; design the analyst layer to be interchangeable).
-
-Executive reports use the standard Fonda Argentina branded template (logo badge, rounded frame, watermark, brand green `#10564E` in PDFs; UI green `#035953`, dark `#023f3b`, cream `#f0e9d8`, same look as ControlPresupuestos_AP).
+Branding: Fonda Argentina template (logo badge, rounded frame, watermark; PDF green `#10564E`; UI green `#035953`, dark `#023f3b`, cream `#f0e9d8`).
 
 ---
 
 # 2. Critical environment notes — READ FIRST
 
-- **Project path (current, correct):** `C:\Users\JavierViniegra\OneDrive - GRUPO FONDA ARGENTINA\Escritorio\AnalisisRestaurantesBI\Reportes\Analisis Ejecutivos`. The old `C:\Users\JavierViniegra\Desktop\AnalisisRestaurantesBI\...` path is permanently dead (OneDrive folder redirection, ~2026-09-15). **The harness's shell resets its working directory to that dead path after every command → always `cd` to the real path or use absolute paths.** Windows Python wants `C:\...` paths; Git-Bash uses `/c/...`.
-- **Sibling repos — NEVER touch them** (owner's explicit rule): `Wansoft/Jupyter Notebooks/Python Files` (restaurant-wansoft-zenput-etl-pipeline_FAR) and `ControlPresupuestos_AP` (presupuestos_semanales_AP_FAR). This project only reads from their databases and (temporarily) imports the Wansoft repo's `core` from the standalone scripts in `scripts/`.
-- **Venv:** `.venv` inside the project (Python 3.13, Django 4.2.30). Run things as `.venv\Scripts\python.exe manage.py ...`.
-- **All secrets live only in `config/.env`** (gitignored); `config/.env.example` documents every variable with blank placeholders. Never in code, SQL, docs or git. The `.env` is at `config/.env` (not `core/config/`) because this repo has no `core` package (the scripts import the Wansoft repo's `core`; two packages with that name would collide).
-- **Dev setup:** local XAMPP MariaDB 10.4 on `localhost:3306`. Dev-only, owner-approved exception: the app connects as local `root` (`EJECUTIVOS_DB_USER_DEV=root`). Never in production. Dev database: `analisis_ejecutivos_dev`, created by `scripts/setup_dev_db.py` (reads `.env`, refuses non-local hosts).
-- **Port 8040** (dev and prod). Not 8000 (XAMPP), not 8010/8020 (ControlPresupuestos_AP). Production prefix behind the Apache proxy: `/central_reportes/`.
-- **MariaDB strict mode** is enabled in the app's DB connection.
-- **Console encoding:** Windows consoles default to cp1252 and cannot print arrows (▲▼); management commands that print them reconfigure stdout to UTF-8.
-- **Editing quirk:** files that contain accented characters sometimes fail exact-match edits; anchor edits on ASCII-only text. Large multi-file heredocs in one Bash call sometimes fail to parse; use several smaller calls or the Write tool.
+- **Project path:** `C:\Users\JavierViniegra\OneDrive - GRUPO FONDA ARGENTINA\Escritorio\AnalisisRestaurantesBI\Reportes\Analisis Ejecutivos`. The old `...\Desktop\...` path is dead (OneDrive redirection). **The harness shell resets its cwd to that dead path after every command → always `cd` to the real path or use absolute paths.** Git-Bash uses `/c/...`.
+- **Sibling repos — NEVER modify them** (read only): `Wansoft/Jupyter Notebooks/Python Files` (Wansoft ETL pipeline; its `docs/data-access-guide/` is the consumer guide for the databases and its `docs/production-cutover-runbook.md` the cutover plan) and `ControlPresupuestos_AP`.
+- **Venv:** `.venv` (Python 3.13, Django 4.2). Run `.venv/Scripts/python.exe manage.py ...`.
+- **Secrets only in `config/.env`** (gitignored); `config/.env.example` documents every variable with blank placeholders. `.env` holds: app DB (dev = local XAMPP MariaDB, root, db `analisis_ejecutivos_dev`), **`FUENTES_ENV=prod`** (the app runs in dev but reads the PRODUCTION sources, read-only), `WANSOFT_DB_*` (prod credentials copied from the Wansoft repo's .env — the pipeline's account `wansoftuser`, which CAN write; sessions are read-only by construction), `PRESUPUESTOS_DB_*` (db `presupuestos_ap`, also a writing account), **`ODOO_*`** (copied from the Wansoft .env). To be replaced by the dedicated read-only user `central_reportes` (Section 9).
+- **Reading `wansoft_prueba` (the rehearsal copy with the NEW schema) without touching `.env`:** prefix the command with `WANSOFT_DB_NAME=wansoft_prueba` (`load_dotenv` does not override existing variables). The dev server has been run that way: `WANSOFT_DB_NAME=wansoft_prueba .venv/Scripts/python.exe manage.py runserver 8040 --noreload` (background). With `--noreload`, restart it after code changes.
+- **Port 8040** (dev and prod; not 8000/8010/8020). Production prefix `/central_reportes/`.
+- **Owner delegated starting/stopping the dev server** to Claude: start it when there is something to see and always tell the owner the URL and what to look at.
+- **Console encoding:** Windows cp1252; commands printing arrows reconfigure stdout to UTF-8; use `PYTHONIOENCODING=utf-8`.
+- **Editing quirks:** very long heredocs in one Bash call can fail to parse → write a patch script with the Write tool into the scratchpad and run it. Python patch scripts inside heredocs turn `"\\n"` into real newlines in f-strings — use `chr(10)` or the Edit tool. Accented text sometimes breaks exact-match edits; anchor on ASCII.
+- **PDF preview without poppler:** `pypdfium2` installed in the session scratchpad (`--target`), not in the project.
+- The auto-mode permission classifier occasionally gives no verdict; just retry once.
 
 ---
 
 # 3. Working style agreed with the owner
 
-- **Roadmap first, stepwise approval.** Propose the design (mock, list of blocks), get an explicit yes, then build in small explained blocks. No big silent scaffolds. Surface concrete numeric tradeoffs on data-definition ambiguities, then follow the owner's explicit choice.
-- **Always update README and `docs/` in the same commit** as any change of behaviour, structure, setup or decision. Commit messages and docs in English (chat in Spanish). Commits end with `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`.
-- **Report data errors honestly** (this session found and corrected two of my own earlier mistakes — see Section 8). Cross-check a metric across all branches before delivering; surface anomalies instead of smoothing them.
-- The owner asks to **stop the web server** at the end of a working session.
-- Do not commit the owner's real financial examples (`docs/Ejemplos/` is gitignored) nor another session's work (`scripts/build_tendencia_grupo_centro.py` and `docs/Especiales/` are not mine: left untracked/ignored).
+- Roadmap first, stepwise approval; small explained blocks; **commit only after the owner approves the block**; surface concrete numeric tradeoffs and follow the owner's choice.
+- README and `docs/DECISIONS.md` updated **in the same commit** as any change of behaviour/structure/decision. Commits and docs in English (chat in Spanish). Commit trailer: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Validate against real data before delivering** and report data errors honestly (many were found this way — Section 8). Show real outputs (PDF pages rendered to PNG, Excel) to the owner.
+- Do not commit `scripts/build_tendencia_grupo_centro.py` or `docs/Especiales/` (another session's work) nor `docs/Ejemplos/` (owner's real files, gitignored).
 
 ---
 
-# 4. Current state (what exists and works)
+# 4. Current state (what exists and works, dev)
 
-Repo layout:
-- `config/` Django project (env-driven settings; `SECRET_KEY` has NO fallback on purpose).
-- `cuentas/` — `Sucursal` (with cross-system ids: `wansoft_subsidiary_id`, `wansoft_ticket_nombre`, `odoo_company_id`), `PerfilUsuario` (branch scope), commands `crear_perfiles` (4 roles as Django Groups: Director, Administrador general, Gerente, Usuario; custom permissions `ver_reportes`, `generar_reportes`, `gestionar_envios`, `gestionar_usuarios`) and `cargar_sucursales` (19 branches; idempotent, never overwrites filled fields).
-- `central/` — the report library: `Reporte` model (category, periodicity, template, source, scope `por_sucursal|consolidado|ambos`, formats, state, allowed profiles = Groups), admin, catalog/detail pages, command `cargar_catalogo` (8 reports; idempotent, never overwrites admin edits; new ones start with no profiles). **Deny-by-default:** a report with no profiles is visible only to staff; a non-visible report returns 404.
-- `central/motor/` (pure, tested engine building blocks):
-  - `periodos.py` (Monday–Sunday weeks, previous week, same ISO week last year — `None` for week 53, monthly-budget proration by days) and `periodo.py` (**`Periodo`**: week/month/bimester/quarter/semester/year/free range, each with `anterior()` and `mismo_periodo_anio_anterior()`, plus `etiqueta()` and `de_fecha()` for automations).
-  - `comparativos.py` (arrow rule: ▲ green better / ▼ red worse / `=` grey within ±1%; inverted where up is bad; `s/c` when there is nothing to compare).
-  - `metricas.py` (`Metricas` for one branch or consolidated, explicit coverage of cash-closing days and ticket-detail days), `tabla_comercial.py` (the indicators table; shares compared in percentage POINTS, threshold 1 pt; neutral rows always grey), `formato.py` (display formatting).
-  - `fuentes/`: `conexiones.py` (read-only connections, `SET SESSION TRANSACTION READ ONLY`), `wansoft.py` (deduplicated daily cash closings by operating day, channel mix, food/beverage mix, detail coverage), `presupuestos.py` (Costo de Ventas budget vs real from ControlPresupuestos_AP, reproducing its "everything else" split).
-- Management commands for verification: `probar_reporte <branches|todas> --tipo <kind> [--fecha|--desde --hasta] [--consolidado]` prints the indicator table from the real sources.
-- `scripts/` standalone PDF generators (pre-Django, still the only thing that produces the monthly executive PDFs): `build_executive_pdf_all.py` (19 branches, current), `build_executive_pdf.py`, `build_executive_pdf_multi.py`, `build_puebla_scorecard.py`, `build_cost_chart.py`, `setup_dev_db.py`; brand background `logo_extract_0.jpeg`. They import `core.database.*` from the Wansoft repo via a hardcoded absolute path (`WANSOFT_REPO_ROOT`) — temporary.
-- `docs/`: `DECISIONS.md` (all decisions, newest first), `PRODUCTION_SETUP.md` (proxy vhost, `.env`, run — written ahead of deployment, nothing executed), `Ejemplos/` (owner's real examples, gitignored), `Mensuales/<year>/<Month>/` (generated PDFs, gitignored; the 19 August 2026 PDFs live here).
-- **51 tests, all passing** (`manage.py test`, needs the local MariaDB).
+**Apps:** `cuentas` (`Sucursal` with cross-system ids — `wansoft_subsidiary_id`, `wansoft_ticket_nombre` = the data guide's short key / `company_source_key`, `odoo_company_id`; `PerfilUsuario` branch scope; helpers `sucursales_de(user)`, `puede_generar(user)`; commands `crear_perfiles`, `cargar_sucursales`) and `central` (catalog, engine, outputs, web).
 
-Phases: 1 skeleton/users/roles/login **done (dev)**; 2 report catalog **done (dev)**; 3 generation engine **in progress** (data layer + indicators table done, PDF not yet); 4 web viewing, 5 scheduled email, 6 Copilot analyst, 7 production deploy **not started**.
+**Roles (Django Groups, deny-by-default report access):** Director, Administrador general, Gerente, Usuario, **Nominista**, **CEDIS**, **Contabilidad**. A report with no profile is visible only to staff. A user can have several categories by being in several groups.
 
-Pending owner-side action: nothing blocking. (The owner created their superuser and used the app locally; server currently stopped.)
+**Catalog categories (owner, 2026-09-30):** Marca (was Comercial), Sucursales (gerentes), Inversionistas (executive + investors + partners), CEDIS (Bodegón), Nómina / RH, Contabilidad, Inventarios. (Operativo, Ejecutivo, Socios, Financiero, Compras were removed; migrations 0004–0008 convert rows.) The catalog page **filters by category**, offering only the user's categories.
 
----
+| Report (clave) | Category | Profile | State |
+|---|---|---|---|
+| comercial-semanal-gerentes | Sucursales | Gerente | **implemented** (PDF + Excel, web) |
+| indicadores-operativos-semanal | Sucursales | Gerente | pending (Power BI table + semáforo rules) |
+| oc-bodegon-empanadas-modificaciones | CEDIS | CEDIS | **implemented** (Excel, web) |
+| oc-bodegon-empanadas-por-hora | CEDIS | CEDIS | **implemented** (Excel, web) |
+| incidencias-nomina | Nómina / RH | Nominista | pending (Buk API token + docs) |
+| resumen-ejecutivo-sucursal, inversionistas-corto-mensual, financiero-operativo-socios-mensual | Inversionistas | — | pending (monthly exec PDF still a standalone script in `scripts/`) |
+| rentabilidad-plataformas-mensual | Marca | — | pending definition |
 
-# 5. The reports (catalog)
+**Web:** catalog → report page → "Generar reporte" (`/reportes/<clave>/generar/`): branches (only the user's, validated server-side), period kind + date or free range (≤366 days), per-branch/consolidated per the report's `alcance`, format PDF/Excel/both (as the report admits); several branches per branch always ask (no default) one file vs one file per branch; several files → .zip. The screen shows which databases it reads ("Datos de: Wansoft `...` · Presupuestos AP `...`"). Generators registered in `central/generadores.py`.
 
-`resumen-ejecutivo-sucursal` (monthly executive PDF per branch — exists as script), `comercial-semanal-gerentes` (**being built now**), `inversionistas-corto-mensual` (example PDF in `docs/Ejemplos`, not versioned; budget from ControlPresupuestos_AP and Odoo budgets, actuals from Odoo), `financiero-operativo-socios-mensual` (needs a NEW template with Fonda colors/logo; content undefined), `oc-bodegon-empanadas-modificaciones` and `oc-bodegon-empanadas-por-hora` (weekly Excel; examples generated in the Wansoft repo under `reports/ordenes_compra_proveedores_internos/`), `rentabilidad-plataformas-mensual` (Uber/Didi/etc.; definition pending: platform list, sales source, commissions/costs source, formula), `indicadores-operativos-semanal` (Carlos's Power BI table with semáforos; needs the table, metrics and semáforo rules from the Power BI file).
+**Commercial report (`central/motor/reporte_comercial.py` assembles everything once):**
+- Page 1: title; **Lectura** (rule-based sentences: gross sales vs previous and vs last year; driver traffic vs check; controls up & ≥0.5% of net; mix/channel moves >2 pp; **both costs vs the 38.0–39.9% target** in one sentence; Costo de Ventas over prorated budget); indicators table (Ventas, Mezcla, Control, **Costo**) with arrow columns; two charts; notes about the period's data.
+- Page 2 **Detalle**: per branch for consolidated (sales, var, guests, check, **costo total % and costo facturado %** with traffic lights, total row) or per day/7-day block/month for a branch (no previous-period pairing in a month); then **"Reglas y umbrales del reporte"** in two columns.
+- Excel: Resumen, one sheet per chart (native Excel chart), Detalle, Notas.
+- `probar_reporte <branches|todas> --tipo ... [--consolidado] [--graficas DIR] [--pdf DIR] [--excel DIR]` prints and writes outputs.
 
-## The weekly commercial report for managers — approved design (build in progress)
-- **Content (all blocks):** sales gross and net, tickets, guests, average check and ticket; food/beverage mix and channel mix (Wansoft order type `Restaurant`→salón, `Para llevar`→llevar, `eCommerce`→plataformas); cancellations, courtesies, discounts; sales by day; plus a **Costo de Ventas real vs budget** block from ControlPresupuestos_AP.
-- **Comparisons:** previous period and same period last year, each with an arrow column. Year-over-year only when data exists (`s/c` otherwise).
-- **No sales target for now** (ControlPresupuestos_AP only has monthly *expense* budgets; a KPI to feed a target will be defined later by the owner). Meta / % Meta columns are omitted until then.
-- **Audience:** each manager receives only their own branch (one PDF per branch).
-- **Format approved (one page, standard Fonda template):** a "Lectura de la semana" box (rule-based observations computed from real numbers, nothing invented; the AI analyst will later rewrite the same box), the indicators table, and two charts (sales by day vs previous period; period sales vs same period last year). **Owner's on-demand generalization:** the report is not "weekly-only": the user picks branches and the period kind.
-- **Open question asked, not yet answered:** for long periods (year, semester), should the "sales by day" chart automatically group by week or by month? (Proposal: yes, automatically.)
+**CEDIS reports (`central/motor/reporte_cedis.py`, `fuentes/odoo.py`, `salidas/excel_cedis.py`):** provider side (El Bodegón / Las Empanadas sales orders, from each provider's Odoo start) so **every branch** appears; orders coming from a branch purchase order are read from that PO (branch counted from its Odoo purchases start, read live from Wansoft `dim_company_analytical`); the rest from the sales order, mapped to a branch by **`ClienteCedis`** (admin table, seeded by `cargar_clientes_cedis`; delivery address wins over customer); changes after confirmation only (quantity notes, extra/additional lines, amount tracking), **"Hecho por" Sucursal/CEDIS** (Odoo user's main company), origin per order; two definitions of "modified" as the owner's originals; Mexico City = UTC-6. Validated against the owner's Excel of 2026-09-23 (same orders; same figures with the same cut).
+
+**Source checks:** `verificar_fuentes [--hoy] [--sin-tickets]` (schema vs `COLUMNAS_REQUERIDAS` declared next to each query, write rights of the account, cutover migration applied, freshness per branch). `deploy/sql/create_central_reportes_readonly_user.sql` (SELECT-only user for `wansoft` + `presupuestos_ap`, run by the owner).
+
+Phases: 1 users/roles ✔ dev; 2 catalog ✔ dev; 3 engine/outputs ✔ for commercial + CEDIS; 4 web on-demand ✔ dev; 5 automations (not started; commercial = weekly AND monthly); 6 Copilot (last); 7 production deploy (not started).
 
 ---
 
-# 6. Business rules and findings (do not re-litigate)
+# 5. Business rules (do not re-litigate)
 
-- **Week = Monday–Sunday.** Same week last year = same ISO week number of the previous ISO year; none if that year has no such week. Months are calendar months. Monthly budgets are prorated by days (a week spanning two months blends both months' daily rates).
-- **Operating day of a cash closing:** `getglobalcashclosing.fecha_corte` is when the closing was done; a closing **before 14:00 belongs to the previous operating day**. Validated: 30/30 days of a full month match the ticket detail to the cent (unshifted: only 8/30).
-- **Duplicate closings exist in `getglobalcashclosing`** (same operating day, identical totals — e.g. three identical rows 13 s apart, or the previous night's closing re-issued next noon). The engine counts one row per identical (day, totals). **Impact on the delivered August 2026 PDFs** (they summed without dedup): 4 duplicate rows in 3 branches — San Jerónimo $152,228, Viaducto $110,188, Tepeyac $74,270 (~$337k of $67.5M, 0.5%); Puebla unaffected. **Decision:** not regenerated yet; regenerate those 3 when the monthly report runs on the new engine.
-- **Ticket detail (`getallordenesbyday_new_venta/_detalleventa`) coverage is partial for several branches** (loaded late). Metepec and Versalles only have detail from 2026-08-21. Coverage must be returned and flagged, never assumed.
-- **Percent-of-sales convention (executive PDFs):** cost percentages are against **venta neta (sin IVA)**.
-- **Costs routing (executive PDFs, owner's rule 2026-09-18, supersedes the old per-branch split in the Wansoft repo's `companies.py`):** Costo de Productos Vendidos from Odoo (`account.move.line`, account code like `501`, `parent_state='posted'`, no move_type filter, XML-RPC call MUST pass `context={'allowed_company_ids': [id]}` or `code` returns False) if the branch is Odoo-sourced, else Wansoft `costeomensual`; **Merma, Cortesías, Cancelaciones, Anulaciones always Wansoft** (Merma from `costeomensual`, the others from `getglobalcashclosing`), valued at sale price and shown apart from the Costo Total. Metepec's low cost % (10.34%) is an accepted operational limitation (franchise does not upload purchases): present as-is, never "fix".
-- **Cross-system branch names never match** — use the ids on `cuentas.Sucursal`; each table must be searched under its own name (the cash-closing name is not the ticket-table name).
-- **ControlPresupuestos_AP** is active only for the 7 Odoo-migrated branches (Acoxpa 7, Antenas 9, Tepeyac 10, Oceanía 11, Coyoacán 36, Puebla 34, CentroMyJ 35 = Odoo company ids); other branches have no budget block (`None`, never zero). Its real spend is keyed by the Monday of the week of goods receipt (PO-linked) or payment, so week-to-week swings are normal (e.g. Puebla $13k vs $319k).
-- **`Costo de Ventas real` is shown even when no budget is captured**; `% ejercido` only uses branches that have both.
-- **Multi-branch behaviour is dictated by each report** (`alcance`: por sucursal, consolidado, ambos) — no global rule.
+- **Week Mon–Sun;** same week last year = same ISO week of the previous ISO year. **Operating day:** a cash closing before 14:00 belongs to the previous day. **Duplicate closings** (same day, same totals, different times) counted once — still needed after the cutover's unique key `(subsidiary_id, fecha_corte)`.
+- **Arrows ±1% (±1 pp for shares);** **s/c** no data; **s/cf** when either period has data on <90% of expected days. **Comparable branches:** a branch without ≥90% data in the comparison period leaves both sides of that comparison (notes name it).
+- **Month charts measure calendar months:** per-day chart alone + 12-month trend vs last year (new branches included, noted; source gaps — Nov–Dec 2024 Odoo pilot — leave both years of that month; month in progress compared month-to-date).
+- **Gross sales** in charts and the Lectura headline; table shows gross and net; cost percentages over **net** sales.
+- **Cost target (owner): 38.0–39.9% of net sales per week and month** — green; <38% orange (bought too little / not captured); ≥40% red (bought too much). Two costs shown and named: **Costo total (Wansoft/Odoo)** = `CostoTotal − COALESCE(CostoDeConsumo,0)` (data guide; week = `costeomensual_semanapyq` row captured the Monday after; month = last `costeomensual` row; bimester–year = sum of months; free range = not available; 0 = no data) and **Costo facturado (Presupuestos AP)** = invoiced (the cash flow). Consumption is booked unevenly. The receipt-based measure ("how much each branch receives per week") is **pending**: the unified purchase tables have no receipt date — to request in the Wansoft project.
+- **Costo de Ventas real (Presupuestos AP) is preliminary until 10 days after the close of the period's month** (invoices keep being captured): comparisons s/cf, note with the final date. A budget is shown even with no invoices yet; % ejercido only where both exist.
+- **Sales targets:** found only for 2025 (SharePoint BI_Fonda scorecards, 4 levels) → no targets for now; pending task when 2026 targets exist.
+- Multi-branch behaviour per report (`alcance`).
 
 ---
 
-# 7. Decisions log (summary — full text in `docs/DECISIONS.md`)
+# 6. Wansoft cutover (Thursday 2026-10-01) — what to do
 
-Django app in its own repo; roles = Django Groups + branch scope model; port 8040; own DB on the separate database server in production (a dedicated restricted user, never root); read-only report sources; secrets only in `.env`; dev root exception; test-first rollout on the owner's PC, production only after a few reports are validated, with a scheduled script that updates the code daily and restarts the app (Phase 7, analogous to ControlPresupuestos_AP's `deploy/update.ps1`); per-user report views and manual generation; reportlab (not xhtml2pdf) for PDFs; generated PDFs are not versioned; Copilot last; name Central de Reportes/`central`; on-demand open periods.
+The live `wansoft` gets the new schema (41 tables + views, unique keys) and the new daily pipeline (01:30). The DB keeps its name, so this app's config does not change. The Wansoft runbook validates the cutover **against this app's commercial report**. Checked on `wansoft_prueba`: the commercial report needs no code change; the new pipeline is more complete (e.g. Sunday closings the legacy loader missed). CEDIS needs `dim_company_analytical`, which only exists after the migration. Puebla/CentroMyJ costs (0 today) are backfilled at the cutover (runbook step 3d).
+
+**Steps for us on Thursday:** (1) owner runs `deploy/sql/create_central_reportes_readonly_user.sql` as root after the migration and puts `central_reportes` in `WANSOFT_DB_*` and `PRESUPUESTOS_DB_*` of `config/.env`; (2) run `verificar_fuentes` against `wansoft` (expect all PASS; no WARN about write rights); (3) generate the commercial report (week 39 and September, consolidated and per branch) and CEDIS workbooks from live `wansoft`; compare with the `wansoft_prueba` figures; confirm Puebla/CentroMyJ now have cost; (4) confirm Isabel, San Jerónimo and Vía Vallejo appear in CEDIS from 2026-10-01 once the pipeline flips them in `dim_company_analytical`.
+
+---
+
+# 7. Decisions log
+
+Full text, newest first, in `docs/DECISIONS.md` (read it). Highlights of 2026-09-24..30: comparable branches; batched queries; month charts; gross sales; source gaps; Excel; web screen + delivery rule; read-only user + `verificar_fuentes`; preliminary cost; catalog by area + profiles; cost target and two costs; two-page PDF; CEDIS (provider side, `ClienteCedis`, who changed); category filter; payroll report skeleton.
 
 ---
 
 # 8. Errors found and corrected (learn from these)
 
-1. **Wrong claim: "Metepec and Versalles have no ticket detail."** False — searched under wrong names (Tollocan/Exhibimex). They have partial detail from 2026-08-21. Corrected in `docs/DECISIONS.md` and in the assistant's memory. Their August PDFs show N/D where partial data (with `*`) was possible.
-2. **August PDFs did not deduplicate cash closings** (Section 6). Found while validating the operating-day rule.
-3. Earlier this session: a `git revert` of a commit that ADDED new files also deleted them from disk (recovered from history via `git show <commit>:path`); mind this when reverting commits that add files.
-4. ControlPresupuestos_AP has **no sales budget** (only expense budgets), contradicting the owner's assumption; verified against its database read-only, then the design changed (no target for now).
+1. Metepec/Versalles ticket detail searched under wrong names (they have detail from 2026-08-21).
+2. August 2026 executive PDFs summed duplicate closings (3 branches, ~$337k) — regenerate when the monthly report moves to the engine.
+3. A `git revert` of a commit that added files deleted them from disk.
+4. ControlPresupuestos_AP has no sales budget.
+5. Real Costo de Ventas returned $0.00 when no records → now None.
+6. La Esquina Coyoacán lost its budget when no invoice was recorded yet → budget shown independently.
+7. The daily cost table includes consumption; the official "Costo Total" subtracts it (Isabel Aug 38.5% vs 35.2%).
+8. **Odoo paging stopped at the first short page and lost 10,469 of 17,611 messages** → page until an empty page, de-duplicate by id.
+9. `odoo_company_migration_policy.operational_start_date` is now the COST switch date (2026-10-01), not the purchases start — use `dim_company_analytical` for purchases.
+10. A stale chart image was shown to the owner once — always regenerate before showing.
 
 ---
 
 # 9. Risks and open items
 
-- **PRODUCTION QUERY RISK:** `getallordenesbyday_new_venta` is large and unindexed on (Sucursal, Fecha); on 2026-09-15 an ad-hoc query against the production Wansoft copy hung for over an hour. Channel/mix/coverage queries filter exactly on those columns. Before pointing at production: check row count and indexes, run off-peak, decide with the owner whether to request an index. Fine on the local dev copy. Consolidating all 19 branches × 3 periods takes ~56 s in dev (per-branch queries); batching into one query is a known optimization.
-- Production DB accounts for report sources must be SELECT-only at the database level.
-- `scripts/*.py` depend on the Wansoft repo via `WANSOFT_REPO_ROOT` (temporary; to be replaced by this app's own data access).
-- Production nothing deployed; `docs/PRODUCTION_SETUP.md` is untested.
-- No email/SMTP configured (console backend); no credentials yet — add `SMTP_*` placeholders to `.env.example` when Phase 5 starts.
-- Open owner-side items: weekly-target KPI (later), Power BI table and semáforo rules for the operating-indicators report, definition of the platform-profitability and partner-financial reports, whether to regenerate the 3 affected August PDFs, whether to rename the GitHub repo.
+- **Accounts:** the app still uses writing accounts (Wansoft ETL `wansoftuser`, the Presupuestos app account, the pipeline's Odoo user) — sessions are read-only by construction (MySQL `SET SESSION TRANSACTION READ ONLY` + 120 s statement cap; Odoo client whitelists query methods). Switch to `central_reportes` (MySQL) and a read-only Odoo user.
+- Large ticket table unindexed on (Sucursal, Fecha): batched queries; mix query per month; semester/year consolidated take minutes → a local monthly summary table before production on-demand.
+- **Consolidated reliability rule per branch** (not only total): proposed after week 39 (8 missing Sundays read as 94% "reliable"); not built.
+- **8 unassigned Odoo customers of the CEDIS** (no September orders): Grupo Hospitalario Rodiva, Inmobiliaria Ares Ríos, LCDP Restaurantes, Peralta y Lau, "Público En general", Tacos FA Fuentes, Tacos P y T, Universatil — ask the owner and set them in the admin ("Clientes de CEDIS").
+- For CEDIS users to pick branches, their `PerfilUsuario` needs "todas las sucursales".
+- No SMTP yet; production not deployed (`docs/PRODUCTION_SETUP.md` untested); `scripts/` still import the Wansoft repo's `core`.
 
 ---
 
 # 10. Backlog / next steps (in order)
 
-1. **Finish the commercial report (Phase 3):** "Lectura de la semana" rule-based observations (from the indicators table); the two charts (chart granularity by period length: day ≤ ~31 days, week for medium, month for long — ask/confirm); **PDF generator** on the Fonda template (reuse `scripts/logo_extract_0.jpeg` background and the reportlab helpers in `scripts/build_executive_pdf_all.py`); one PDF per branch and/or consolidated per the report's `alcance`; then an Excel output.
-2. **Web UI for on-demand generation (Phases 3–4):** pick report, branches (one/several/all), period kind and value (incl. free range), format; per-user view restricted to their branches/reports; consolidated vs per-branch as each report dictates.
-3. **Automations (Phase 5):** subscription model (report, recipients per branch, format, ONE period kind, schedule), a dispatcher run by Task Scheduler (like ControlPresupuestos_AP), SMTP config, send log.
-4. Regenerate the 3 affected August PDFs via the new engine once the monthly report is ported.
-5. Remaining reports (investors short, partners financial with new template, OC Excel, platform profitability, operating indicators).
-6. Copilot analyst layer (last); Phase 7 production deployment (daily auto-update script + restart).
+1. **Thursday 2026-10-01 cutover validation** (Section 6).
+2. Owner answers: the 8 CEDIS customers; payroll period cut-offs (weekly paid Fridays; biweekly paid on the 14th and the day before month end).
+3. **Buk payroll report** (`incidencias-nomina`) as soon as the owner gets the API token and docs: incidents as Buk provides them, per branch (map Buk areas to branches), Excel + PDF, read at generation time (personal data, no copy stored), Nominista only.
+4. **Automations (Phase 5):** subscriptions (report, recipients, format, ONE period kind, schedule; commercial = weekly and monthly), dispatcher via Task Scheduler, SMTP in `.env`, send log.
+5. Monthly executive report onto the engine (costs from `costeomensual` for every branch); regenerate the 3 August PDFs with duplicates.
+6. Pending definitions: operating indicators (Power BI semáforos), platform profitability, investors/partners reports; receipt-based cost measure (needs receipt date from the Wansoft pipeline); 2026 sales targets; consolidated reliability per branch; local monthly summary table; Copilot; Phase 7 deploy.
 
 ---
 
@@ -150,66 +156,62 @@ Django app in its own repo; roles = Django Groups + branch scope model; port 804
 
 ```
 cd "C:\Users\JavierViniegra\OneDrive - GRUPO FONDA ARGENTINA\Escritorio\AnalisisRestaurantesBI\Reportes\Analisis Ejecutivos"
-.venv\Scripts\python.exe manage.py test                       # 51 tests
+.venv\Scripts\python.exe manage.py test                                   # 138 tests (needs local MariaDB)
 .venv\Scripts\python.exe manage.py migrate
 .venv\Scripts\python.exe manage.py crear_perfiles
 .venv\Scripts\python.exe manage.py cargar_sucursales
 .venv\Scripts\python.exe manage.py cargar_catalogo
-.venv\Scripts\python.exe manage.py probar_reporte puebla --tipo semana --fecha 2026-09-14
-.venv\Scripts\python.exe manage.py probar_reporte todas --tipo mes --fecha 2026-08-15 --consolidado
-.venv\Scripts\python.exe manage.py runserver 8040             # stop it when done (Ctrl+C / kill the process)
+.venv\Scripts\python.exe manage.py cargar_clientes_cedis                  # reads Odoo
+.venv\Scripts\python.exe manage.py verificar_fuentes
+.venv\Scripts\python.exe manage.py probar_reporte todas --tipo semana --fecha 2026-09-23 --consolidado --pdf C:/temp/pdf
+.venv\Scripts\python.exe manage.py runserver 8040 --noreload              # stop it when done
 ```
+(Git-Bash: prefix `WANSOFT_DB_NAME=wansoft_prueba` to read the rehearsal copy.)
 
 ---
 
-# 12. HANDOFF PROMPT
+# 12. Files map (main)
+
+`central/motor/`: `periodo(s).py`, `comparativos.py` (arrows, s/cf, cost traffic light), `metricas.py` (batched read, consolidation, comparables, costs), `tabla_comercial.py`, `lectura.py`, `notas.py`, `graficas.py` / `graficas_png.py`, `detalle.py`, `reporte_comercial.py`, `reporte_cedis.py`; `central/motor/fuentes/`: `conexiones.py`, `wansoft.py`, `presupuestos.py`, `odoo.py`, `verificacion.py`. `central/salidas/`: `pdf_comercial.py`, `excel_comercial.py`, `excel_cedis.py`. `central/generadores.py`, `forms.py`, `views.py`, `models.py` (`Reporte`, `ClienteCedis`). `deploy/sql/`. `docs/DECISIONS.md`, `docs/PRODUCTION_SETUP.md`.
+
+---
+
+# 13. HANDOFF PROMPT
 
 **Paste this as the first message of the new chat:**
 
 ```
-Continúo el proyecto FONDA "Central de Reportes" (antes "Análisis Ejecutivos"): una
-aplicación Django que es una biblioteca de reportes + automatizaciones, a demanda
-(el usuario elige sucursal(es) y periodo abierto: semana, mes, bimestre, trimestre,
-semestre, año o rango libre) y programada (cada automatización usa UN solo tipo de
-periodo). Repo: https://github.com/javierviniegra/analisis_ejecutivos_FAR.git
+Continúo el proyecto FONDA "Central de Reportes": aplicación Django, biblioteca de
+reportes + automatizaciones, a demanda (sucursales y cualquier periodo) y programada.
+Repo: https://github.com/javierviniegra/analisis_ejecutivos_FAR.git
 Carpeta: C:\Users\JavierViniegra\OneDrive - GRUPO FONDA ARGENTINA\Escritorio\
 AnalisisRestaurantesBI\Reportes\Analisis Ejecutivos
 
-Lee completo PROJECT_CONTEXT_REPORT.md en la raíz del repo antes de responder
-(sobre todo Secciones 0, 2, 3, 6, 9 y 10) y luego docs/DECISIONS.md. Reglas clave:
-- NO toques los repos hermanos (Wansoft ETL y ControlPresupuestos_AP); solo se leen sus bases.
-- Todas las claves solo en config/.env (con placeholders en .env.example).
-- Trabajamos por roadmap y aprobación paso a paso, en bloques pequeños y explicados.
-- README y docs actualizados en el mismo commit; commits y docs en inglés.
-- Al final de cada sesión: apagar el servidor web, y cuando te pida cambiar de chat
-  haz siempre las 4 cosas: (1) regenerar PROJECT_CONTEXT_REPORT.md, (2) prompt de
-  indicaciones, (3) nombre del nuevo chat, (4) commit y push si hace falta.
-- El shell de este entorno regresa siempre a una ruta muerta (Desktop): usa cd a la
-  ruta real o rutas absolutas.
+Lee completo PROJECT_CONTEXT_REPORT.md (sobre todo Secciones 0, 2, 3, 5, 6, 9 y 10)
+y luego docs/DECISIONS.md. Reglas clave:
+- NO modifiques los repos hermanos (Wansoft ETL y ControlPresupuestos_AP); solo se leen.
+  La guía de datos de Wansoft (docs/data-access-guide) y su runbook del corte son referencia.
+- Claves solo en config/.env (placeholders en .env.example). La app lee las fuentes de
+  producción en solo lectura (FUENTES_ENV=prod); para la base nueva de prueba antepón
+  WANSOFT_DB_NAME=wansoft_prueba al comando.
+- Roadmap y aprobación por bloque; bloques pequeños y explicados; commit solo con mi visto bueno.
+- README y docs en el mismo commit; commits y docs en inglés.
+- Tú levantas/apagas el servidor de pruebas (puerto 8040) y me avisas la liga.
+- Al cambiar de chat: regenerar el reporte, prompt, título "FONDA (Central de Reportes):
+  Chat N: ...", commit/push y apagar el servidor.
+- El shell regresa a una ruta muerta (Desktop): usa cd a la ruta real o rutas absolutas.
 
-Estado: Fase 1 (usuarios/roles/login) y Fase 2 (catálogo) hechas en dev; Fase 3 en
-curso: ya está la capa de datos de solo lectura (Wansoft y Presupuestos AP), el
-modelo de periodo abierto, las métricas/consolidación y la tabla de indicadores con
-flechas (probar_reporte imprime la tabla con datos reales); 51 pruebas pasan.
-Siguiente: el reporte comercial a demanda — caja "Lectura de la semana" por reglas,
-las dos gráficas (la granularidad de "venta por día" cambia con la longitud del
-periodo: día/semana/mes; te propuse hacerlo automático, pendiente de confirmar) y el
-PDF con la plantilla Fonda (un PDF por sucursal y/o consolidado según lo dicte el
-reporte); después la pantalla web de generación a demanda y las automatizaciones.
+Estado: reporte comercial terminado (PDF de 2 páginas con Detalle, Excel, pantalla web,
+reglas de comparables y s/cf, dos costos con semáforo 38-39.9%, costo preliminar);
+reportes de CEDIS terminados (Excel desde Odoo del lado del proveedor, todas las sucursales,
+quién hizo cada cambio); catálogo por categorías con filtro y perfiles Gerente, CEDIS,
+Contabilidad y Nominista; reporte de nómina (Buk) dado de alta, pendiente la API.
+138 pruebas pasan.
 
-Recordatorios importantes: el cierre diario de Wansoft trae cierres duplicados y el
-día operativo es "cierre antes de las 14:00 = día anterior" (el motor ya lo maneja;
-los PDF de agosto de San Jerónimo, Viaducto y Tepeyac quedaron con duplicados y se
-regeneran cuando el mensual pase al motor nuevo). Metepec y Versalles SÍ tienen
-detalle de tickets, parcial desde el 21-ago. No hay meta de venta por ahora.
-Antes de apuntar a producción hay que revisar el riesgo de consultas a la tabla
-grande de tickets (Sección 9).
+Hoy/mañana: corte de Wansoft del jueves 1-oct (Sección 6): usuario de solo lectura
+central_reportes, verificar_fuentes contra wansoft, generar reportes y comparar con
+wansoft_prueba, confirmar costos de Centro y Puebla. Pendientes míos: asignar 8 clientes
+de CEDIS sin sucursal y los cortes de los periodos de nómina. Después: Buk y automatizaciones.
 ```
 
-**Suggested title for the new chat:** `FONDA (Central de Reportes): Paso 25-2: PDF del reporte comercial y generación a demanda`
-
----
-
-# Permanent Rule
-
-Regenerate this document in full (never as patches) when the owner asks for a chat handoff, a major step closes, or the conversation gets very long. In that case do the four things of Section 0 (this report, the handoff prompt, the new chat title, commit and push) and stop any running web server. **Language:** this document, all commit messages and everything pushed to GitHub in this project are written in English, even though the conversation with the owner is in Spanish.
+**Suggested title for the new chat:** `FONDA (Central de Reportes): Chat 4: Corte de Wansoft, CEDIS y Buk`
