@@ -66,8 +66,13 @@ def _suc(nombre, odoo_id):
 
 
 class RuteoCostosTests(SimpleTestCase):
-    def test_politica_excepcion_y_cambio_automatico(self):
-        cur = _Cursor([(7, date(2026, 10, 1)), (5, date(2026, 10, 1)), (6, date(2026, 10, 1))],
+    def test_tabla_publicada_por_el_pipeline(self):
+        cur = _Cursor([(1,)], [("Acoxpa", date(2026, 10, 1)), ("Puebla", date(2026, 6, 10))])
+        inicios = wansoft.inicio_costos_odoo(cur, [_suc("Acoxpa", 7), _suc("Antenas", 9), _suc("Viaducto", None)])
+        self.assertEqual(inicios, {"Acoxpa": date(2026, 10, 1)})
+
+    def test_respaldo_politica_excepcion_y_cambio_automatico(self):
+        cur = _Cursor([(0,)], [(7, date(2026, 10, 1)), (5, date(2026, 10, 1)), (6, date(2026, 10, 1))],
                       [("Isabel La Católica", date(2026, 10, 6))])
         inicios = wansoft.inicio_costos_odoo(cur, [
             _suc("Acoxpa", 7), _suc("Antenas", 9), _suc("Isabel La Católica", 5), _suc("San Jeronimo", 6),

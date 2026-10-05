@@ -272,13 +272,15 @@ def costo_diario(cur, subsidiary_ids: list[int], desde: date, hasta: date) -> di
     return resultado
 
 
-# Mirror of the Wansoft pipeline's cost routing (its extract/costs/cost_routing.py
-# and core/config/companies.py), which lives in code there, not in a table:
+# The Wansoft pipeline publishes its cost routing every night in
+# `costs_source_by_company` (since the run of 2026-10-06 ~02:00): first day on
+# Odoo cost per branch, NULL = all Wansoft. Read it when it exists. Fallback
+# while it does not: a mirror of the pipeline's code (extract/costs/cost_routing.py,
+# core/config/companies.py):
 # - Antenas stays on Wansoft costs while its Odoo cost data is repaired;
 # - the October wave switches to Odoo costs by itself, from the date recorded
 #   in `costs_odoo_switch` (none recorded = still on Wansoft).
-# Interim (owner, 2026-10-05) until the Wansoft project publishes the routing
-# in a table this app can read; keep in sync with those two sets.
+TABLA_RUTA_COSTOS = "costs_source_by_company"
 COSTOS_EXCEPCION_WANSOFT = {"Antenas"}
 COSTOS_CAMBIO_AUTOMATICO = {"Isabel La Católica", "San Jeronimo", "Vía Vallejo"}
 
@@ -288,6 +290,14 @@ def inicio_costos_odoo(cur, sucursales: list) -> dict[str, date]:
     (`wansoft_ticket_nombre`); branches whose cost is all Wansoft are absent.
     Odoo's cost of a day is built from that day's customer invoices, which
     arrive late, so the report estimates those days (see metricas)."""
+    cur.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = %s",
+                (TABLA_RUTA_COSTOS,))
+    if cur.fetchall()[0][0]:
+        cur.execute(f"SELECT company_source_key, odoo_cost_start_date FROM {TABLA_RUTA_COSTOS} "
+                    "WHERE odoo_cost_start_date IS NOT NULL")
+        publicadas = dict(cur.fetchall())
+        return {s.wansoft_ticket_nombre: publicadas[s.wansoft_ticket_nombre] for s in sucursales
+                if s.wansoft_ticket_nombre in publicadas}
     con_odoo = [s for s in sucursales if s.odoo_company_id is not None
                 and s.wansoft_ticket_nombre not in COSTOS_EXCEPCION_WANSOFT]
     if not con_odoo:

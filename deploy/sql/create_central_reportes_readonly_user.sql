@@ -45,6 +45,11 @@ GRANT SELECT ON `wansoft`.`costeomensual`                       TO 'central_repo
 GRANT SELECT ON `wansoft`.`costeomensual_semanapyq`             TO 'central_reportes'@'%';
 GRANT SELECT ON `wansoft`.`gettotalcostbydate`                  TO 'central_reportes'@'%';
 GRANT SELECT ON `wansoft`.`getexpenses_factura`                 TO 'central_reportes'@'%';
+-- cost routing per branch (which days are on Odoo cost): the pipeline's published
+-- table, and the two tables of the fallback rules used while it did not exist
+GRANT SELECT ON `wansoft`.`costs_source_by_company`             TO 'central_reportes'@'%';
+GRANT SELECT ON `wansoft`.`odoo_company_migration_policy`       TO 'central_reportes'@'%';
+GRANT SELECT ON `wansoft`.`costs_odoo_switch`                   TO 'central_reportes'@'%';
 
 -- ---------------- wansoft: unified purchases/inventory and dimensions (after the migration) ----------------
 GRANT SELECT ON `wansoft`.`analytics_purchase_order_lines`               TO 'central_reportes'@'%';
