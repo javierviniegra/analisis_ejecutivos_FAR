@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ClienteCedis, Reporte
+from .models import Automatizacion, ClienteCedis, EnvioAutomatico, Reporte
 
 
 @admin.register(Reporte)
@@ -16,3 +16,18 @@ class ClienteCedisAdmin(admin.ModelAdmin):
     list_display = ("nombre_odoo", "odoo_partner_id", "sucursal", "etiqueta", "excluir", "nota")
     list_filter = ("excluir", "sucursal")
     search_fields = ("nombre_odoo", "etiqueta")
+
+
+@admin.register(Automatizacion)
+class AutomatizacionAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "reporte", "tipo", "dias_despues", "hora", "formato", "activa")
+    list_filter = ("activa", "tipo", "reporte")
+    search_fields = ("nombre",)
+    filter_horizontal = ("sucursales", "destinatarios")
+
+
+@admin.register(EnvioAutomatico)
+class EnvioAutomaticoAdmin(admin.ModelAdmin):
+    list_display = ("automatizacion", "desde", "hasta", "programado_para", "enviado_en", "estado", "intentos")
+    list_filter = ("estado",)
+    readonly_fields = [f.name for f in EnvioAutomatico._meta.fields]

@@ -71,3 +71,9 @@ def sucursales_de(user):
 
 def puede_generar(user) -> bool:
     return user.is_superuser or user.has_perm("cuentas.generar_reportes")
+
+
+def puede_automatizar(user) -> bool:
+    """Create / edit / pause automations (owner, 2026-10-05: Director and
+    Administrador general, who hold `gestionar_envios`)."""
+    return user.is_superuser or user.has_perm("cuentas.gestionar_envios")

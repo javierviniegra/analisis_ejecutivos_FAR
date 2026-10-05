@@ -1,4 +1,6 @@
+from django.conf import settings
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -126,3 +128,115 @@ class ClienteCedis(models.Model):
         if self.excluir:
             return None
         return self.sucursal.nombre if self.sucursal else (self.etiqueta or None)
+
+
+class Automatizacion(models.Model):
+    """A scheduled delivery of one report (Phase 5): which branches, what is
+    sent (consolidated and/or one per branch), format, the report's options
+    as rules, who receives it and when. Bound to ONE period kind; it always
+    sends the last closed period of that kind, `dias_despues` days after it
+    closes, at `hora` (see central/motor/programacion.py)."""
+
+    class Tipo(models.TextChoices):
+        # same values as motor.periodo.TipoPeriodo (a free range cannot be automated)
+        SEMANA = "semana", "Semanal"
+        MES = "mes", "Mensual"
+        BIMESTRE = "bimestre", "Bimestral"
+        TRIMESTRE = "trimestre", "Trimestral"
+        SEMESTRE = "semestre", "Semestral"
+        ANIO = "anio", "Anual"
+
+    class Formato(models.TextChoices):
+        PDF = "pdf", "PDF"
+        EXCEL = "excel", "Excel"
+        AMBOS = "ambos", "PDF y Excel"
+
+    reporte = models.ForeignKey(Reporte, on_delete=models.CASCADE, related_name="automatizaciones")
+    nombre = models.CharField(max_length=120)
+    activa = models.BooleanField(default=True)
+    tipo = models.CharField("frecuencia", max_length=12, choices=Tipo.choices, default=Tipo.SEMANA)
+    dias_despues = models.PositiveSmallIntegerField(
+        "días después del cierre", default=1,
+        help_text="1 = el día siguiente al cierre (lunes para una semana, día 1 para un mes).")
+    hora = models.TimeField(default="08:00")
+    todas_las_sucursales = models.BooleanField(
+        default=True, help_text="Todas las sucursales activas, también las que se abran después.")
+    sucursales = models.ManyToManyField("cuentas.Sucursal", blank=True, related_name="automatizaciones")
+    enviar_consolidado = models.BooleanField(default=False)
+    enviar_particulares = models.BooleanField("enviar uno por sucursal", default=True)
+    formato = models.CharField(max_length=8, choices=Formato.choices, default=Formato.PDF)
+    opciones = models.JSONField(default=dict, blank=True, help_text="Reglas del reporte, p. ej. incluir_costos.")
+    destinatarios = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="automatizaciones")
+    correos_extra = models.TextField(blank=True, help_text="Correos fuera del sistema, uno por renglón.")
+    gerente_su_sucursal = models.BooleanField(
+        "a cada quien solo su sucursal", default=True,
+        help_text="Los reportes por sucursal le llegan a cada destinatario solo de las sucursales de su perfil.")
+    creada_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+")
+    creada = models.DateTimeField(auto_now_add=True)
+    actualizada = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["reporte", "nombre"]
+        verbose_name = "automatización"
+        verbose_name_plural = "automatizaciones"
+
+    def __str__(self):
+        return f"{self.reporte} · {self.nombre}"
+
+    def clean(self):
+        from .motor.periodo import TipoPeriodo
+        from .motor.programacion import max_dias_despues
+
+        errores = {}
+        if not (self.enviar_consolidado or self.enviar_particulares):
+            errores["enviar_particulares"] = "Elige consolidado, uno por sucursal o ambos."
+        if self.reporte_id:
+            alcance = self.reporte.alcance
+            if self.enviar_consolidado and alcance == Reporte.Alcance.POR_SUCURSAL:
+                errores["enviar_consolidado"] = "Este reporte no tiene versión consolidada."
+            if self.enviar_particulares and alcance == Reporte.Alcance.CONSOLIDADO:
+                errores["enviar_particulares"] = "Este reporte solo es consolidado."
+            admitidos = {self.Formato.PDF: self.reporte.admite_pdf, self.Formato.EXCEL: self.reporte.admite_excel,
+                         self.Formato.AMBOS: self.reporte.admite_pdf and self.reporte.admite_excel}
+            if not admitidos.get(self.formato):
+                errores["formato"] = "Este reporte no se genera en ese formato."
+        tope = max_dias_despues(TipoPeriodo(self.tipo))
+        if not 1 <= self.dias_despues <= tope:
+            errores["dias_despues"] = f"Entre 1 y {tope} días después del cierre."
+        if errores:
+            raise ValidationError(errores)
+
+    @property
+    def correos(self) -> list[str]:
+        return [c.strip() for c in self.correos_extra.replace(",", "\n").splitlines() if c.strip()]
+
+
+class EnvioAutomatico(models.Model):
+    """Send log: one row per automation and period (retries update it), so a
+    period is never sent twice and every send can be audited."""
+
+    class Estado(models.TextChoices):
+        ENVIADO = "enviado", "Enviado"
+        ERROR = "error", "Error"
+        SIN_DESTINATARIOS = "sin_destinatarios", "Sin destinatarios"
+
+    automatizacion = models.ForeignKey(Automatizacion, on_delete=models.CASCADE, related_name="envios")
+    desde = models.DateField()
+    hasta = models.DateField()
+    programado_para = models.DateTimeField()
+    enviado_en = models.DateTimeField(null=True, blank=True)
+    estado = models.CharField(max_length=20, choices=Estado.choices)
+    destinatarios = models.TextField(blank=True)
+    archivos = models.TextField(blank=True)
+    error = models.TextField(blank=True)
+    intentos = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-programado_para"]
+        constraints = [models.UniqueConstraint(fields=["automatizacion", "desde"], name="un_envio_por_periodo")]
+        verbose_name = "envío automático"
+        verbose_name_plural = "envíos automáticos"
+
+    def __str__(self):
+        return f"{self.automatizacion} · {self.desde:%d/%m/%Y} · {self.get_estado_display()}"

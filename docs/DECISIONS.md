@@ -2,6 +2,15 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-05 — Automations (Phase 5), block 1: model, send log, permission, schedule
+
+- **Design approved by the owner:** each report gets an "Automatizaciones" section. An automation (`central.Automatizacion`) stores: name, active, **one period kind** (weekly, monthly, bimonthly, quarterly, semiannual, annual -- a free range cannot be automated), **when** = `dias_despues` days after the period closes (1 = the day after: Monday for a week, the 1st for a month; weeks up to 7, other kinds up to 28) at `hora`, and it always sends **the last closed period**; branches (chosen, or "todas las activas" so new branches come in by themselves); **what is sent**: consolidated and/or one per branch (validated against the report's scope); format (only what the report admits); the report's options as rules (`opciones`, today `incluir_costos`); recipients = system users + outside e-mails; **"a cada quien solo su sucursal" (owner: yes)**: per-branch reports reach each recipient only for the branches of their profile.
+- **Who (owner):** creating / editing / pausing automations needs `cuentas.gestionar_envios`, held by Director and Administrador general (`cuentas.models.puede_automatizar`).
+- **Send log `EnvioAutomatico`:** one row per automation and period (unique; retries update it), with schedule time, send time, state (enviado / error / sin destinatarios), recipients, files, error and attempts -- a period is never sent twice and every send is auditable.
+- Pure scheduling in `central/motor/programacion.py` (`periodo_a_enviar`, `proximo_envio`). Migration 0010; both models in the admin.
+- **The weekly send day/hour is NOT fixed yet:** it waits for the 2026-10-07 comparison of Wansoft's late cost recalculation (see the entry below).
+- Next blocks: the section on the report page (list, create, edit, pause); then the dispatcher command (`enviar_automatizaciones`, every 15 min via Task Scheduler) with SMTP from `config/.env`.
+
 ## 2026-10-05 — Estimated total cost while Odoo invoicing is behind; "Incluir costos" option
 
 - **Why:** the week 40 rehearsal on the migrated `wansoft` (Wansoft chat, 2026-10-05) gave a consolidated total cost of 25.4% vs 34.0% the week before. For branches on Odoo costs (Acoxpa, Tepeyac, Oceanía, La Esquina Coyoacán, Puebla, CentroMyJ), the cost of a day comes from that day's Odoo customer invoices (the Wansoft sales passed to Odoo), created with a lag: in September 40-70% one day later, 70-100% after 7 days, all of it at the month-end close. The cost per invoiced peso is stable (35-38%); the invoiced share is not.
