@@ -186,7 +186,7 @@ def _detalle(ws, r: ReporteComercial):
             if costos and f.costo_total_estimado:  # estimated: "34.4%*", still a number
                 ws.cell(i, 7).number_format = ws.cell(i, 7).number_format + '"*"'
         if costos and total.costo_total_estimado:
-            ws.cell(5 + len(filas), 1, "* costo total estimado (Odoo aún no factura todo el periodo)").font = Font(italic=True)
+            ws.cell(5 + len(filas), 1, "* costo total estimado (ver hoja Notas)").font = Font(italic=True)
         anchos = (32, 18, 10, 4, 12, 14, 14, 16)
     else:
         compara = detalle.compara_con_anterior(r)

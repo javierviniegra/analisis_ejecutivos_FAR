@@ -24,6 +24,9 @@ TITULO = "Reporte comercial"
 
 log = logging.getLogger(__name__)
 
+# Budget rows of the indicators table (left out of a consolidated report without a complete budget).
+FILAS_PRESUPUESTO = {"costo_ventas_ppto", "costo_ventas_ejercido"}
+
 
 @dataclass
 class ReporteComercial:
@@ -97,24 +100,45 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
 
     nombres = [s.nombre for s in sucursales]
     if consolidado:
-        r = _uno("Consolidado", nombres, periodo, metricas.consolidar(ma, periodo),
-                 metricas.comparables(nombres, ma, mp, periodo, anterior),
-                 metricas.comparables(nombres, ma, my, periodo, anio_ant), diario, incluir_costos)
+        actual = metricas.consolidar(ma, periodo)
+        comp_ant = metricas.comparables(nombres, ma, mp, periodo, anterior)
+        comp_anio = metricas.comparables(nombres, ma, my, periodo, anio_ant)
+        # Owner, 2026-10-05: the budget is shown in the consolidated only when every
+        # branch has one; a partial budget would stain the whole report.
+        # Each period on its own: a period with a budget for only some of its branches loses it.
+        presupuesto_incompleto = False
+        for m in (actual, comp_ant.actual, comp_ant.base, comp_anio.actual, comp_anio.base):
+            if m is not None and 0 < m.n_con_presupuesto < m.n_sucursales:
+                metricas.sin_presupuesto(m)
+                presupuesto_incompleto = True
+        r = _uno("Consolidado", nombres, periodo, actual, comp_ant, comp_anio, diario, incluir_costos)
+        if actual.costo_ventas_ppto is None:  # no budget rows at all rather than a column of dashes
+            r.filas = [f for f in r.filas if f.indicador.clave not in FILAS_PRESUPUESTO]
         r.por_sucursal = [(n, ma[i], mp[i]) for i, n in enumerate(nombres)]
-        sin_costo = [n for n, m, _ in r.por_sucursal if m.costo_total is None and m.dias_con_cierre]
+        sin_considerar = [s.nombre for s in sucursales if not getattr(s, "considerar_costo", True)]
+        if incluir_costos and sin_considerar:
+            r.cobertura.append(f"No se considera el costo de {', '.join(sin_considerar)} (así está configurada la "
+                               "sucursal): sus ventas quedan fuera de los porcentajes de costo.")
+        if incluir_costos and presupuesto_incompleto:
+            r.cobertura.append("El presupuesto de Costo de Ventas no se muestra en el consolidado: no todas las "
+                               "sucursales lo tienen capturado (se ve en el reporte de cada sucursal).")
+        sin_costo = [n for (n, m, _), s in zip(r.por_sucursal, sucursales)
+                     if m.costo_total is None and m.dias_con_cierre and getattr(s, "considerar_costo", True)]
         if incluir_costos and sin_costo and periodo.tipo != TipoPeriodo.RANGO:
             r.cobertura.append("Costo total sin dato en el reporte de costos (fuera de su porcentaje): "
                                + ", ".join(sin_costo) + ".")
-        estimadas = [f"{n} {m.pct_facturado_odoo * 100:.0f}%" for n, m, _ in r.por_sucursal
-                     if m.costo_total_estimado and m.pct_facturado_odoo is not None]
+        estimadas = [n + (f" ({m.pct_facturado_odoo * 100:.0f}% facturado en Odoo)" if m.costo_estimado_odoo
+                          and m.pct_facturado_odoo is not None else f" (${m.pendiente_wansoft:,.0f} pendiente en Wansoft)")
+                     for n, m, _ in r.por_sucursal if m.costo_total_estimado]
         if estimadas:
-            r.cobertura.append("Facturado en Odoo por sucursal con costo estimado: " + ", ".join(estimadas) + ".")
+            r.cobertura.append("Sucursales con costo total estimado: " + ", ".join(estimadas) + ".")
         return [r]
     return [
         _uno(n, [n], periodo, ma[i],
              metricas.comparables([n], [ma[i]], [mp[i]], periodo, anterior),
              metricas.comparables([n], [ma[i]], [my[i]] if my else None, periodo, anio_ant),
-             {n: diario[n]} if diario is not None else None, incluir_costos)
+             {n: diario[n]} if diario is not None else None,
+             incluir_costos and getattr(sucursales[i], "considerar_costo", True))  # Metepec: no cost section
         for i, n in enumerate(nombres)
     ]
 

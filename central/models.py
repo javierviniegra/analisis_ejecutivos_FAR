@@ -166,11 +166,23 @@ class Automatizacion(models.Model):
     enviar_particulares = models.BooleanField("enviar uno por sucursal", default=True)
     formato = models.CharField(max_length=8, choices=Formato.choices, default=Formato.PDF)
     opciones = models.JSONField(default=dict, blank=True, help_text="Reglas del reporte, p. ej. incluir_costos.")
-    destinatarios = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="automatizaciones")
-    correos_extra = models.TextField(blank=True, help_text="Correos fuera del sistema, uno por renglón.")
-    gerente_su_sucursal = models.BooleanField(
-        "a cada quien solo su sucursal", default=True,
-        help_text="Los reportes por sucursal le llegan a cada destinatario solo de las sucursales de su perfil.")
+    # Recipients, separate for each kind of file (owner, 2026-10-05):
+    # - consolidated: specific people only;
+    # - one per branch: each branch's default recipients (cuentas.Sucursal) get
+    #   their branch's report, plus optional people who get the branches' reports
+    #   (users only those of their profile, if so set; outside e-mails all).
+    consolidado_destinatarios = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True, related_name="automatizaciones_consolidado")
+    consolidado_correos = models.TextField(blank=True, help_text="Correos fuera del sistema, uno por renglón.")
+    particulares_a_sucursal = models.BooleanField(
+        "a los destinatarios de cada sucursal", default=True,
+        help_text="Cada sucursal recibe solo su reporte (destinatarios definidos en la sucursal).")
+    particulares_destinatarios = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True, related_name="automatizaciones_particulares")
+    particulares_correos = models.TextField(blank=True, help_text="Correos fuera del sistema, uno por renglón.")
+    particulares_solo_sus_sucursales = models.BooleanField(
+        "cada quien solo sus sucursales", default=True,
+        help_text="Los usuarios agregados reciben solo las sucursales de su perfil; los correos externos, todas.")
     creada_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                    related_name="+")
     creada = models.DateTimeField(auto_now_add=True)
@@ -208,8 +220,14 @@ class Automatizacion(models.Model):
             raise ValidationError(errores)
 
     @property
-    def correos(self) -> list[str]:
-        return [c.strip() for c in self.correos_extra.replace(",", "\n").splitlines() if c.strip()]
+    def correos_consolidado(self) -> list[str]:
+        from cuentas.models import separar_correos
+        return separar_correos(self.consolidado_correos)
+
+    @property
+    def correos_particulares(self) -> list[str]:
+        from cuentas.models import separar_correos
+        return separar_correos(self.particulares_correos)
 
 
 class EnvioAutomatico(models.Model):

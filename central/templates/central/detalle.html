@@ -21,4 +21,51 @@
 {% else %}
 <p class="muted">La generación de este reporte se habilita en las siguientes fases.</p>
 {% endif %}
+
+{% if automatiza %}
+<style>
+  .autos { width:100%; border-collapse:collapse; font-size:14px; }
+  .autos th { text-align:left; color:var(--verde-oscuro); font-size:13px; border-bottom:2px solid var(--verde); padding:6px 10px 6px 0; }
+  .autos td { padding:8px 10px 8px 0; border-bottom:1px solid #eee; vertical-align:top; }
+  .pausada { color:#999; }
+  .etiqueta { font-size:12px; border-radius:8px; padding:1px 8px; background:#e8f3f1; color:var(--verde-oscuro); }
+  .etiqueta.gris { background:#eee; color:#777; }
+  .etiqueta.roja { background:#fdecea; color:#8a1c14; }
+  form.enlinea { display:inline; }
+  .enlace { background:none; border:0; color:var(--verde); font-size:13px; cursor:pointer; padding:0; text-decoration:underline; }
+</style>
+<div class="card">
+  <h2 style="margin-top:0">Automatizaciones</h2>
+  <p class="muted" style="margin-top:-6px">Envíos programados por correo. Cada uno manda siempre el último periodo cerrado.</p>
+  {% if automatizaciones %}
+  <table class="autos">
+    <tr><th>Nombre</th><th>Frecuencia</th><th>Qué se manda</th><th>Destinatarios</th><th>Próximo envío</th><th>Último envío</th><th></th></tr>
+    {% for x in automatizaciones %}{% with a=x.a %}
+    <tr class="{% if not a.activa %}pausada{% endif %}">
+      <td><strong>{{ a.nombre }}</strong>{% if not a.activa %} <span class="etiqueta gris">Pausada</span>{% endif %}</td>
+      <td>{{ a.get_tipo_display }}<br><span class="muted">{{ a.dias_despues }} día{{ a.dias_despues|pluralize }} después del cierre, {{ a.hora|time:"H:i" }}</span></td>
+      <td>{% if a.enviar_consolidado %}Consolidado{% endif %}{% if a.enviar_consolidado and a.enviar_particulares %} y {% endif %}{% if a.enviar_particulares %}uno por sucursal{% endif %}
+          · {{ a.get_formato_display }}<br>
+          <span class="muted">{% if a.todas_las_sucursales %}Todas las sucursales activas{% else %}{{ a.sucursales.all|length }} sucursales{% endif %}{% if a.opciones.incluir_costos is False %} · sin costos{% endif %}</span></td>
+      <td>{% if a.enviar_consolidado %}<strong>Consolidado:</strong>
+            {% for u in a.consolidado_destinatarios.all %}{{ u.get_full_name|default:u.username }}{% if not forloop.last or a.correos_consolidado %}, {% endif %}{% endfor %}{{ a.correos_consolidado|join:", " }}<br>{% endif %}
+          {% if a.enviar_particulares %}<strong>Por sucursal:</strong>
+            {% if a.particulares_a_sucursal %}los destinatarios de cada sucursal{% endif %}
+            {% if a.particulares_destinatarios.all or a.correos_particulares %}{% if a.particulares_a_sucursal %} + {% endif %}{% for u in a.particulares_destinatarios.all %}{{ u.get_full_name|default:u.username }}{% if not forloop.last or a.correos_particulares %}, {% endif %}{% endfor %}{{ a.correos_particulares|join:", " }}{% if a.particulares_destinatarios.all and a.particulares_solo_sus_sucursales %} <span class="muted">(solo sus sucursales)</span>{% endif %}{% endif %}
+            {% if x.sin_destino %}<br><span class="etiqueta roja">Sin destinatarios: {{ x.sin_destino|join:", " }}</span>{% endif %}
+          {% endif %}</td>
+      <td>{% if a.activa %}{{ x.proximo_periodo.etiqueta }}<br><span class="muted">{{ x.proximo|date:"D d/m/Y H:i" }}</span>{% else %}—{% endif %}</td>
+      <td>{% if x.ultimo %}{{ x.ultimo.desde|date:"d/m" }}–{{ x.ultimo.hasta|date:"d/m/Y" }}<br><span class="etiqueta {% if x.ultimo.estado != 'enviado' %}roja{% endif %}">{{ x.ultimo.get_estado_display }}</span>{% else %}<span class="muted">Aún no</span>{% endif %}</td>
+      <td style="white-space:nowrap"><a href="{% url 'automatizacion_editar' reporte.clave a.pk %}" class="enlace">Editar</a> ·
+        <form method="post" action="{% url 'automatizacion_pausar' reporte.clave a.pk %}" class="enlinea">{% csrf_token %}
+          <button class="enlace">{% if a.activa %}Pausar{% else %}Reanudar{% endif %}</button></form></td>
+    </tr>
+    {% endwith %}{% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">Este reporte todavía no tiene automatizaciones.</p>
+  {% endif %}
+  <p style="margin-bottom:0"><a class="btn" href="{% url 'automatizacion_nueva' reporte.clave %}">Nueva automatización</a></p>
+</div>
+{% endif %}
 {% endblock %}

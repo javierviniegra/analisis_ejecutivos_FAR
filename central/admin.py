@@ -23,7 +23,7 @@ class AutomatizacionAdmin(admin.ModelAdmin):
     list_display = ("nombre", "reporte", "tipo", "dias_despues", "hora", "formato", "activa")
     list_filter = ("activa", "tipo", "reporte")
     search_fields = ("nombre",)
-    filter_horizontal = ("sucursales", "destinatarios")
+    filter_horizontal = ("sucursales", "consolidado_destinatarios", "particulares_destinatarios")
 
 
 @admin.register(EnvioAutomatico)

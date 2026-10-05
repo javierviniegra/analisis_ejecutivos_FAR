@@ -2,6 +2,11 @@ from django.conf import settings
 from django.db import models
 
 
+def separar_correos(texto: str) -> list[str]:
+    """E-mails typed one per line (commas also accepted)."""
+    return [c.strip() for c in (texto or "").replace(",", "\n").splitlines() if c.strip()]
+
+
 class Sucursal(models.Model):
     """A branch a report can be about. Odoo/Wansoft naming differs per system,
     so `clave` is this project's own stable key (e.g. "Puebla")."""
@@ -22,12 +27,35 @@ class Sucursal(models.Model):
         null=True, blank=True, unique=True, help_text="Odoo res.company id (also ControlPresupuestos_AP's key)."
     )
 
+    # Owner, 2026-10-05: whether this branch's cost is taken into account. Off
+    # (Metepec: Wansoft never finishes discounting its cost) -> its own report
+    # shows no cost and the consolidated leaves it out of every cost, saying so.
+    considerar_costo = models.BooleanField(
+        default=True, help_text="Desmarcado: su reporte sale sin costos y el consolidado no considera su costo.")
+
+    # Who receives this branch's reports by default (owner, 2026-10-05: one list
+    # per branch, for every report). Automations sending one report per branch
+    # use it unless they say otherwise; change a manager here, once.
+    destinatarios = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True, related_name="sucursales_destino",
+        help_text="Usuarios que reciben por defecto los reportes de esta sucursal.")
+    correos_reporte = models.TextField(
+        "correos externos", blank=True, help_text="Correos fuera del sistema que reciben sus reportes, uno por renglón.")
+
     class Meta:
         ordering = ["nombre"]
         verbose_name_plural = "sucursales"
 
     def __str__(self):
         return self.nombre
+
+    @property
+    def correos(self) -> list[str]:
+        return separar_correos(self.correos_reporte)
+
+    @property
+    def tiene_destinatarios(self) -> bool:
+        return bool(self.correos) or self.destinatarios.exists()
 
 
 class PerfilUsuario(models.Model):

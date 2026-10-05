@@ -317,7 +317,7 @@ def _detalle_sucursales(c, r: ReporteComercial, y: float) -> float:
     if costos and total.costo_total_estimado:
         c.setFillColor(TEXTO)
         c.setFont(F, 6.6)
-        c.drawRightString(MARGEN + ANCHO_UTIL, y - 5, "* costo total estimado (Odoo aún no factura todo el periodo)")
+        c.drawRightString(MARGEN + ANCHO_UTIL, y - 5, "* costo total estimado (ver notas de la página 1)")
         y -= 10
     return y - 6
 

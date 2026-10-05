@@ -4,7 +4,7 @@ from datetime import date
 
 from django import forms
 
-from .models import Reporte
+from .models import Automatizacion, Reporte
 from .motor.periodo import Periodo, TipoPeriodo
 
 TIPOS = [
@@ -98,3 +98,79 @@ class GenerarForm(forms.Form):
             raise forms.ValidationError("El periodo todavía no empieza.")
         datos["periodo"] = periodo
         return datos
+
+
+class AutomatizacionForm(forms.ModelForm):
+    """Create / edit an automation of one report. Only the choices the report
+    admits are offered (scope, formats, its options); the model validates them
+    again. The report's options are stored in `opciones` as rules."""
+
+    incluir_costos = forms.BooleanField(required=False, initial=True, label="Incluir costos")
+
+    class Meta:
+        model = Automatizacion
+        fields = ["nombre", "activa", "tipo", "dias_despues", "hora", "todas_las_sucursales", "sucursales",
+                  "enviar_consolidado", "enviar_particulares", "formato",
+                  "consolidado_destinatarios", "consolidado_correos",
+                  "particulares_a_sucursal", "particulares_destinatarios", "particulares_correos",
+                  "particulares_solo_sus_sucursales"]
+        widgets = {
+            "sucursales": forms.CheckboxSelectMultiple,
+            "consolidado_destinatarios": forms.CheckboxSelectMultiple,
+            "particulares_destinatarios": forms.CheckboxSelectMultiple,
+            "formato": forms.RadioSelect,
+            "hora": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+            "consolidado_correos": forms.Textarea(attrs={"rows": 2}),
+            "particulares_correos": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, reporte: Reporte, sucursales, usuarios, opciones: dict | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance.reporte = reporte
+        self.fields["sucursales"].queryset = sucursales
+        for campo in ("consolidado_destinatarios", "particulares_destinatarios"):
+            self.fields[campo].queryset = usuarios
+            self.fields[campo].label_from_instance = (
+                lambda u: f"{u.get_full_name() or u.username} ({u.email or 'sin correo'})")
+        formatos = [(Automatizacion.Formato.PDF, "PDF")] * reporte.admite_pdf + \
+                   [(Automatizacion.Formato.EXCEL, "Excel")] * reporte.admite_excel
+        if len(formatos) == 2:
+            formatos.append((Automatizacion.Formato.AMBOS, "PDF y Excel"))
+        self.fields["formato"].choices = formatos
+        if not self.instance.pk and formatos:
+            self.initial.setdefault("formato", formatos[0][0])
+        # scope: drop what the report cannot send
+        if reporte.alcance == Reporte.Alcance.POR_SUCURSAL:
+            for campo in ("enviar_consolidado", "consolidado_destinatarios", "consolidado_correos"):
+                del self.fields[campo]
+        elif reporte.alcance == Reporte.Alcance.CONSOLIDADO:
+            for campo in ("enviar_particulares", "particulares_a_sucursal", "particulares_destinatarios",
+                          "particulares_correos", "particulares_solo_sus_sucursales"):
+                del self.fields[campo]
+            self.instance.enviar_particulares, self.instance.enviar_consolidado = False, True
+        # the report's own options, as rules (default: the report's default, or what was saved)
+        self.opciones = opciones or {}
+        if "incluir_costos" in self.opciones:
+            self.fields["incluir_costos"].initial = self.instance.opciones.get(
+                "incluir_costos", self.opciones["incluir_costos"]) if self.instance.pk else self.opciones["incluir_costos"]
+        else:
+            del self.fields["incluir_costos"]
+
+    def clean(self):
+        datos = super().clean()
+        if not datos.get("todas_las_sucursales") and not datos.get("sucursales"):
+            self.add_error("sucursales", "Elige sucursales o marca «Todas las sucursales activas».")
+        consolidado = datos.get("enviar_consolidado", self.instance.enviar_consolidado)
+        if consolidado and not (datos.get("consolidado_destinatarios") or (datos.get("consolidado_correos") or "").strip()):
+            self.add_error("consolidado_destinatarios" if "consolidado_destinatarios" in self.fields else None,
+                           "Elige a quién se manda el consolidado.")
+        if datos.get("enviar_particulares") and not (
+                datos.get("particulares_a_sucursal") or datos.get("particulares_destinatarios")
+                or (datos.get("particulares_correos") or "").strip()):
+            self.add_error("particulares_destinatarios",
+                           "Elige a quién se mandan los reportes por sucursal (sus destinatarios o personas).")
+        return datos
+
+    def save(self, commit=True):
+        self.instance.opciones = {nombre: bool(self.cleaned_data.get(nombre)) for nombre in self.opciones}
+        return super().save(commit)

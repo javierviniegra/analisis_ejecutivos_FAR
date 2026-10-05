@@ -6,4 +6,7 @@ urlpatterns = [
     path("", views.catalogo, name="catalogo"),
     path("<slug:clave>/", views.detalle, name="reporte_detalle"),
     path("<slug:clave>/generar/", views.generar, name="reporte_generar"),
+    path("<slug:clave>/automatizaciones/nueva/", views.automatizacion, name="automatizacion_nueva"),
+    path("<slug:clave>/automatizaciones/<int:pk>/", views.automatizacion, name="automatizacion_editar"),
+    path("<slug:clave>/automatizaciones/<int:pk>/pausar/", views.automatizacion_pausar, name="automatizacion_pausar"),
 ]

@@ -67,10 +67,21 @@ class Metricas:
     # Branches with Odoo cost (see estimar_costo_odoo): Wansoft net sales of their
     # Odoo-cost days and what Odoo has invoiced of them; while not fully
     # invoiced the total cost is an estimate.
-    costo_total_estimado: bool = False
+    costo_estimado_odoo: bool = False
     venta_dias_odoo: Decimal | None = None
     facturado_odoo: Decimal | None = None
     costo_odoo_sin_leer: bool = False  # Odoo could not be read: Odoo-cost days may be partial
+    # Branches with Wansoft cost: cost of what was sold not yet discounted from
+    # inventory (added to the cost while above 0, which makes it an estimate).
+    pendiente_wansoft: Decimal | None = None
+
+    @property
+    def costo_estimado_wansoft(self) -> bool:
+        return bool(self.pendiente_wansoft)
+
+    @property
+    def costo_total_estimado(self) -> bool:
+        return self.costo_estimado_odoo or self.costo_estimado_wansoft
 
     @property
     def dias_esperados(self) -> int:
@@ -140,6 +151,22 @@ def costos_totales(cur_wansoft, subsidiary_ids: list[int], periodo: Periodo) -> 
     return {sid: v for sid, v in costos.items() if v}
 
 
+def pendientes_rebaja(cur_wansoft, subsidiary_ids: list[int], periodo: Periodo) -> dict[int, Decimal]:
+    """Cost not yet discounted by Wansoft per branch, from the same snapshots as
+    `costos_totales` (business rule, owner 2026-10-05): only branches with some."""
+    if periodo.tipo == TipoPeriodo.RANGO or not subsidiary_ids:
+        return {}
+    if periodo.tipo == TipoPeriodo.SEMANA:
+        pendientes = wansoft.costo_total_semana(cur_wansoft, subsidiary_ids, periodo.desde, wansoft.PENDIENTE_REBAJA)
+    else:
+        pendientes = {}
+        for primero, ultimo in _meses(periodo.desde, periodo.hasta):
+            for sid, v in wansoft.costo_total_mes(cur_wansoft, subsidiary_ids, primero, ultimo,
+                                                  wansoft.PENDIENTE_REBAJA).items():
+                pendientes[sid] = pendientes.get(sid, CERO) + v
+    return {sid: v for sid, v in pendientes.items() if v > 0}
+
+
 # Odoo's cost of a day comes from that day's customer invoices (the Wansoft
 # sales passed to Odoo), created with a lag: in September 2026, 40-70% one day
 # later, 70-100% after 7 days, all of it at the month-end close. A period is
@@ -184,14 +211,17 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
     the estimated cost. Without `incluir_costos` no cost is read at all."""
     d, h = periodo.desde, periodo.hasta
     preliminar = presupuestos.es_preliminar(h, hoy or date.today())
+    # Branches whose cost is not taken into account (cuentas.Sucursal.considerar_costo) get no cost at all.
+    con_costo = [s for s in sucursales if incluir_costos and getattr(s, "considerar_costo", True)]
     cierres = wansoft.cierres_por_dia(
         cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None], d, h)
     nombres = [s.wansoft_ticket_nombre for s in sucursales]
     detalle = wansoft.detalle_por_sucursal(cur_wansoft, nombres, d, h)
     mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h)
-    costos = (costos_totales(cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales
-                                           if s.wansoft_subsidiary_id is not None], periodo) or {}) if incluir_costos else {}
-    inicios = wansoft.inicio_costos_odoo(cur_wansoft, sucursales) if costos else {}
+    costos = (costos_totales(cur_wansoft, [s.wansoft_subsidiary_id for s in con_costo
+                                           if s.wansoft_subsidiary_id is not None], periodo) or {}) if con_costo else {}
+    pendientes = pendientes_rebaja(cur_wansoft, list(costos), periodo) if costos else {}
+    inicios = wansoft.inicio_costos_odoo(cur_wansoft, con_costo) if costos else {}
     inicios = {k: v for k, v in inicios.items() if v <= h}
     costo_dia, facturado = {}, {}
     if inicios and odoo is not None:
@@ -221,6 +251,10 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
         if sucursal.wansoft_subsidiary_id in costos:
             m.costo_total = costos[sucursal.wansoft_subsidiary_id]
             m.venta_neta_con_costo_total = m.venta_neta
+            pendiente = pendientes.get(sucursal.wansoft_subsidiary_id)
+            if pendiente:  # Wansoft has not discounted all of it yet: estimated (owner, 2026-10-05)
+                m.costo_total += pendiente
+                m.pendiente_wansoft = pendiente
         inicio = inicios.get(sucursal.wansoft_ticket_nombre)
         if inicio is not None and odoo is None:
             m.costo_odoo_sin_leer = True
@@ -229,7 +263,7 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             c = estimar_costo_odoo(m.costo_total, dias_odoo, costo_dia.get(sucursal.wansoft_subsidiary_id, {}),
                                    facturado.get(sucursal.odoo_company_id, {}),
                                    {x: t["venta_neta"] for x, t in dias.items()})
-            m.costo_total, m.costo_total_estimado = c.costo, c.estimado
+            m.costo_total, m.costo_estimado_odoo = c.costo, c.estimado
             m.venta_dias_odoo, m.facturado_odoo = c.venta, c.facturado
             m.venta_neta_con_costo_total = m.venta_neta if c.costo is not None else None
 
@@ -238,7 +272,7 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             m.dias_con_detalle, m.canal = detalle[nombre]
             m.mix = mix.get(nombre, {})
 
-        if incluir_costos and sucursal.odoo_company_id is not None:
+        if sucursal in con_costo and sucursal.odoo_company_id is not None:
             real = presupuestos.gasto_real_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
             ppto = presupuestos.presupuesto_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
             m.costo_ventas_real = real
@@ -288,7 +322,9 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
         if m.costo_total is not None:
             total.costo_total = (total.costo_total or CERO) + m.costo_total
             total.venta_neta_con_costo_total = (total.venta_neta_con_costo_total or CERO) + (m.venta_neta_con_costo_total or CERO)
-        total.costo_total_estimado = total.costo_total_estimado or m.costo_total_estimado
+        total.costo_estimado_odoo = total.costo_estimado_odoo or m.costo_estimado_odoo
+        if m.pendiente_wansoft:
+            total.pendiente_wansoft = (total.pendiente_wansoft or CERO) + m.pendiente_wansoft
         total.costo_odoo_sin_leer = total.costo_odoo_sin_leer or m.costo_odoo_sin_leer
         if m.venta_dias_odoo is not None:
             total.venta_dias_odoo = (total.venta_dias_odoo or CERO) + m.venta_dias_odoo
@@ -336,3 +372,12 @@ def comparables(nombres: list[str], actuales: list[Metricas], bases: list[Metric
         return Comparacion(consolidar(actuales, periodo), None, excluidas)
     return Comparacion(consolidar([actuales[i] for i in dentro], periodo),
                        consolidar([bases[i] for i in dentro], periodo_base), excluidas)
+
+
+def sin_presupuesto(m: Metricas | None) -> None:
+    """Drop the Costo de Ventas budget figures from a metrics object (the
+    consolidated report shows no budget unless every branch has one)."""
+    if m is None:
+        return
+    m.costo_ventas_ppto = m.costo_ventas_real_con_ppto = m.costo_ventas_ppto_con_real = None
+    m.n_con_presupuesto = 0

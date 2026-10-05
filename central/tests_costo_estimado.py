@@ -84,7 +84,7 @@ class RuteoCostosTests(SimpleTestCase):
 class SalidasCostoEstimadoTests(SimpleTestCase):
     def _metricas(self, estimado=True):
         m = Metricas(periodo=Periodo.semana_de(LUNES), venta_neta=D(1000), dias_con_cierre=7,
-                     costo_total=D(344), venta_neta_con_costo_total=D(1000), costo_total_estimado=estimado,
+                     costo_total=D(344), venta_neta_con_costo_total=D(1000), costo_estimado_odoo=estimado,
                      venta_dias_odoo=D(800), facturado_odoo=D(400))
         return m
 
@@ -106,7 +106,66 @@ class SalidasCostoEstimadoTests(SimpleTestCase):
         m = self._metricas()
         self.assertFalse([r for r in notas_reglas(m.periodo, incluir_costos=False) if "osto" in r.split(":")[0]])
         self.assertFalse([n for n in notas_cobertura(m.periodo, m, None, None, incluir_costos=False) if "osto" in n])
-        self.assertTrue(any(r.startswith("Costo total estimado") for r in notas_reglas(m.periodo)))
+        # the estimate is explained in the notes when it happens, never as a standing rule
+        self.assertFalse(any("estimado" in r for r in notas_reglas(m.periodo)))
+
+    def test_pendiente_de_wansoft(self):
+        m = self._metricas(estimado=False)
+        self.assertFalse(m.costo_total_estimado)
+        self.assertFalse([n for n in notas_cobertura(m.periodo, m, None, None) if "estimado" in n])  # complete: silent
+        m.pendiente_wansoft = D("20054")
+        self.assertTrue(m.costo_total_estimado)
+        filas = {f.indicador.clave: f for f in construir_tabla(m, None, None)}
+        self.assertTrue(filas["costo_total"].estimado)
+        self.assertTrue(any("pendiente de rebaja" in n and "$20,054" in n
+                            for n in notas_cobertura(m.periodo, m, None, None)))
 
     def test_umbral(self):
         self.assertEqual(metricas.UMBRAL_FACTURADO_COMPLETO, D("0.995"))
+
+
+class ConsiderarCostoYPresupuestoTests(SimpleTestCase):
+    """Owner, 2026-10-05: a branch whose cost is not considered (Metepec) shows no
+    cost in its report and is reported as left out in the consolidated; a
+    partial budget is not shown in the consolidated."""
+
+    def _armar(self, consolidado):
+        from contextlib import nullcontext
+        from unittest import mock
+
+        from .motor import reporte_comercial
+
+        def metricas_de(cur_w, cur_p, sucursales, periodo, **kw):
+            salida = []
+            for s in sucursales:
+                m = Metricas(periodo=periodo, venta_bruta=D(1160), venta_neta=D(1000), dias_con_cierre=periodo.dias)
+                if s.considerar_costo:
+                    m.costo_total, m.venta_neta_con_costo_total = D(385), D(1000)
+                if s.nombre == "Acoxpa":
+                    m.costo_ventas_ppto, m.n_con_presupuesto = D(400), 1
+                salida.append(m)
+            return salida
+
+        sucursales = [SimpleNamespace(nombre="Acoxpa", odoo_company_id=7, considerar_costo=True),
+                      SimpleNamespace(nombre="Metepec", odoo_company_id=None, considerar_costo=False)]
+        with mock.patch.object(reporte_comercial.conexiones, "abrir_wansoft", return_value=nullcontext()), \
+                mock.patch.object(reporte_comercial.conexiones, "abrir_presupuestos", return_value=nullcontext()), \
+                mock.patch.object(reporte_comercial, "_abrir_odoo", return_value=None), \
+                mock.patch.object(reporte_comercial.metricas, "recolectar", side_effect=metricas_de):
+            return reporte_comercial.armar(sucursales, Periodo.semana_de(LUNES), consolidado)
+
+    def test_reporte_de_metepec_sin_costos(self):
+        acoxpa, metepec = self._armar(False)
+        self.assertTrue(acoxpa.incluir_costos)
+        self.assertFalse(metepec.incluir_costos)
+        self.assertFalse(any("osto" in r.split(":")[0] for r in metepec.reglas))
+
+    def test_consolidado_avisa_y_quita_presupuesto_parcial(self):
+        (r,) = self._armar(True)
+        self.assertTrue(any(n.startswith("No se considera el costo de Metepec") for n in r.cobertura))
+        self.assertTrue(any("presupuesto de Costo de Ventas no se muestra" in n for n in r.cobertura))
+        self.assertIsNone(r.actual.costo_ventas_ppto)
+        self.assertIsNone(r.anterior.base.costo_ventas_ppto)  # the comparison periods too
+        self.assertFalse([f for f in r.filas if f.indicador.clave == "costo_ventas_ppto"])
+        self.assertEqual(r.actual.pct_costo_total, D("0.385"))  # Acoxpa only: Metepec's sales out of the base
+        self.assertFalse(any("sin dato" in n for n in r.cobertura))  # Metepec is not "missing", it is excluded

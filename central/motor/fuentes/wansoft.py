@@ -45,8 +45,10 @@ COLUMNAS_REQUERIDAS = {
     ],
     "getallordenesbyday_new_venta": ["Sucursal", "Fecha", "TipoOrden", "Total", "Movimento"],
     "getallordenesbyday_new_detalleventa": ["Movimiento_Id", "Sucursal", "TipoGrupo", "Total"],
-    "costeomensual": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo"],
-    "costeomensual_semanapyq": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo"],
+    "costeomensual": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo",
+                      "CostoIdealDeProductosPendientesDeRebaja"],
+    "costeomensual_semanapyq": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo",
+                                "CostoIdealDeProductosPendientesDeRebaja"],
     "dim_company_analytical": ["company_source_key", "purchases_source_system", "operational_start_date"],
     "gettotalcostbydate": ["subsidiary_id", "created_date", "CostoTotalVenta"],
     "odoo_company_migration_policy": ["odoo_company_id", "operational_start_date", "is_active"],
@@ -184,16 +186,25 @@ def mix_alimentos_bebidas(cur, nombres: list[str], desde: date, hasta: date) -> 
     return resultado
 
 
-def _costo_ultima_foto(cur, tabla: str, subsidiary_ids: list[int], desde: date, hasta: date) -> dict[int, Decimal]:
-    """Cost of the latest snapshot per branch with capture date in [desde, hasta]:
-    `CostoTotal - COALESCE(CostoDeConsumo, 0)` (the data guide's "Costo Total";
-    COALESCE because Odoo rows leave consumption NULL). The capture date is
-    read from `created_at` (present before and after the 2026-10-01
-    migration, which adds `created_date` = its date); the latest capture wins."""
+COSTO_TOTAL = "CostoTotal - COALESCE(CostoDeConsumo, 0)"
+# Cost of what was sold that Wansoft has not yet discounted from inventory: while
+# above 0 the row's cost is not final (Wansoft recalculates it; rows inside the
+# pipeline's 10-day window are rewritten every night).
+PENDIENTE_REBAJA = "COALESCE(CostoIdealDeProductosPendientesDeRebaja, 0)"
+
+
+def _costo_ultima_foto(cur, tabla: str, subsidiary_ids: list[int], desde: date, hasta: date,
+                       expresion: str = COSTO_TOTAL) -> dict[int, Decimal]:
+    """A value (default the cost) of the latest snapshot per branch with capture
+    date in [desde, hasta]. Cost = `CostoTotal - COALESCE(CostoDeConsumo, 0)`
+    (the data guide's "Costo Total"; COALESCE because Odoo rows leave
+    consumption NULL). The capture date is read from `created_at` (present
+    before and after the 2026-10-01 migration, which adds `created_date` = its
+    date); the latest capture wins."""
     marcas = ", ".join(["%s"] * len(subsidiary_ids))
     cur.execute(
         f"""
-        SELECT subsidiary_id, CostoTotal - COALESCE(CostoDeConsumo, 0)
+        SELECT subsidiary_id, {expresion}
         FROM (
             SELECT t.*, ROW_NUMBER() OVER (PARTITION BY subsidiary_id ORDER BY created_at DESC, id DESC) AS rn
             FROM {tabla} t
@@ -206,7 +217,7 @@ def _costo_ultima_foto(cur, tabla: str, subsidiary_ids: list[int], desde: date, 
     return {s: Decimal(v) for s, v in cur.fetchall() if v is not None}
 
 
-def costo_total_semana(cur, subsidiary_ids: list[int], lunes: date) -> dict[int, Decimal]:
+def costo_total_semana(cur, subsidiary_ids: list[int], lunes: date, expresion: str = COSTO_TOTAL) -> dict[int, Decimal]:
     """Monday-Sunday week from `costeomensual_semanapyq`. A row accumulates from
     Monday through the day BEFORE its capture date, so the complete week is the
     row captured the next Monday (checked: Isabel 21-Sep row = sum of daily
@@ -214,15 +225,16 @@ def costo_total_semana(cur, subsidiary_ids: list[int], lunes: date) -> dict[int,
     if not subsidiary_ids:
         return {}
     return _costo_ultima_foto(cur, "costeomensual_semanapyq", subsidiary_ids,
-                              lunes + timedelta(days=1), lunes + timedelta(days=7))
+                              lunes + timedelta(days=1), lunes + timedelta(days=7), expresion)
 
 
-def costo_total_mes(cur, subsidiary_ids: list[int], primero: date, ultimo: date) -> dict[int, Decimal]:
+def costo_total_mes(cur, subsidiary_ids: list[int], primero: date, ultimo: date,
+                    expresion: str = COSTO_TOTAL) -> dict[int, Decimal]:
     """Calendar month from `costeomensual` (month-to-date from the 1st through the
     capture date): the latest row of the month."""
     if not subsidiary_ids:
         return {}
-    return _costo_ultima_foto(cur, "costeomensual", subsidiary_ids, primero, ultimo)
+    return _costo_ultima_foto(cur, "costeomensual", subsidiary_ids, primero, ultimo, expresion)
 
 
 # Purchases systems in `dim_company_analytical` that mean "buys in Odoo".

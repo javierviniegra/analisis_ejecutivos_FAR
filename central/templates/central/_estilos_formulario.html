@@ -1,0 +1,22 @@
+<style>
+  .campo { margin-bottom:20px; }
+  .campo > label, .campo legend { display:block; font-weight:600; color:var(--verde-oscuro); margin-bottom:8px; font-size:15px; }
+  fieldset { border:0; padding:0; margin:0; }
+  .sucursales { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:6px 16px; }
+  .sucursales label { font-size:14px; display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .sucursales ul, .opciones ul { list-style:none; padding:0; margin:0; }
+  .sucursales ul { display:contents; }
+  .opciones ul { display:flex; gap:22px; flex-wrap:wrap; }
+  .opciones label { font-size:14px; display:flex; align-items:center; gap:8px; cursor:pointer; }
+  select, input[type=date] { font:inherit; font-size:14px; padding:7px 10px; border:1px solid #ccc; border-radius:8px; background:#fff; }
+  .fila { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; }
+  .fila label { font-size:13px; color:#555; display:block; margin-bottom:4px; }
+  .enlace { background:none; border:0; color:var(--verde); font-size:13px; cursor:pointer; padding:0; text-decoration:underline; }
+  .errores { background:#fdecea; color:#8a1c14; border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:14px; }
+  .errorlist { color:#8a1c14; font-size:13px; margin:6px 0 0; padding-left:18px; }
+  .aviso { display:none; margin-left:14px; }
+  .btn[disabled] { opacity:.6; cursor:wait; }
+  input[type=text], input[type=number], input[type=time], textarea { font:inherit; font-size:14px; padding:7px 10px; border:1px solid #ccc; border-radius:8px; background:#fff; }
+  textarea { width:100%; max-width:520px; }
+  .ayuda { color:#666; font-size:13px; margin:4px 0 0; }
+</style>

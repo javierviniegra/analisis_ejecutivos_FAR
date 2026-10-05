@@ -89,3 +89,17 @@ class CostoTotalTests(SimpleTestCase):
             self.assertEqual(metricas.costos_totales(None, [1], trimestre), {1: D("150")})  # sum of 3 months
             self.assertEqual(m.call_count, 3)
             self.assertIsNone(metricas.costos_totales(None, [1], Periodo.rango(date(2026, 9, 1), date(2026, 9, 10))))
+
+
+class PendienteRebajaTests(SimpleTestCase):
+    def test_solo_sucursales_con_pendiente_y_suma_de_meses(self):
+        from datetime import date as _d
+        from unittest import mock
+
+        from .motor import metricas
+        semana = mock.patch("central.motor.fuentes.wansoft.costo_total_semana", return_value={1: D("20054"), 2: D("0")})
+        mes = mock.patch("central.motor.fuentes.wansoft.costo_total_mes", return_value={1: D("10")})
+        with semana, mes:
+            self.assertEqual(metricas.pendientes_rebaja(None, [1, 2], SEM), {1: D("20054")})
+            trimestre = Periodo.de_fecha(TipoPeriodo.TRIMESTRE, _d(2026, 8, 1))
+            self.assertEqual(metricas.pendientes_rebaja(None, [1], trimestre), {1: D("30")})

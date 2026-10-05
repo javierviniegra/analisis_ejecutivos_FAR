@@ -83,16 +83,23 @@ def _notas_costo_estimado(actual: Metricas, comparaciones) -> list[str]:
     if actual.costo_odoo_sin_leer:
         notas.append("No se pudo leer Odoo: el costo total de las sucursales con costo de Odoo puede estar "
                      "incompleto (facturación atrasada) y no se estimó.")
-    if actual.costo_total_estimado:
+    # Said only when the cost IS estimated, with how (owner, 2026-10-05); a complete cost is just given.
+    if actual.costo_estimado_odoo:
         pct = actual.pct_facturado_odoo
         cuanto = f"Odoo ha facturado el {pct * 100:.0f}% de la venta neta" if pct is not None else "Odoo no ha facturado"
-        notas.append(f"Costo total estimado: {cuanto} de los días con costo de Odoo; esos días se estiman con el "
-                     "costo por peso facturado. Será el costo real cuando el periodo quede facturado.")
+        notas.append(f"Costo total estimado en sucursales con costo de Odoo: {cuanto} de esos días (las facturas "
+                     "de venta, de las que sale su costo, se crean con atraso); mientras no llegue al "
+                     f"{_pct(UMBRAL_FACTURADO_COMPLETO)}, su costo = costo de Odoo / facturado de Odoo x venta "
+                     "neta de Wansoft.")
         if actual.costo_total is None:
             notas.append("Sin facturas en Odoo todavía para esos días: el costo total queda sin dato.")
+    if actual.costo_estimado_wansoft:
+        notas.append(f"Costo total estimado en sucursales con costo de Wansoft: Wansoft aún no descuenta del "
+                     f"inventario ${actual.pendiente_wansoft:,.0f} del costo de lo vendido (pendiente de rebaja); "
+                     "se suma a su costo hasta que el pendiente llegue a 0.")
     previos = [nombre for comp, nombre in comparaciones if comp.base is not None and comp.base.costo_total_estimado]
     if previos:
-        notas.append(f"Costo total de {_lista(previos)} también estimado (aún no facturado completo).")
+        notas.append(f"Costo total de {_lista(previos)} también estimado (aún incompleto).")
     return notas
 
 
@@ -131,10 +138,6 @@ def notas_reglas(periodo: Periodo | None = None, incluir_costos: bool = True) ->
         f"abajo de {_pct(META_COSTO_MIN)} naranja, {_pct(META_COSTO_TOPE)} o más rojo. Costo total = reporte de costos "
         "de Wansoft u Odoo (costo total menos consumo; el consumo se registra de forma irregular); costo facturado = "
         "facturas de Presupuestos AP (el flujo); la medición por mercancía recibida está pendiente.",
-        f"Costo total estimado: en las sucursales con costo de Odoo (sale de las facturas de venta, que se crean con "
-        f"atraso), mientras Odoo no facture al menos el {_pct(UMBRAL_FACTURADO_COMPLETO)} de la venta neta de esos "
-        "días, su costo = costo de Odoo / facturado de Odoo x venta neta de Wansoft; se marca «estimado» y se "
-        "compara igual.",
     ]
     if incluir_costos:
         reglas += costos
