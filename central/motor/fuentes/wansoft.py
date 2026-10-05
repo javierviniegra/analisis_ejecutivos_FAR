@@ -48,6 +48,9 @@ COLUMNAS_REQUERIDAS = {
     "costeomensual": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo"],
     "costeomensual_semanapyq": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo"],
     "dim_company_analytical": ["company_source_key", "purchases_source_system", "operational_start_date"],
+    "gettotalcostbydate": ["subsidiary_id", "created_date", "CostoTotalVenta"],
+    "odoo_company_migration_policy": ["odoo_company_id", "operational_start_date", "is_active"],
+    "costs_odoo_switch": ["company_source_key", "switch_date"],
 }
 
 
@@ -249,3 +252,64 @@ def inicio_proveedores_internos(cur) -> dict[str, date]:
     cur.execute("SELECT display_name, operational_start_date FROM dim_company_analytical "
                 "WHERE is_internal_provider = 1 AND operational_start_date IS NOT NULL")
     return {nombre: inicio for nombre, inicio in cur.fetchall()}
+
+
+def costo_diario(cur, subsidiary_ids: list[int], desde: date, hasta: date) -> dict[int, dict[date, Decimal]]:
+    """Total cost per branch and day from `gettotalcostbydate` (one row per
+    branch and day, unique key). The weekly snapshot is the sum of these days
+    (checked: Acoxpa week 40 = $258,969 both ways)."""
+    if not subsidiary_ids:
+        return {}
+    cur.execute(
+        f"SELECT subsidiary_id, created_date, CostoTotalVenta FROM gettotalcostbydate "
+        f"WHERE subsidiary_id IN ({_marcadores(subsidiary_ids)}) AND created_date BETWEEN %s AND %s",
+        (*subsidiary_ids, desde, hasta),
+    )
+    resultado: dict[int, dict[date, Decimal]] = {}
+    for sid, dia, costo in cur.fetchall():
+        if costo is not None:
+            resultado.setdefault(sid, {})[dia] = Decimal(costo)
+    return resultado
+
+
+# Mirror of the Wansoft pipeline's cost routing (its extract/costs/cost_routing.py
+# and core/config/companies.py), which lives in code there, not in a table:
+# - Antenas stays on Wansoft costs while its Odoo cost data is repaired;
+# - the October wave switches to Odoo costs by itself, from the date recorded
+#   in `costs_odoo_switch` (none recorded = still on Wansoft).
+# Interim (owner, 2026-10-05) until the Wansoft project publishes the routing
+# in a table this app can read; keep in sync with those two sets.
+COSTOS_EXCEPCION_WANSOFT = {"Antenas"}
+COSTOS_CAMBIO_AUTOMATICO = {"Isabel La Católica", "San Jeronimo", "Vía Vallejo"}
+
+
+def inicio_costos_odoo(cur, sucursales: list) -> dict[str, date]:
+    """First day each branch's total cost comes from Odoo, by its short key
+    (`wansoft_ticket_nombre`); branches whose cost is all Wansoft are absent.
+    Odoo's cost of a day is built from that day's customer invoices, which
+    arrive late, so the report estimates those days (see metricas)."""
+    con_odoo = [s for s in sucursales if s.odoo_company_id is not None
+                and s.wansoft_ticket_nombre not in COSTOS_EXCEPCION_WANSOFT]
+    if not con_odoo:
+        return {}
+    cur.execute(
+        f"SELECT odoo_company_id, operational_start_date FROM odoo_company_migration_policy "
+        f"WHERE is_active = 1 AND operational_start_date IS NOT NULL "
+        f"AND odoo_company_id IN ({_marcadores(con_odoo)})",
+        [s.odoo_company_id for s in con_odoo],
+    )
+    politica = dict(cur.fetchall())
+    cur.execute("SELECT company_source_key, switch_date FROM costs_odoo_switch WHERE switch_date IS NOT NULL")
+    cambios = dict(cur.fetchall())
+    inicios = {}
+    for s in con_odoo:
+        inicio = politica.get(s.odoo_company_id)
+        if inicio is None:
+            continue  # no policy row: the pipeline keeps it on Wansoft
+        if s.wansoft_ticket_nombre in COSTOS_CAMBIO_AUTOMATICO:
+            cambio = cambios.get(s.wansoft_ticket_nombre)
+            if cambio is None:
+                continue
+            inicio = max(inicio, cambio)
+        inicios[s.wansoft_ticket_nombre] = inicio
+    return inicios

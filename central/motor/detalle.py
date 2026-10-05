@@ -40,6 +40,7 @@ class FilaSucursal:
     semaforo_total: str | None
     pct_costo: Decimal | None  # invoiced cost (Presupuestos AP) / net sales
     semaforo: str | None
+    costo_total_estimado: bool = False
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,8 @@ class FilaPeriodo:
 def _fila_sucursal(nombre: str, m: Metricas, var: Variacion) -> FilaSucursal:
     return FilaSucursal(nombre, m.venta_bruta, var, m.clientes, m.cheque_promedio,
                         m.pct_costo_total, semaforo_costo(m.pct_costo_total),
-                        m.pct_costo_ventas, semaforo_costo(m.pct_costo_ventas))
+                        m.pct_costo_ventas, semaforo_costo(m.pct_costo_ventas),
+                        m.costo_total_estimado and m.pct_costo_total is not None)
 
 
 def _var_sucursal(m: Metricas, previo: Metricas | None) -> Variacion:

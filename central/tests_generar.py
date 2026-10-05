@@ -52,7 +52,7 @@ class GenerarTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertIn('attachment; filename="Reporte.pdf"', r["Content-Disposition"])
-        sucursales, periodo, consolidado, separados, formatos = self._generador().call_args.args
+        sucursales, periodo, consolidado, separados, formatos, _ = self._generador().call_args.args
         self.assertEqual(sucursales, [self.puebla])
         self.assertEqual(periodo, Periodo.semana_de(date(2026, 9, 16)))
         self.assertFalse(consolidado)
@@ -73,7 +73,7 @@ class GenerarTests(TestCase):
         self.assertContains(r, "todavía no empieza")
         r = self.client.post(self.url, {**base, "tipo": "rango", "desde": "2026-09-01", "hasta": "2026-09-10"})
         self.assertEqual(r.status_code, 200)
-        _, periodo, consolidado, _, _ = self._generador().call_args.args
+        _, periodo, consolidado, _, _, _ = self._generador().call_args.args
         self.assertEqual((periodo.desde, periodo.hasta, consolidado), (date(2026, 9, 1), date(2026, 9, 10), True))
 
     def test_alcance_por_sucursal_no_ofrece_consolidado(self):
@@ -133,6 +133,17 @@ class GenerarTests(TestCase):
         r = self.client.get(self.url)
         self.assertNotContains(r, 'value="excel"')
         self.assertNotContains(r, 'value="ambos"')
+
+    def test_incluir_costos_marcado_por_default_y_se_puede_quitar(self):
+        r = self.client.get(self.url)
+        self.assertContains(r, 'name="incluir_costos"')
+        self.assertTrue(r.context["form"].fields["incluir_costos"].initial)
+        datos = {"sucursales": [self.puebla.pk], "tipo": "semana", "fecha": "2026-09-16",
+                 "modo": "por_sucursal", "formato": "pdf"}
+        self.client.post(self.url, {**datos, "incluir_costos": "on"})
+        self.assertEqual(self._generador().call_args.args[5], {"incluir_costos": True})
+        self.client.post(self.url, datos)  # unchecked box: not sent
+        self.assertEqual(self._generador().call_args.args[5], {"incluir_costos": False})
 
 
 class ZipTests(TestCase):

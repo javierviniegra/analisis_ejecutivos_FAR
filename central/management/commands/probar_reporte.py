@@ -35,6 +35,7 @@ class Command(BaseCommand):
         parser.add_argument("--graficas", help="Folder where the charts are saved as PNG (optional)")
         parser.add_argument("--pdf", help="Folder where the PDF is saved, one per report (optional)")
         parser.add_argument("--excel", help="Folder where the Excel workbook is saved, one per report (optional)")
+        parser.add_argument("--sin-costos", action="store_true", help="Leave every cost out (the \"Incluir costos\" option off)")
 
     def _periodo(self, tipo, fecha, desde, hasta) -> Periodo:
         if tipo == TipoPeriodo.RANGO:
@@ -56,7 +57,7 @@ class Command(BaseCommand):
                 raise CommandError(f"Unknown branches: {sorted(faltan)}. Run: manage.py cargar_sucursales")
 
         self.stdout.write(f"\nPeriodo: {periodo.etiqueta()}  ({periodo.desde} a {periodo.hasta}, {periodo.dias} dias)")
-        reportes = reporte_comercial.armar(elegidas, periodo, consolidado)
+        reportes = reporte_comercial.armar(elegidas, periodo, consolidado, not options["sin_costos"])
         for r in reportes:
             a = r.actual
             self.stdout.write(f"\n=== {r.nombre} ({', '.join(r.sucursales)})" if r.nombre == "Consolidado" else f"\n=== {r.nombre}")
@@ -72,7 +73,7 @@ class Command(BaseCommand):
                     self.stdout.write(f"  -- {seccion}")
                 fm = f.indicador.formato
                 self.stdout.write(
-                    f"    {f.indicador.etiqueta:<36} {formato.valor(f.actual, fm):>16} | "
+                    f"    {f.etiqueta:<36} {formato.valor(f.actual, fm):>16} | "
                     f"ant {formato.valor(f.anterior, fm):>16} {formato.variacion(f.var_anterior, fm):>12} | "
                     f"a.ant {formato.valor(f.anio_anterior, fm):>16} {formato.variacion(f.var_anio, fm):>12}"
                     + (f"  [{f.semaforo}]" if f.semaforo else "")

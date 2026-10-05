@@ -191,7 +191,7 @@ def _tabla(c, r: ReporteComercial, y: float) -> float:
         base = y - 6.5
         c.setFillColor(TEXTO)
         c.setFont(F, 7.6)
-        c.drawString(x[0] + 11, base, f.indicador.etiqueta)
+        c.drawString(x[0] + 11, base, f.etiqueta)
         for i, v in ((1, f.actual), (2, f.anterior), (4, f.anio_anterior)):
             c.setFont(FB if i == 1 else F, 7.6)
             c.setFillColor(TEXTO if i == 1 else TEXTO_SUAVE)
@@ -279,8 +279,8 @@ def _columnas(anchos: list[float]) -> list[float]:
     return x
 
 
-def _pct_con_punto(c, x_der: float, base: float, pct, color, negrita: bool):
-    texto = formato.valor(pct, PORCENTAJE) if pct is not None else "—"
+def _pct_con_punto(c, x_der: float, base: float, pct, color, negrita: bool, marca: str = ""):
+    texto = formato.valor(pct, PORCENTAJE) + marca if pct is not None else "—"
     fuente = FB if negrita else F
     c.setFillColor(TEXTO)
     c.setFont(fuente, 7.6)
@@ -292,9 +292,10 @@ def _pct_con_punto(c, x_der: float, base: float, pct, color, negrita: bool):
 
 def _detalle_sucursales(c, r: ReporteComercial, y: float) -> float:
     alto = 11.0
-    x = _columnas([138, 86, 56, 58, 72, 53, 53])  # = ANCHO_UTIL
-    y = _encabezado_tabla(c, x, y, ["Sucursal", "Venta bruta", "Var.", "Clientes", "Cheque prom.",
-                                    "Costo total", "Costo fact."], alto)
+    costos = r.incluir_costos
+    x = _columnas([138, 86, 56, 58, 72, 53, 53] if costos else [178, 106, 76, 78, 78])  # = ANCHO_UTIL
+    y = _encabezado_tabla(c, x, y, ["Sucursal", "Venta bruta", "Var.", "Clientes", "Cheque prom."]
+                          + (["Costo total", "Costo fact."] if costos else []), alto)
     filas, total = detalle.por_sucursal(r)
     for i, f in enumerate(filas + [total]):
         es_total = f is total
@@ -306,11 +307,18 @@ def _detalle_sucursales(c, r: ReporteComercial, y: float) -> float:
             c.rect(MARGEN, y - alto + 2.5, ANCHO_UTIL, alto, fill=1, stroke=0)
         base = y - 6.5
         _celdas(c, x, base, [f.nombre, formato.valor(f.venta_bruta, MONEDA), None, formato.valor(f.clientes, ENTERO),
-                             formato.valor(f.cheque_promedio, MONEDA), None, None], negrita=es_total)
+                             formato.valor(f.cheque_promedio, MONEDA)] + [None, None] * costos, negrita=es_total)
         _variacion(c, x[3] - 5, base, f.var_anterior, MONEDA)
-        _pct_con_punto(c, x[6] - 5, base, f.pct_costo_total, f.semaforo_total, es_total)
-        _pct_con_punto(c, x[7] - 5, base, f.pct_costo, f.semaforo, es_total)
+        if costos:
+            _pct_con_punto(c, x[6] - 5, base, f.pct_costo_total, f.semaforo_total, es_total,
+                           "*" if f.costo_total_estimado else "")
+            _pct_con_punto(c, x[7] - 5, base, f.pct_costo, f.semaforo, es_total)
         y -= alto
+    if costos and total.costo_total_estimado:
+        c.setFillColor(TEXTO)
+        c.setFont(F, 6.6)
+        c.drawRightString(MARGEN + ANCHO_UTIL, y - 5, "* costo total estimado (Odoo aún no factura todo el periodo)")
+        y -= 10
     return y - 6
 
 

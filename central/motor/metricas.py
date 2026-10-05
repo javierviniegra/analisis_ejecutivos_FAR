@@ -14,6 +14,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from .comparativos import cobertura_fiable
+from .fuentes import odoo as odoo_fuente
 from .fuentes import presupuestos, wansoft
 from .periodo import Periodo, TipoPeriodo
 
@@ -63,6 +64,13 @@ class Metricas:
     # CostoTotal - consumption), with the net sales of the branches that have it.
     costo_total: Decimal | None = None
     venta_neta_con_costo_total: Decimal | None = None
+    # Branches with Odoo cost (see estimar_costo_odoo): Wansoft net sales of their
+    # Odoo-cost days and what Odoo has invoiced of them; while not fully
+    # invoiced the total cost is an estimate.
+    costo_total_estimado: bool = False
+    venta_dias_odoo: Decimal | None = None
+    facturado_odoo: Decimal | None = None
+    costo_odoo_sin_leer: bool = False  # Odoo could not be read: Odoo-cost days may be partial
 
     @property
     def dias_esperados(self) -> int:
@@ -91,6 +99,11 @@ class Metricas:
     def pct_costo_total(self) -> Decimal | None:
         """Total cost (Wansoft/Odoo) as a share of the net sales of the same branches."""
         return _razon(self.costo_total, self.venta_neta_con_costo_total)
+
+    @property
+    def pct_facturado_odoo(self) -> Decimal | None:
+        """Share of the Odoo-cost days' net sales already invoiced in Odoo."""
+        return _razon(self.facturado_odoo, self.venta_dias_odoo)
 
     @property
     def pct_costo_ventas(self) -> Decimal | None:
@@ -127,10 +140,48 @@ def costos_totales(cur_wansoft, subsidiary_ids: list[int], periodo: Periodo) -> 
     return {sid: v for sid, v in costos.items() if v}
 
 
-def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo, hoy: date | None = None) -> list[Metricas]:
+# Odoo's cost of a day comes from that day's customer invoices (the Wansoft
+# sales passed to Odoo), created with a lag: in September 2026, 40-70% one day
+# later, 70-100% after 7 days, all of it at the month-end close. A period is
+# fully invoiced at this share of its net sales (owner, 2026-10-05: not 100%
+# exactly; Puebla 28-Sep stayed at 89% for a week).
+UMBRAL_FACTURADO_COMPLETO = Decimal("0.995")
+
+
+@dataclass(frozen=True)
+class CostoOdoo:
+    costo: Decimal | None  # total cost of the period to show (None: cannot be told)
+    estimado: bool
+    venta: Decimal  # Wansoft net sales of the Odoo-cost days
+    facturado: Decimal  # invoiced in Odoo for those days
+
+
+def estimar_costo_odoo(costo_periodo: Decimal | None, dias_odoo: list[date], costo_dia: dict[date, Decimal],
+                       facturado_dia: dict[date, Decimal], venta_dia: dict[date, Decimal]) -> CostoOdoo:
+    """Business rule "B2" (owner, 2026-10-05). While Odoo has not invoiced the
+    Odoo-cost days of the period, their cost is estimated as (Odoo cost /
+    Odoo invoiced) x Wansoft net sales of those days -- the cost per invoiced
+    peso is stable (35-38% in September) while the invoiced share is not. The
+    Wansoft-cost days of the period keep their real cost. Fully invoiced: the
+    real cost, unchanged."""
+    venta = sum((venta_dia.get(x, CERO) for x in dias_odoo), CERO)
+    facturado = sum((facturado_dia.get(x, CERO) for x in dias_odoo), CERO)
+    if costo_periodo is None or not venta or facturado >= venta * UMBRAL_FACTURADO_COMPLETO:
+        return CostoOdoo(costo_periodo, False, venta, facturado)
+    if facturado <= 0:
+        return CostoOdoo(None, True, venta, facturado)  # nothing invoiced yet: no basis to estimate
+    costo_odoo = sum((costo_dia.get(x, CERO) for x in dias_odoo), CERO)
+    estimado = costo_odoo / facturado * venta
+    return CostoOdoo(costo_periodo - costo_odoo + estimado, True, venta, facturado)
+
+
+def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo, hoy: date | None = None,
+               odoo=None, incluir_costos: bool = True) -> list[Metricas]:
     """Read every metric of `periodo` for each branch (`cuentas.Sucursal`),
     in the same order as `sucursales`. `hoy` (default today) decides whether
-    the real Costo de Ventas is still preliminary."""
+    the real Costo de Ventas is still preliminary. `odoo` (a read-only
+    client, or None when Odoo cannot be read) gives the invoiced sales behind
+    the estimated cost. Without `incluir_costos` no cost is read at all."""
     d, h = periodo.desde, periodo.hasta
     preliminar = presupuestos.es_preliminar(h, hoy or date.today())
     cierres = wansoft.cierres_por_dia(
@@ -138,8 +189,16 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
     nombres = [s.wansoft_ticket_nombre for s in sucursales]
     detalle = wansoft.detalle_por_sucursal(cur_wansoft, nombres, d, h)
     mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h)
-    costos = costos_totales(cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales
-                                          if s.wansoft_subsidiary_id is not None], periodo) or {}
+    costos = (costos_totales(cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales
+                                           if s.wansoft_subsidiary_id is not None], periodo) or {}) if incluir_costos else {}
+    inicios = wansoft.inicio_costos_odoo(cur_wansoft, sucursales) if costos else {}
+    inicios = {k: v for k, v in inicios.items() if v <= h}
+    costo_dia, facturado = {}, {}
+    if inicios and odoo is not None:
+        desde_odoo = max(d, min(inicios.values()))
+        con_odoo = [s for s in sucursales if s.wansoft_ticket_nombre in inicios]
+        costo_dia = wansoft.costo_diario(cur_wansoft, [s.wansoft_subsidiary_id for s in con_odoo], desde_odoo, h)
+        facturado = odoo_fuente.facturado_por_dia(odoo, [s.odoo_company_id for s in con_odoo], desde_odoo, h)
 
     resultado = []
     for sucursal in sucursales:
@@ -162,13 +221,24 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
         if sucursal.wansoft_subsidiary_id in costos:
             m.costo_total = costos[sucursal.wansoft_subsidiary_id]
             m.venta_neta_con_costo_total = m.venta_neta
+        inicio = inicios.get(sucursal.wansoft_ticket_nombre)
+        if inicio is not None and odoo is None:
+            m.costo_odoo_sin_leer = True
+        elif inicio is not None:
+            dias_odoo = [x for x in dias if x >= inicio]
+            c = estimar_costo_odoo(m.costo_total, dias_odoo, costo_dia.get(sucursal.wansoft_subsidiary_id, {}),
+                                   facturado.get(sucursal.odoo_company_id, {}),
+                                   {x: t["venta_neta"] for x, t in dias.items()})
+            m.costo_total, m.costo_total_estimado = c.costo, c.estimado
+            m.venta_dias_odoo, m.facturado_odoo = c.venta, c.facturado
+            m.venta_neta_con_costo_total = m.venta_neta if c.costo is not None else None
 
         nombre = sucursal.wansoft_ticket_nombre
         if nombre in detalle:
             m.dias_con_detalle, m.canal = detalle[nombre]
             m.mix = mix.get(nombre, {})
 
-        if sucursal.odoo_company_id is not None:
+        if incluir_costos and sucursal.odoo_company_id is not None:
             real = presupuestos.gasto_real_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
             ppto = presupuestos.presupuesto_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
             m.costo_ventas_real = real
@@ -218,6 +288,11 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
         if m.costo_total is not None:
             total.costo_total = (total.costo_total or CERO) + m.costo_total
             total.venta_neta_con_costo_total = (total.venta_neta_con_costo_total or CERO) + (m.venta_neta_con_costo_total or CERO)
+        total.costo_total_estimado = total.costo_total_estimado or m.costo_total_estimado
+        total.costo_odoo_sin_leer = total.costo_odoo_sin_leer or m.costo_odoo_sin_leer
+        if m.venta_dias_odoo is not None:
+            total.venta_dias_odoo = (total.venta_dias_odoo or CERO) + m.venta_dias_odoo
+            total.facturado_odoo = (total.facturado_odoo or CERO) + m.facturado_odoo
         if m.costo_ventas_ppto is not None:
             total.costo_ventas_ppto = (total.costo_ventas_ppto or CERO) + m.costo_ventas_ppto
             total.n_con_presupuesto += 1

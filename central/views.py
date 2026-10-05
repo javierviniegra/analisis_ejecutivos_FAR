@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, render
 from cuentas.models import puede_generar, sucursales_de
 
 from .forms import CONSOLIDADO, GenerarForm
-from .generadores import GENERADORES, tiene_generador
+from .generadores import GENERADORES, opciones_de, tiene_generador
 from .models import Reporte
 from .motor.fuentes import conexiones
 
@@ -55,13 +55,14 @@ def generar(request, clave):
     if not puede_generar(request.user):
         raise PermissionDenied
     sucursales = sucursales_de(request.user).filter(wansoft_subsidiary_id__isnull=False)
-    form = GenerarForm(request.POST or None, reporte=reporte, sucursales=sucursales)
+    form = GenerarForm(request.POST or None, reporte=reporte, sucursales=sucursales, opciones=opciones_de(clave))
     error = None
     if request.method == "POST" and form.is_valid():
         datos = form.cleaned_data
         try:
             archivo = GENERADORES[clave](list(datos["sucursales"]), datos["periodo"],
-                                         datos["modo"] == CONSOLIDADO, datos["separados"], datos["formatos"])
+                                         datos["modo"] == CONSOLIDADO, datos["separados"], datos["formatos"],
+                                         datos["opciones"])
         except Exception:  # a source down or a query over the time cap: tell the user, keep the details in the log
             log.exception("Report generation failed: %s", clave)
             error = "No se pudo generar el reporte (fuente de datos no disponible o consulta demasiado larga). Intenta de nuevo o con un periodo más corto."

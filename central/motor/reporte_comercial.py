@@ -8,10 +8,11 @@ PDF, the web screen and the automations all show exactly the same thing.
 returns one `ReporteComercial` per branch, or a single consolidated one.
 """
 
+import logging
 from dataclasses import dataclass, field
 
 from . import metricas
-from .fuentes import conexiones
+from .fuentes import conexiones, odoo
 from .graficas import Grafica, construir_graficas, ventana_tendencia
 from .lectura import Lectura, construir_lectura
 from .metricas import Comparacion, Metricas
@@ -20,6 +21,8 @@ from .periodo import Periodo, TipoPeriodo
 from .tabla_comercial import Fila, construir_tabla
 
 TITULO = "Reporte comercial"
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -37,13 +40,14 @@ class ReporteComercial:
     reglas: list[str]  # the rules and thresholds the report applies
     # Consolidated only: each branch's own period and previous period, for the detail page.
     por_sucursal: list[tuple[str, Metricas, Metricas | None]] = field(default_factory=list)
+    incluir_costos: bool = True  # option of the generation screen / automation (default on)
 
     @property
     def notas(self) -> list[str]:
         return self.cobertura + self.reglas
 
 
-def _uno(nombre, sucursales, periodo, actual, anterior, anio_anterior, diario) -> ReporteComercial:
+def _uno(nombre, sucursales, periodo, actual, anterior, anio_anterior, diario, incluir_costos=True) -> ReporteComercial:
     return ReporteComercial(
         nombre=nombre,
         sucursales=sucursales,
@@ -54,23 +58,39 @@ def _uno(nombre, sucursales, periodo, actual, anterior, anio_anterior, diario) -
         lectura=construir_lectura(periodo, actual, anterior, anio_anterior),
         filas=construir_tabla(actual, anterior, anio_anterior),
         graficas=construir_graficas(periodo, actual, anterior, anio_anterior, diario),
-        cobertura=notas_cobertura(periodo, actual, anterior, anio_anterior),
-        reglas=notas_reglas(periodo),
+        cobertura=notas_cobertura(periodo, actual, anterior, anio_anterior, incluir_costos),
+        reglas=notas_reglas(periodo, incluir_costos),
+        incluir_costos=incluir_costos,
     )
 
 
-def armar(sucursales: list, periodo: Periodo, consolidado: bool) -> list[ReporteComercial]:
+def _abrir_odoo():
+    """Odoo client for the invoiced sales behind the estimated cost; None when
+    Odoo cannot be reached (the report still comes out, with a note)."""
+    try:
+        return odoo.abrir_odoo()
+    except Exception:  # network / credentials: degrade, never break the report
+        log.exception("Odoo no disponible para el costo estimado")
+        return None
+
+
+def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos: bool = True) -> list[ReporteComercial]:
     """Read the sources and build the report: one per branch, or one
-    consolidated for the whole selection (as the report's `alcance` says)."""
+    consolidated for the whole selection (as the report's `alcance` says).
+    Without `incluir_costos` the report carries no cost at all (not read,
+    not shown, no cost rules)."""
     anterior = periodo.anterior()
     anio_ant = periodo.mismo_periodo_anio_anterior()
+    cli = _abrir_odoo() if incluir_costos and any(s.odoo_company_id for s in sucursales) else None
     with conexiones.abrir_wansoft() as cw, conexiones.abrir_presupuestos() as cp:
-        ma = metricas.recolectar(cw, cp, sucursales, periodo)
-        mp = metricas.recolectar(cw, cp, sucursales, anterior)
+        def leer(p):
+            return metricas.recolectar(cw, cp, sucursales, p, odoo=cli, incluir_costos=incluir_costos)
+        ma = leer(periodo)
+        mp = leer(anterior)
         if anio_ant == anterior:  # a year: both comparisons are the same period
             my = mp
         else:
-            my = metricas.recolectar(cw, cp, sucursales, anio_ant) if anio_ant else None
+            my = leer(anio_ant) if anio_ant else None
         diario = None
         if periodo.tipo == TipoPeriodo.MES:  # the month trend chart needs 24 months of closings
             diario = metricas.recolectar_diario(cw, sucursales, *ventana_tendencia(periodo))
@@ -79,18 +99,22 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool) -> list[Reporte
     if consolidado:
         r = _uno("Consolidado", nombres, periodo, metricas.consolidar(ma, periodo),
                  metricas.comparables(nombres, ma, mp, periodo, anterior),
-                 metricas.comparables(nombres, ma, my, periodo, anio_ant), diario)
+                 metricas.comparables(nombres, ma, my, periodo, anio_ant), diario, incluir_costos)
         r.por_sucursal = [(n, ma[i], mp[i]) for i, n in enumerate(nombres)]
         sin_costo = [n for n, m, _ in r.por_sucursal if m.costo_total is None and m.dias_con_cierre]
-        if sin_costo and periodo.tipo != TipoPeriodo.RANGO:
+        if incluir_costos and sin_costo and periodo.tipo != TipoPeriodo.RANGO:
             r.cobertura.append("Costo total sin dato en el reporte de costos (fuera de su porcentaje): "
                                + ", ".join(sin_costo) + ".")
+        estimadas = [f"{n} {m.pct_facturado_odoo * 100:.0f}%" for n, m, _ in r.por_sucursal
+                     if m.costo_total_estimado and m.pct_facturado_odoo is not None]
+        if estimadas:
+            r.cobertura.append("Facturado en Odoo por sucursal con costo estimado: " + ", ".join(estimadas) + ".")
         return [r]
     return [
         _uno(n, [n], periodo, ma[i],
              metricas.comparables([n], [ma[i]], [mp[i]], periodo, anterior),
              metricas.comparables([n], [ma[i]], [my[i]] if my else None, periodo, anio_ant),
-             {n: diario[n]} if diario is not None else None)
+             {n: diario[n]} if diario is not None else None, incluir_costos)
         for i, n in enumerate(nombres)
     ]
 

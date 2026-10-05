@@ -192,6 +192,8 @@ def _costo_meta(actual: Metricas) -> Observacion | None:
             continue
         colores.append(color)
         texto = f"{nombre} {pct * 100:.1f}%, {donde[color]}"
+        if nombre == "total" and actual.costo_total_estimado:
+            texto += " (estimado: Odoo aún no factura todo el periodo)"
         if nombre == "facturado" and actual.costo_preliminar:
             texto += " (preliminar, pueden faltar facturas)"
         partes.append(texto)

@@ -85,6 +85,10 @@ INDICADORES = [
 ]
 
 
+# Rows built from the total cost, which may be estimated (metricas.estimar_costo_odoo).
+ESTIMABLES = {"costo_total", "costo_total_pct"}
+
+
 @dataclass(frozen=True)
 class Fila:
     indicador: Indicador
@@ -94,6 +98,11 @@ class Fila:
     anio_anterior: Decimal | None
     var_anio: Variacion
     semaforo: str | None = None  # verde / naranja / rojo, for indicators with a target
+    estimado: bool = False  # total cost estimated (Odoo invoicing still behind)
+
+    @property
+    def etiqueta(self) -> str:
+        return self.indicador.etiqueta + (", estimado" if self.estimado else "")
 
 
 def variacion_puntos(actual, base, *, mejor_si_sube: bool = True, umbral: Decimal = UMBRAL_IGUAL) -> Variacion:
@@ -157,5 +166,6 @@ def construir_tabla(actual: Metricas, anterior: Comparacion | Metricas | None,
         p, var_p = _columna(ind, ant)
         y, var_y = _columna(ind, anio)
         valor = _valor(ind, actual)
-        filas.append(Fila(ind, valor, p, var_p, y, var_y, ind.semaforo(valor) if ind.semaforo else None))
+        estimado = ind.clave in ESTIMABLES and actual.costo_total_estimado and valor is not None
+        filas.append(Fila(ind, valor, p, var_p, y, var_y, ind.semaforo(valor) if ind.semaforo else None, estimado))
     return filas

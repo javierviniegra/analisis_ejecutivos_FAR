@@ -14,7 +14,7 @@ from . import lectura
 from .comparativos import META_COSTO_MIN, META_COSTO_TOPE, UMBRAL_COBERTURA_FIABLE, UMBRAL_IGUAL, cobertura_fiable
 from .fuentes import presupuestos
 from .fuentes.wansoft import HORA_CORTE_DIA
-from .metricas import Comparacion, Metricas, como_comparacion
+from .metricas import UMBRAL_FACTURADO_COMPLETO, Comparacion, Metricas, como_comparacion
 from .periodo import Periodo, TipoPeriodo
 
 
@@ -35,7 +35,7 @@ def _lista(nombres: list[str]) -> str:
 
 
 def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,
-                    anio_anterior: Comparacion | Metricas | None) -> list[str]:
+                    anio_anterior: Comparacion | Metricas | None, incluir_costos: bool = True) -> list[str]:
     notas = []
     esperados = actual.dias_esperados
     if actual.dias_con_cierre < esperados:
@@ -69,9 +69,30 @@ def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Comparacion | 
         elif not cobertura_fiable(m.dias_con_detalle, m.dias_esperados) and m.dias_con_detalle:
             notas.append(f"Mezcla y canal s/cf contra {nombre}: el detalle de tickets cubre "
                          f"{m.dias_con_detalle} de {m.dias_esperados} días.")
+    if not incluir_costos:
+        return notas
     notas += _notas_costo_preliminar(periodo, actual, comparaciones)
+    notas += _notas_costo_estimado(actual, comparaciones)
     if periodo.tipo == TipoPeriodo.RANGO:
         notas.append("Costo total: no disponible en un rango libre (solo semana, mes o bloques de meses).")
+    return notas
+
+
+def _notas_costo_estimado(actual: Metricas, comparaciones) -> list[str]:
+    notas = []
+    if actual.costo_odoo_sin_leer:
+        notas.append("No se pudo leer Odoo: el costo total de las sucursales con costo de Odoo puede estar "
+                     "incompleto (facturación atrasada) y no se estimó.")
+    if actual.costo_total_estimado:
+        pct = actual.pct_facturado_odoo
+        cuanto = f"Odoo ha facturado el {pct * 100:.0f}% de la venta neta" if pct is not None else "Odoo no ha facturado"
+        notas.append(f"Costo total estimado: {cuanto} de los días con costo de Odoo; esos días se estiman con el "
+                     "costo por peso facturado. Será el costo real cuando el periodo quede facturado.")
+        if actual.costo_total is None:
+            notas.append("Sin facturas en Odoo todavía para esos días: el costo total queda sin dato.")
+    previos = [nombre for comp, nombre in comparaciones if comp.base is not None and comp.base.costo_total_estimado]
+    if previos:
+        notas.append(f"Costo total de {_lista(previos)} también estimado (aún no facturado completo).")
     return notas
 
 
@@ -88,7 +109,7 @@ def _notas_costo_preliminar(periodo: Periodo, actual: Metricas, comparaciones) -
     return []
 
 
-def notas_reglas(periodo: Periodo | None = None) -> list[str]:
+def notas_reglas(periodo: Periodo | None = None, incluir_costos: bool = True) -> list[str]:
     reglas = [
         f"Flechas: ▲ verde mejora, ▼ rojo empeora; «=» gris si el cambio está dentro de ±{_pct(UMBRAL_IGUAL)} "
         f"(±{_pp(UMBRAL_IGUAL)}, puntos porcentuales, en porcentajes). En cancelaciones, cortesías y descuentos subir es peor. "
@@ -100,15 +121,23 @@ def notas_reglas(periodo: Periodo | None = None) -> list[str]:
         f"Día operativo: un cierre de caja hecho antes de las {HORA_CORTE_DIA}:00 cuenta para el día anterior; "
         "los cierres duplicados (mismo día y mismos totales) se cuentan una sola vez.",
         f"Lectura: controles solo si suben y pesan al menos {_pct(lectura.UMBRAL_PESO_CONTROL)} de la venta neta; "
-        f"mezcla y canal solo si se mueven más de {_pp(lectura.UMBRAL_PUNTOS_MEZCLA)}; Costo de Ventas solo si "
-        "supera el presupuesto prorrateado por días.",
+        f"mezcla y canal solo si se mueven más de {_pp(lectura.UMBRAL_PUNTOS_MEZCLA)}"
+        + ("; Costo de Ventas solo si supera el presupuesto prorrateado por días." if incluir_costos else "."),
+    ]
+    costos = [
         f"Costo de Ventas real: preliminar (s/cf) hasta {presupuestos.DIAS_CIERRE_MES} días después del cierre del "
         "mes del periodo, porque las facturas se siguen capturando en Odoo.",
         f"Meta de costo: {_pct(META_COSTO_MIN)} a {_num(META_COSTO_TOPE - Decimal('0.001'))}% de la venta neta (verde); "
         f"abajo de {_pct(META_COSTO_MIN)} naranja, {_pct(META_COSTO_TOPE)} o más rojo. Costo total = reporte de costos "
         "de Wansoft u Odoo (costo total menos consumo; el consumo se registra de forma irregular); costo facturado = "
         "facturas de Presupuestos AP (el flujo); la medición por mercancía recibida está pendiente.",
+        f"Costo total estimado: en las sucursales con costo de Odoo (sale de las facturas de venta, que se crean con "
+        f"atraso), mientras Odoo no facture al menos el {_pct(UMBRAL_FACTURADO_COMPLETO)} de la venta neta de esos "
+        "días, su costo = costo de Odoo / facturado de Odoo x venta neta de Wansoft; se marca «estimado» y se "
+        "compara igual.",
     ]
+    if incluir_costos:
+        reglas += costos
     if periodo is None or periodo.tipo == TipoPeriodo.SEMANA:
         reglas.insert(4, "Semana de lunes a domingo; la misma semana del año anterior es la misma semana ISO "
                          "del año anterior.")

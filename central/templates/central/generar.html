@@ -66,6 +66,14 @@
     {{ form.formato.errors }}
   </fieldset>
 
+  {% if form.incluir_costos %}
+  <fieldset class="campo opciones">
+    <legend>Contenido</legend>
+    <label>{{ form.incluir_costos }} Incluir costos</label>
+    <p class="muted" style="margin:4px 0 0">Sin marcar, el reporte sale sin la sección de costo, sin sus reglas y sin las columnas de costo del detalle.</p>
+  </fieldset>
+  {% endif %}
+
   <fieldset class="campo opciones" id="con-entrega">
     <legend>Entrega</legend>
     {{ form.entrega }}

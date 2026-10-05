@@ -40,9 +40,17 @@ class GenerarForm(forms.Form):
                                          (SEPARADOS, "Un archivo por sucursal (se descargan juntos en un .zip)")])
     formato = forms.ChoiceField(widget=forms.RadioSelect, label="Formato",
                                 choices=[(PDF, "PDF"), (EXCEL, "Excel"), (AMBOS, "PDF y Excel (en un .zip)")])
+    # Report options (generadores.OPCIONES); only the ones the report admits are kept.
+    incluir_costos = forms.BooleanField(required=False, initial=True, label="Incluir costos")
 
-    def __init__(self, *args, reporte: Reporte, sucursales, **kwargs):
+    def __init__(self, *args, reporte: Reporte, sucursales, opciones: dict | None = None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.opciones = opciones or {}
+        for nombre in ("incluir_costos",):
+            if nombre in self.opciones:
+                self.fields[nombre].initial = self.opciones[nombre]
+            else:
+                del self.fields[nombre]
         # Only branches the user may see: validated here on the server, not
         # just hidden in the page.
         self.fields["sucursales"].queryset = sucursales
@@ -67,6 +75,7 @@ class GenerarForm(forms.Form):
         datos["separados"] = varias and datos.get("entrega") == SEPARADOS
         formato = datos.get("formato")
         datos["formatos"] = {PDF, EXCEL} if formato == AMBOS else {formato}
+        datos["opciones"] = {nombre: bool(datos.get(nombre)) for nombre in self.opciones}
         tipo = datos.get("tipo")
         if not tipo:
             return datos

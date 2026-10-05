@@ -1,4 +1,5 @@
-"""Read-only access to Odoo (XML-RPC) for the CEDIS purchase-order reports.
+"""Read-only access to Odoo (XML-RPC): the CEDIS purchase-order reports and
+the invoiced sales behind the estimated total cost of the commercial report.
 
 Read-only by construction: the client only lets the query methods through
 (`search_read`, `read`, `search_count`, `fields_get`), so no code path can
@@ -13,6 +14,7 @@ Odoo stores datetimes in UTC; Mexico City has been UTC-6 all year since 2022
 import os
 import xmlrpc.client
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 METODOS_PERMITIDOS = {"search_read", "read", "search_count", "fields_get"}
 UTC_A_CDMX = timedelta(hours=-6)
@@ -180,3 +182,24 @@ def compania_de_autores(cli: OdooLectura, partner_ids: list[int]) -> dict[int, i
                             fields=["partner_id", "company_id"], context={**cli._contexto, "active_test": False}):
             salida[u["partner_id"][0]] = u["company_id"][0]
     return salida
+
+
+def facturado_por_dia(cli: OdooLectura, company_ids: list[int], desde: date, hasta: date) -> dict[int, dict[date, Decimal]]:
+    """Invoiced sales without VAT per company and invoice date: posted customer
+    invoices minus credit notes (`amount_untaxed_signed`). They are the Wansoft
+    sales passed to Odoo; the invoice date is the operating day (checked:
+    days already invoiced match Wansoft net sales to the peso)."""
+    if not company_ids:
+        return {}
+    movimientos = cli.leer_todo(
+        "account.move",
+        [["move_type", "in", ["out_invoice", "out_refund"]], ["state", "=", "posted"],
+         ["company_id", "in", company_ids], ["invoice_date", ">=", str(desde)], ["invoice_date", "<=", str(hasta)]],
+        ["company_id", "invoice_date", "amount_untaxed_signed"],
+    )
+    resultado: dict[int, dict[date, Decimal]] = {}
+    for m in movimientos:
+        dia = date.fromisoformat(m["invoice_date"])
+        por_dia = resultado.setdefault(m["company_id"][0], {})
+        por_dia[dia] = por_dia.get(dia, Decimal("0")) + Decimal(str(m["amount_untaxed_signed"]))
+    return resultado

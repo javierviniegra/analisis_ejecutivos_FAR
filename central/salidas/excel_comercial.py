@@ -96,7 +96,7 @@ def _resumen(ws, r: ReporteComercial):
             par = False
         fila += 1
         fmt = f.indicador.formato
-        ws.cell(fila, 1, "   " + f.indicador.etiqueta)
+        ws.cell(fila, 1, "   " + f.etiqueta)
         for col, valor in ((2, f.actual), (3, f.anterior), (6, f.anio_anterior)):
             c = ws.cell(fila, col, float(valor) if valor is not None else "—")
             c.number_format = FORMATO_VALOR[fmt]
@@ -169,8 +169,9 @@ def _detalle(ws, r: ReporteComercial):
     ws["A1"] = "Detalle por sucursal" if r.por_sucursal else "Detalle por periodo"
     ws["A1"].font = SECCION_F
     if r.por_sucursal:
-        _encabezado(ws, 3, ["Sucursal", "Venta bruta", "Var.", "", "Clientes", "Cheque prom.", "Costo total",
-                            "Costo facturado"])
+        costos = r.incluir_costos
+        _encabezado(ws, 3, ["Sucursal", "Venta bruta", "Var.", "", "Clientes", "Cheque prom."]
+                    + (["Costo total", "Costo facturado"] if costos else []))
         filas, total = detalle.por_sucursal(r)
         for i, f in enumerate(filas + [total], start=4):
             ws.cell(i, 1, f.nombre).font = Font(bold=f is total)
@@ -178,10 +179,14 @@ def _detalle(ws, r: ReporteComercial):
             _variacion(ws, i, 3, f.var_anterior, MONEDA)
             _numero(ws, i, 5, f.clientes, ENTERO)
             _numero(ws, i, 6, f.cheque_promedio, MONEDA)
-            for col, pct, color in ((7, f.pct_costo_total, f.semaforo_total), (8, f.pct_costo, f.semaforo)):
+            for col, pct, color in ((7, f.pct_costo_total, f.semaforo_total), (8, f.pct_costo, f.semaforo))[:2 * costos]:
                 _numero(ws, i, col, pct, PORCENTAJE)
                 if color:
                     ws.cell(i, col).fill = PatternFill("solid", fgColor=FONDO_SEMAFORO[color])
+            if costos and f.costo_total_estimado:  # estimated: "34.4%*", still a number
+                ws.cell(i, 7).number_format = ws.cell(i, 7).number_format + '"*"'
+        if costos and total.costo_total_estimado:
+            ws.cell(5 + len(filas), 1, "* costo total estimado (Odoo aún no factura todo el periodo)").font = Font(italic=True)
         anchos = (32, 18, 10, 4, 12, 14, 14, 16)
     else:
         compara = detalle.compara_con_anterior(r)
