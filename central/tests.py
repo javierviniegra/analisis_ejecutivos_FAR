@@ -135,3 +135,17 @@ class CargarCatalogoTests(TestCase):
         nomina.perfiles.clear()  # the admin removes it
         call_command("cargar_catalogo", stdout=StringIO())
         self.assertFalse(nomina.perfiles.exists())  # a re-run never re-assigns
+
+
+@PLAIN_STATIC
+class AyudaTests(TestCase):
+    def test_ayuda_pide_sesion_y_usa_los_umbrales_del_motor(self):
+        from django.contrib.auth.models import User
+        self.assertEqual(self.client.get("/ayuda/").status_code, 302)  # login first
+        self.client.force_login(User.objects.create_user("u"))
+        r = self.client.get("/ayuda/")
+        self.assertContains(r, "Ayuda")
+        self.assertContains(r, "menos del 90% de sus días")  # comparativos.UMBRAL_COBERTURA_FIABLE
+        self.assertContains(r, "al menos el 99.5%")  # metricas.UMBRAL_FACTURADO_COMPLETO
+        self.assertContains(r, "antes de las 14:00")  # wansoft.HORA_CORTE_DIA
+        self.assertNotContains(r, "Director y Administrador general)</a>")

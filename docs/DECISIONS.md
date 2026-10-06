@@ -2,6 +2,18 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-06 — In-app help ("Ayuda"), same style as ControlPresupuestos_AP
+
+- **Owner:** before going to production the app gets a help page like Presupuestos AP's: `/ayuda/` (login required), linked from the header and the admin. Same look (the CSS is taken from Presupuestos' page): sticky contents index, banner, step-by-step flow, examples with numbers, tables, FAQ, glossary, print button.
+- Sections: what it is and profiles; how it works; catalogue; generating; the commercial report (pages, arrows, s/c, s/cf); business rules (operating day, duplicate and several closings, weeks, 90% coverage, comparable branches, gross vs net); costs (two costs, 38.0-39.9% target, estimated cost for Odoo and Wansoft, preliminary invoiced cost, budget/invoiced only when complete in the consolidated, branches without cost, free range); worked examples; CEDIS reports; sending by e-mail; automations; administration; when the data updates; FAQ; glossary.
+- **Every threshold shown comes from the engine's constants** (passed by the view), so the help cannot drift from the calculation -- the same principle as the report's own "Reglas y umbrales". Narrative to be reviewed by the owner.
+
+## 2026-10-06 — Production layout (Phase 7)
+
+- **Owner:** production runs like ControlPresupuestos_AP: the app on the app VM `SVR-HIKCENTER` (192.168.100.93) with Waitress on **port 8040**; its database **`centraldereportes`** on the XAMPP MySQL of 187.251.203.223 -- the same server as `presupuestos_ap` and `wansoft`; users at `http://187.251.203.223:8088/central_reportes/` through the Apache proxy.
+- **Initial data = a copy of the dev database** (owner, option a): users, profiles, catalogue, branches and their recipients, CEDIS customers, automations; the test automation and the test send log were removed first. Dump in `logs/centraldereportes_inicial.sql` (not in git: password hashes).
+- Deploy kit: `deploy/update.ps1` (pull, install, migrate, profiles, static, restart, `verificar_fuentes`), `deploy/windows/iniciar_servidor.ps1` (Waitress on 8040; start-if-down or `-Reiniciar`), `deploy/windows/registrar_tareas.ps1` (two tasks, S4U: sends every 15 min, and **web server at VM startup** -- the reboot gap Presupuestos still has). Step by step in `docs/PRODUCTION_SETUP.md`. Apache `ProxyTimeout 300` for long consolidated reports.
+
 ## 2026-10-06 — Several cash closings in one day: the one matching the tickets wins
 
 - **Found by the owner:** Puebla's September report showed $54,843 for 28-Sep; the right figure is $48,780 (its 12 tickets; net $42,052 = Wansoft, Odoo and MySQL). The day had two closings: $48,780 (12 orders) and a stray $6,063 (1 order, 01:34, no tickets anywhere), and the report added both.

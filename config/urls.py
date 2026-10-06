@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
+from central import views as central_views
 from cuentas import views
 
 admin.site.site_header = "Central de Reportes"
@@ -13,5 +14,6 @@ urlpatterns = [
     path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(next_page="login"), name="logout"),
     path("reportes/", include("central.urls")),
+    path("ayuda/", central_views.ayuda, name="ayuda"),
     path("admin/", admin.site.urls),
 ]

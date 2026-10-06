@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -232,3 +233,40 @@ def correo_adjunto(request, clave, token, n):
     modo = "inline" if tipo == "application/pdf" else "attachment"
     respuesta["Content-Disposition"] = f'{modo}; filename="{nombre}"'
     return respuesta
+
+
+def _pct(valor) -> str:
+    """0.995 -> "99.5", 0.9 -> "90" (for the help texts)."""
+    return f"{(valor * 100).normalize():f}"
+
+
+@login_required
+def ayuda(request):
+    """In-app help (same style as ControlPresupuestos_AP's). Every threshold
+    it mentions comes from the constants the engine uses, so the help can
+    never drift from the calculation."""
+    from .forms import MAX_DIAS_RANGO
+    from .motor import comparativos, lectura
+    from .motor.fuentes import presupuestos as fuente_presupuestos
+    from .motor.fuentes import wansoft as fuente_wansoft
+    from .motor.metricas import UMBRAL_FACTURADO_COMPLETO
+
+    return render(request, "central/ayuda.html", {
+        "umbral_igual": _pct(comparativos.UMBRAL_IGUAL),
+        "cobertura": _pct(comparativos.UMBRAL_COBERTURA_FIABLE),
+        "meta_min": _pct(comparativos.META_COSTO_MIN),
+        "meta_tope": _pct(comparativos.META_COSTO_TOPE),
+        "peso_control": _pct(lectura.UMBRAL_PESO_CONTROL),
+        "puntos_mezcla": _pct(lectura.UMBRAL_PUNTOS_MEZCLA),
+        "facturado_completo": _pct(UMBRAL_FACTURADO_COMPLETO),
+        "dias_cierre": fuente_presupuestos.DIAS_CIERRE_MES,
+        "hora_corte": fuente_wansoft.HORA_CORTE_DIA,
+        "max_dias_rango": MAX_DIAS_RANGO,
+        "vigencia_previa": previas.VIGENCIA // 3600,
+        "max_intentos": envios.MAX_INTENTOS,
+        "remitente": settings.CORREO_REMITENTE,
+        "contacto": settings.CORREO_CONTACTO_NOMBRE,
+        "contacto_correo": settings.CORREO_CONTACTO,
+        "prefijo": settings.CORREO_PREFIJO_ASUNTO,
+        "automatiza": puede_automatizar(request.user),
+    })

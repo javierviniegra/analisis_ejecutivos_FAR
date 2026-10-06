@@ -1,0 +1,561 @@
+{% load static %}
+{# Same look as ControlPresupuestos_AP's help page (owner, 2026-10-06). #}
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ayuda · Central de Reportes</title>
+<style>
+  :root {
+    --verde: #035953;
+    --verde-oscuro: #023f3b;
+    --naranja: #eb6834;
+    --crema: #f0e9d8;
+    --texto: #2d2d2d;
+    --borde: #dcdcdc;
+    --rojo: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    color: var(--texto);
+    background: #f6f4ef;
+    line-height: 1.55;
+  }
+  header {
+    background: var(--verde-oscuro);
+    color: #fff;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 18px; }
+  header img { height: 32px; }
+  header a { color: #cfe3e0; font-size: 13px; text-decoration: none; }
+  header a:hover { text-decoration: underline; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    gap: 32px;
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 24px 32px 64px;
+  }
+  nav.indice {
+    position: sticky;
+    top: 16px;
+    align-self: start;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    padding: 14px 0;
+    font-size: 14px;
+  }
+  nav.indice h2 { margin: 0 16px 8px; font-size: 12px; text-transform: uppercase; color: #777; letter-spacing: .04em; }
+  nav.indice a { display: block; padding: 6px 16px; color: var(--verde-oscuro); text-decoration: none; }
+  nav.indice a:hover { background: #f2f2ee; }
+  nav.indice a.destacado { color: #a0400f; font-weight: 700; }
+  nav.indice button {
+    margin: 10px 16px 0;
+    padding: 7px 12px;
+    border: 1px solid var(--borde);
+    background: #fafafa;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--verde-oscuro);
+    cursor: pointer;
+  }
+
+  main { min-width: 0; }
+  h1 { color: var(--verde-oscuro); font-size: 26px; margin: 0 0 4px; }
+  .subtitulo { color: #666; margin: 0 0 20px; font-size: 14px; }
+
+  section {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    padding: 22px 26px;
+    margin-bottom: 18px;
+    scroll-margin-top: 16px;
+  }
+  section h2 { color: var(--verde-oscuro); font-size: 20px; margin: 0 0 10px; }
+  section h3 { color: var(--verde); font-size: 15px; margin: 18px 0 6px; }
+  p, li { font-size: 14.5px; }
+  p { margin: 8px 0; }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  code, .tag {
+    background: #f2f2ee;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 13px;
+  }
+  .rojo { color: var(--rojo); font-weight: 700; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .aviso-contadores { border: 2px solid var(--naranja); background: #fff8f3; }
+  .aviso-contadores h2 { color: #a0400f; }
+  .banner {
+    background: #fff8f3;
+    border: 1px solid var(--naranja);
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 18px;
+    font-size: 14px;
+  }
+  .banner a { color: #a0400f; font-weight: 700; }
+  .nota {
+    background: #eef5f4;
+    border-left: 4px solid var(--verde);
+    padding: 8px 14px;
+    border-radius: 6px;
+    margin: 10px 0;
+    font-size: 14px;
+  }
+  .ejemplo {
+    background: #fbf8ef;
+    border: 1px solid #e6dfcb;
+    border-radius: 8px;
+    padding: 4px 16px 10px;
+    margin: 12px 0;
+  }
+  .ejemplo h3 { margin-top: 10px; color: var(--verde-oscuro); }
+  .ejemplo .aviso-cifras { font-size: 12px; color: #888; margin: 0 0 2px; }
+
+  /* Flujo de punta a punta */
+  .flujo { list-style: none; padding: 0; margin: 12px 0; counter-reset: paso; }
+  .flujo li {
+    counter-increment: paso;
+    position: relative;
+    margin: 0 0 12px;
+    padding: 12px 14px 12px 56px;
+    background: #f7f9f8;
+    border: 1px solid #dfe9e7;
+    border-radius: 10px;
+  }
+  .flujo li:before {
+    content: counter(paso);
+    position: absolute;
+    left: 14px;
+    top: 12px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--verde);
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .flujo li strong:first-child { display: block; color: var(--verde-oscuro); margin-bottom: 2px; }
+  .flujo li p { margin: 4px 0 0; font-size: 14px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+  th { background: #f2f2ee; color: #555; text-align: left; padding: 8px 12px; font-size: 12px; text-transform: uppercase; }
+  th.num { text-align: right; }
+  td { padding: 8px 12px; font-size: 14px; border-top: 1px solid #eee; vertical-align: top; }
+
+  details.faq { border-top: 1px solid #eee; padding: 10px 0; }
+  details.faq summary { cursor: pointer; font-weight: 600; color: var(--verde-oscuro); font-size: 14.5px; }
+  details.faq p { margin: 8px 0 0; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; padding: 16px; }
+    nav.indice { position: static; max-height: none; }
+    header { padding: 14px 16px; }
+    section { padding: 18px 16px; }
+    table { display: block; overflow-x: auto; }
+  }
+  @media print {
+    header, nav.indice, .banner { display: none; }
+    .layout { display: block; padding: 0; }
+    section { box-shadow: none; break-inside: avoid; }
+    details.faq > *:not(summary) { display: block; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="{% static 'ejecutivos/img/logo.png' %}" alt="Fonda Argentina">
+    Central de Reportes
+  </div>
+  <div>
+    <a href="{% url 'catalogo' %}">&larr; Volver a los reportes</a>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="indice">
+    <h2>Contenido</h2>
+    <a href="#inicio">1. Qué es Central de Reportes</a>
+    <a href="#funcionamiento">2. Cómo funciona, paso a paso</a>
+    <a href="#catalogo">3. El catálogo de reportes</a>
+    <a href="#generar">4. Generar un reporte</a>
+    <a href="#comercial">5. El reporte comercial</a>
+    <a href="#reglas">6. Reglas de negocio</a>
+    <a href="#costos">7. Los costos</a>
+    <a href="#ejemplos">8. Ejemplos con números</a>
+    <a href="#cedis">9. Reportes de CEDIS</a>
+    <a href="#correo">10. Enviar por correo</a>
+    <a href="#automatizaciones" class="{% if automatiza %}destacado{% endif %}">11. Automatizaciones</a>
+    <a href="#administracion">12. Administración</a>
+    <a href="#datos">13. Cuándo se actualizan los datos</a>
+    <a href="#faq">14. Preguntas frecuentes</a>
+    <a href="#glosario">15. Glosario</a>
+    <button type="button" onclick="window.print()">Imprimir esta ayuda</button>
+  </nav>
+
+  <main>
+    <h1>Ayuda</h1>
+    <p class="subtitulo">Manual de uso de Central de Reportes: cómo generar, leer, enviar y programar los reportes, y de dónde sale cada número.</p>
+
+    <div class="banner">
+      ¿Quieres entender de dónde sale un número? Ve a <a href="#reglas">Reglas de negocio</a>, <a href="#costos">Los costos</a> y los <a href="#ejemplos">ejemplos con números</a>.
+      {% if automatiza %}¿Vas a programar envíos? Lee <a href="#automatizaciones">Automatizaciones</a>.{% endif %}
+      ¿Algo no cuadra? Revisa las <a href="#faq">preguntas frecuentes</a>.
+    </div>
+
+    <!-- 1 -->
+    <section id="inicio">
+      <h2>1. Qué es Central de Reportes</h2>
+      <p>
+        Es la <strong>biblioteca de reportes</strong> de Fonda Argentina. Cada reporte se puede
+        <strong>generar cuando lo necesites</strong> (eliges sucursales y cualquier periodo) o
+        <strong>recibir por correo de forma automática</strong> (cada semana, cada mes, etc.).
+      </p>
+      <ul>
+        <li>Los datos se <strong>leen en el momento</strong> de las fuentes de la empresa: Wansoft (ventas, cortes de caja, costos), Odoo (compras, facturación, pedidos al CEDIS) y Presupuestos AP (presupuesto y facturas de proveedor).</li>
+        <li>La aplicación <strong>solo lee</strong>: nunca escribe ni cambia nada en esas fuentes.</li>
+        <li>Los textos de los reportes (la "Lectura", las notas) los arma la aplicación con <strong>reglas fijas</strong> a partir de los números del reporte; no hay inteligencia artificial de por medio.</li>
+      </ul>
+      <h3>Perfiles de usuario</h3>
+      <table>
+        <tr><th>Perfil</th><th>Qué puede hacer</th></tr>
+        <tr><td>Director / Administrador general</td><td>Todos los reportes que tenga asignados, de todas las sucursales de su perfil; además crea y edita <strong>automatizaciones</strong> y entra a la Administración.</td></tr>
+        <tr><td>Gerente</td><td>Genera y envía por correo los reportes de su área, solo de <strong>sus sucursales</strong>.</td></tr>
+        <tr><td>CEDIS, Contabilidad, Nominista</td><td>Ven y generan solo los reportes de su área (CEDIS, contabilidad, nómina).</td></tr>
+        <tr><td>Usuario</td><td>Consulta los reportes asignados a su perfil.</td></tr>
+      </table>
+      <div class="nota">Cada reporte está asignado a uno o más perfiles. Si no ves un reporte o una sucursal, no es un error: tu perfil no la tiene. Pídelo a un administrador.</div>
+    </section>
+
+    <!-- 2 -->
+    <section id="funcionamiento">
+      <h2>2. Cómo funciona, paso a paso</h2>
+      <ol class="flujo">
+        <li>
+          <strong>Cada noche se cargan los datos del día anterior</strong>
+          <p>El proceso de Wansoft carga en la base de datos los cortes de caja, el detalle de tickets y los costos (alrededor de la 1:30 a.m.). Odoo y Presupuestos AP se leen directo, en vivo.</p>
+        </li>
+        <li>
+          <strong>Eliges el reporte, las sucursales y el periodo</strong>
+          <p>Desde el catálogo, con <em>Generar reporte</em>. Puede ser una semana, un mes, un bimestre, trimestre, semestre, año o un rango libre.</p>
+        </li>
+        <li>
+          <strong>La aplicación lee las fuentes y aplica las reglas</strong>
+          <p>Día operativo, cortes duplicados, cobertura, sucursales comparables, costos estimados… (ver <a href="#reglas">Reglas de negocio</a>). Siempre compara contra el periodo anterior y contra el mismo periodo del año anterior.</p>
+        </li>
+        <li>
+          <strong>Arma el reporte</strong>
+          <p>PDF y/o Excel, con la lectura, la tabla de indicadores, las gráficas, el detalle y las notas que explican cualquier dato incompleto.</p>
+        </li>
+        <li>
+          <strong>Lo descargas, lo envías por correo o se envía solo</strong>
+          <p>Con <em>Generar</em> lo descargas; con <em>Enviar por correo</em> ves una vista previa y lo mandas; con una <em>automatización</em> se manda solo cada periodo.</p>
+        </li>
+      </ol>
+      <div class="nota">Los reportes reflejan lo que había en las fuentes en el momento de generarlos. Si alguien corrige algo en Wansoft u Odoo, se verá la siguiente vez que se genere el reporte (y, para Wansoft, después de la carga de la noche).</div>
+    </section>
+
+    <!-- 3 -->
+    <section id="catalogo">
+      <h2>3. El catálogo de reportes</h2>
+      <p>Es la pantalla de inicio de <em>Reportes</em>. Muestra solo los reportes de tu perfil, agrupados por categoría (Marca, Sucursales, Inversionistas, CEDIS, Nómina / RH, Contabilidad, Inventarios). Si ves más de una categoría, puedes filtrar por una.</p>
+      <ul>
+        <li>Cada reporte tiene su ficha: qué es, periodicidad, formatos (PDF / Excel), fuente de datos, alcance (por sucursal, consolidado o ambos) y estado.</li>
+        <li>Solo los reportes en estado <strong>Implementado</strong> tienen el botón <em>Generar reporte</em>; los demás están en definición.</li>
+      </ul>
+    </section>
+
+    <!-- 4 -->
+    <section id="generar">
+      <h2>4. Generar un reporte</h2>
+      <table>
+        <tr><th>Campo</th><th>Qué hace</th></tr>
+        <tr><td>Sucursales</td><td>Solo aparecen las de tu perfil. <em>Marcar todas / Quitar todas</em> para ir rápido.</td></tr>
+        <tr><td>Periodo</td><td>Tipo de periodo y <strong>cualquier día dentro de él</strong> (por ejemplo, cualquier día de septiembre = septiembre completo). En <em>Rango libre</em> pones fecha inicial y final (máximo {{ max_dias_rango }} días).</td></tr>
+        <tr><td>Presentación</td><td><strong>Un reporte por sucursal</strong> o <strong>Consolidado</strong> (todas las elegidas sumadas), según lo que permita el reporte.</td></tr>
+        <tr><td>Formato</td><td>PDF, Excel o ambos (se descargan juntos en un .zip).</td></tr>
+        <tr><td>Contenido</td><td><strong>Incluir costos</strong> (marcado por omisión). Desmarcado, el reporte sale sin la sección de costo, sin sus reglas y sin las columnas de costo del detalle.</td></tr>
+        <tr><td>Entrega</td><td>Solo aparece con varias sucursales por separado: <em>todo en un archivo</em> (una página u hoja por sucursal) o <em>un archivo por sucursal</em> (.zip). <strong>Hay que elegir una</strong>.</td></tr>
+      </table>
+      <p>Arriba de la pantalla dice de qué bases se están leyendo los datos. Un consolidado de muchas sucursales o un periodo largo puede tardar hasta un minuto.</p>
+    </section>
+
+    <!-- 5 -->
+    <section id="comercial">
+      <h2>5. El reporte comercial</h2>
+      <h3>Página 1</h3>
+      <ul>
+        <li><strong>Lectura:</strong> frases que resumen el periodo: la venta bruta contra el periodo anterior y el año anterior, si el cambio vino del tráfico (clientes) o del cheque promedio, los controles que subieron (solo si pesan al menos {{ peso_control }}% de la venta neta), los cambios de mezcla o canal de más de {{ puntos_mezcla }} puntos, y el costo contra la meta.</li>
+        <li><strong>Tabla de indicadores:</strong> Ventas, Mezcla, Control (cancelaciones, cortesías y descuentos a precio de venta) y Costo, con el periodo, el anterior, el año anterior y sus variaciones.</li>
+        <li><strong>Dos gráficas:</strong> venta bruta por día contra el periodo anterior y contra el año anterior. En un mes: la venta por día y la tendencia de 12 meses contra el año anterior.</li>
+        <li><strong>Notas:</strong> todo lo que haga incompleto un número (días sin corte, sucursales que no se comparan, costos estimados, cortes descartados…).</li>
+      </ul>
+      <h3>Página 2: Detalle</h3>
+      <ul>
+        <li><strong>Consolidado:</strong> una fila por sucursal (venta, variación contra su periodo anterior, clientes, cheque promedio y los dos porcentajes de costo con su semáforo), de mayor a menor venta.</li>
+        <li><strong>Una sucursal:</strong> por día, por bloque de 7 días o por mes, según el largo del periodo.</li>
+        <li>Al final, <strong>Reglas y umbrales del reporte</strong>: todas las reglas que se aplicaron, escritas en el propio reporte.</li>
+      </ul>
+      <h3>Cómo leer las variaciones</h3>
+      <table>
+        <tr><th>Símbolo</th><th>Significa</th></tr>
+        <tr><td>▲ verde / ▼ rojo</td><td>Mejora / empeora. En cancelaciones, cortesías, descuentos y costo, <em>subir es peor</em>.</td></tr>
+        <tr><td>= gris</td><td>El cambio está dentro de ±{{ umbral_igual }}% (o ±{{ umbral_igual }} punto en porcentajes): se considera igual.</td></tr>
+        <tr><td>Gris siempre</td><td>Mezcla, canal y presupuesto: no tienen "bueno" o "malo".</td></tr>
+        <tr><td>s/c</td><td><strong>Sin comparativo:</strong> no hay datos del periodo de comparación.</td></tr>
+        <tr><td>s/cf</td><td><strong>Sin comparativo fiable:</strong> alguno de los dos periodos tiene datos en menos del {{ cobertura }}% de sus días; se muestra el valor pero no se compara.</td></tr>
+      </table>
+    </section>
+
+    <!-- 6 -->
+    <section id="reglas">
+      <h2>6. Reglas de negocio</h2>
+      <h3>Día operativo</h3>
+      <p>Un corte de caja hecho <strong>antes de las {{ hora_corte }}:00</strong> cuenta para el <strong>día anterior</strong> (los cierres de madrugada pertenecen a la noche anterior).</p>
+      <h3>Cortes de caja duplicados o de más</h3>
+      <ul>
+        <li>Un corte repetido (mismo día y mismos totales) se cuenta <strong>una sola vez</strong>.</li>
+        <li>Si un día tiene <strong>varios cortes distintos</strong> y <strong>uno de ellos coincide exactamente con la suma de los tickets del día</strong>, solo cuenta ese; los demás se descartan y se anotan en las notas del reporte. Si ninguno coincide (por ejemplo, dos turnos reales), se suman todos.</li>
+      </ul>
+      <h3>Semanas y periodos</h3>
+      <ul>
+        <li>La semana va de <strong>lunes a domingo</strong>. La misma semana del año anterior es la misma semana ISO (mismo número de semana).</li>
+        <li>Los meses, bimestres, trimestres, semestres y años son calendario.</li>
+      </ul>
+      <h3>Cobertura ({{ cobertura }}%)</h3>
+      <p>Si un periodo tiene cortes de caja en menos del {{ cobertura }}% de los días esperados, sus comparativos salen <strong>s/cf</strong> y una nota dice cuántos días tiene.</p>
+      <h3>Sucursales comparables</h3>
+      <p>Una sucursal que no operó completo el periodo de comparación (nueva, o sin datos en el {{ cobertura }}% de esos días) <strong>sale de ambos lados</strong> de esa comparación, para no "inflar" el resultado. La columna del periodo sí muestra el total de todas; la nota dice qué sucursales se excluyeron.</p>
+      <h3>Venta bruta y venta neta</h3>
+      <p>La <strong>venta bruta</strong> incluye IVA y es la que usan la Lectura y las gráficas. La <strong>venta neta</strong> no incluye IVA y es la base de los porcentajes de costo.</p>
+    </section>
+
+    <!-- 7 -->
+    <section id="costos">
+      <h2>7. Los costos</h2>
+      <h3>Dos costos, con nombre distinto</h3>
+      <table>
+        <tr><th>Costo</th><th>De dónde sale</th><th>Para qué sirve</th></tr>
+        <tr><td>Costo total (Wansoft/Odoo)</td><td>Reporte de costos de Wansoft u Odoo: costo total menos consumo.</td><td>El costo de lo vendido; el que usan los reportes ejecutivos.</td></tr>
+        <tr><td>Costo facturado (Presupuestos AP)</td><td>Facturas de proveedor registradas en Presupuestos AP.</td><td>El flujo: lo que se facturó en el periodo.</td></tr>
+      </table>
+      <h3>Meta de costo (semáforo)</h3>
+      <p>El costo debe estar entre <strong>{{ meta_min }}% y 39.9% de la venta neta</strong>: <span class="tag">verde</span> dentro de la meta, <span class="tag">naranja</span> abajo de {{ meta_min }}% (se compró o se registró de menos), <span class="tag">rojo</span> de {{ meta_tope }}% en adelante (se compró de más).</p>
+      <h3>Costo estimado</h3>
+      <p>El costo de los últimos días puede estar incompleto. Cuando pasa, el costo se marca <strong>"estimado"</strong> y una nota dice cómo se calculó; cuando ya está completo, se da sin ninguna mención.</p>
+      <ul>
+        <li><strong>Sucursales con costo de Odoo:</strong> el costo sale de las facturas de venta, que Odoo crea con días de atraso. Mientras Odoo no facture al menos el {{ facturado_completo }}% de la venta neta de esos días, su costo = costo de Odoo ÷ facturado en Odoo × venta neta de Wansoft.</li>
+        <li><strong>Sucursales con costo de Wansoft:</strong> si Wansoft todavía no descuenta del inventario parte de lo vendido ("pendiente de rebaja"), ese pendiente se suma al costo hasta que llegue a cero.</li>
+        <li>El costo estimado sí lleva semáforo y se compara.</li>
+      </ul>
+      <h3>Otros casos</h3>
+      <ul>
+        <li><strong>Costo facturado preliminar:</strong> las facturas se siguen capturando, así que el costo facturado es preliminar (s/cf) hasta {{ dias_cierre }} días después del cierre del mes del periodo.</li>
+        <li><strong>En el consolidado</strong>, el costo facturado y el presupuesto solo se muestran si <strong>todas</strong> las sucursales los tienen; si no, se quitan con una nota (se ven en el reporte de cada sucursal).</li>
+        <li><strong>Sucursales sin costo:</strong> una sucursal puede estar configurada para no considerar su costo (hoy, Metepec). Su reporte sale sin costos y el consolidado la deja fuera de los porcentajes, con una nota.</li>
+        <li>En un <strong>rango libre</strong> no hay costo total (solo semana, mes o bloques de meses).</li>
+      </ul>
+    </section>
+
+    <!-- 8 -->
+    <section id="ejemplos">
+      <h2>8. Ejemplos con números</h2>
+      <p class="aviso-cifras">Cifras ilustrativas, solo para mostrar cómo se calcula cada cosa.</p>
+      <div class="ejemplo">
+        <h3>Ejemplo 1. Una variación "igual"</h3>
+        <p>Venta de la semana: $1,010,000. Semana anterior: $1,000,000. Cambio: +1.0%.</p>
+        <p>Como el cambio está dentro de ±{{ umbral_igual }}%, se muestra <strong>= gris</strong> (sin flecha verde).</p>
+      </div>
+      <div class="ejemplo">
+        <h3>Ejemplo 2. Día operativo</h3>
+        <table>
+          <tr><th>Corte hecho</th><th>Cuenta para</th></tr>
+          <tr><td>Sábado 23:40</td><td>Sábado</td></tr>
+          <tr><td>Domingo 00:35</td><td>Sábado (antes de las {{ hora_corte }}:00)</td></tr>
+          <tr><td>Domingo 16:10</td><td>Domingo</td></tr>
+        </table>
+      </div>
+      <div class="ejemplo">
+        <h3>Ejemplo 3. Varios cortes en un día</h3>
+        <p>Una sucursal tiene dos cortes para el lunes: $48,780 (12 órdenes) y $6,063 (1 orden). Los tickets del lunes suman $48,780.</p>
+        <p>Solo cuenta el corte de <strong>$48,780</strong>; el de $6,063 se descarta y aparece en las notas: <em>"Se descartaron cortes de caja que no coinciden con los tickets del día…"</em>.</p>
+      </div>
+      <div class="ejemplo">
+        <h3>Ejemplo 4. Cobertura y s/cf</h3>
+        <p>Una semana de 7 días con cortes en 6 días: 6 ÷ 7 = 85.7%, menos del {{ cobertura }}% → sus comparativos salen <strong>s/cf</strong> y la nota dice "cierres de caja en 6 de 7 días".</p>
+      </div>
+      <div class="ejemplo">
+        <h3>Ejemplo 5. Costo estimado de una sucursal con costo de Odoo</h3>
+        <table>
+          <tr><th>Concepto</th><th class="num">Monto</th></tr>
+          <tr><td>Venta neta de Wansoft de los días con costo de Odoo</td><td class="num">$1,000,000</td></tr>
+          <tr><td>Facturado en Odoo de esos días (50%)</td><td class="num">$500,000</td></tr>
+          <tr><td>Costo de Odoo de esos días</td><td class="num">$175,000</td></tr>
+          <tr><td>Costo por peso facturado: $175,000 ÷ $500,000</td><td class="num">35%</td></tr>
+          <tr><td><strong>Costo estimado: 35% × $1,000,000</strong></td><td class="num"><strong>$350,000</strong></td></tr>
+        </table>
+        <p>Sin estimar, el costo saldría en 17.5% (solo lo ya facturado) y parecería muy abajo de la meta.</p>
+      </div>
+      <div class="ejemplo">
+        <h3>Ejemplo 6. Semáforo</h3>
+        <p>Costo $385,000 sobre venta neta $1,000,000 = 38.5% → <strong>verde</strong>. Con $410,000 = 41% → <span class="rojo">rojo</span>. Con $350,000 = 35% → naranja.</p>
+      </div>
+    </section>
+
+    <!-- 9 -->
+    <section id="cedis">
+      <h2>9. Reportes de CEDIS (El Bodegón y Las Empanadas)</h2>
+      <p>Dos libros de Excel sobre los pedidos de las sucursales a los CEDIS: <strong>modificaciones</strong> (qué cambió después de confirmar el pedido) y <strong>por hora</strong> (a qué hora se piden y cuáles se modificaron).</p>
+      <ul>
+        <li>Se leen <strong>del lado del proveedor</strong>, así que aparecen <strong>todas</strong> las sucursales: las que piden con orden de compra en Odoo y las que el CEDIS captura directamente.</li>
+        <li>Cada sucursal cuenta desde su arranque de compras en Odoo.</li>
+        <li><strong>Hecho por:</strong> cada cambio dice si lo hizo la sucursal o el CEDIS (según la empresa del usuario de Odoo).</li>
+        <li><strong>Modificada</strong> tiene dos definiciones, como en los reportes originales: en "modificaciones", cualquier cambio; en "por hora", cambio de monto o línea extra.</li>
+        <li>Los clientes del CEDIS se asignan a una sucursal en la Administración (<em>Clientes de CEDIS</em>). Un cliente sin asignar aparece en las notas hasta que se le asigne.</li>
+      </ul>
+    </section>
+
+    <!-- 10 -->
+    <section id="correo">
+      <h2>10. Enviar por correo</h2>
+      <ol class="flujo">
+        <li><strong>Arma el reporte como para descargarlo</strong><p>Sucursales, periodo, presentación, formato e "Incluir costos".</p></li>
+        <li><strong>Pulsa "Enviar por correo…"</strong><p>Elige usuarios del sistema y/o escribe otros correos (uno por renglón). Opcional: un <strong>título</strong> para el reporte en el correo y un <strong>mensaje</strong>.</p></li>
+        <li><strong>Pulsa "Vista previa"</strong><p>Ves el correo completo (para quién, asunto, texto, adjuntos) y el PDF del reporte. La vista previa dura {{ vigencia_previa }} horas.</p></li>
+        <li><strong>Pulsa "Enviar"</strong><p>Se manda exactamente lo que viste, en un solo correo para todos. Arriba aparece a quién se envió{% if automatiza %} y el botón <em>Automatizar este envío</em>{% endif %}.</p></li>
+      </ol>
+      <h3>Cómo llega el correo</h3>
+      <ul>
+        <li>Asunto: <code>{{ prefijo }} &lt;título&gt; · &lt;periodo&gt;</code>. Si no pones título, se usa el nombre del reporte.</li>
+        <li>Remitente: <strong>{{ remitente }}</strong>, nunca el nombre de quien lo envía (la aplicación sí registra quién lo mandó).</li>
+        <li>Lleva un aviso de <strong>no responder</strong> (la cuenta que envía no se revisa) y un <strong>aviso de confidencialidad</strong>.</li>
+        <li>Las dudas se dirigen a <strong>{{ contacto }}</strong>{% if contacto_correo %} ({{ contacto_correo }}); si alguien pulsa "Responder", la respuesta le llega a ese contacto{% endif %}.</li>
+        <li>Si eliges PDF y Excel, o varias sucursales por separado, llegan como archivos adjuntos separados.</li>
+      </ul>
+    </section>
+
+    <!-- 11 -->
+    <section id="automatizaciones">
+      <h2>11. Automatizaciones (Director y Administrador general)</h2>
+      <p>Una automatización manda un reporte por correo <strong>cada periodo, solo</strong>. Se crean en la página de cada reporte, sección <em>Automatizaciones</em> &rsaquo; <em>Nueva automatización</em>, o desde un correo ya enviado con <em>Automatizar este envío</em> (queda igual a ese correo y solo eliges cada cuándo).</p>
+      <h3>Cuándo se envía</h3>
+      <ul>
+        <li>Cada automatización manda siempre <strong>el último periodo cerrado</strong>: la última semana completa (lunes a domingo), el mes anterior, etc.</li>
+        <li><strong>Semanal:</strong> eliges el <em>día de la semana</em> y la hora. Ejemplo: martes 08:00 → cada martes llega la semana que cerró el domingo.</li>
+        <li><strong>Mensual</strong> (y bimestral, trimestral…): eliges el <em>día del mes siguiente</em> y la hora. Ejemplo: día 5, 08:00 → el 5 de noviembre llega octubre.</li>
+        <li>La frase verde de la pantalla dice en palabras cuándo se manda; la lista muestra el <strong>próximo envío</strong>.</li>
+        <li>Para recibir el mismo reporte semanal y mensual, crea dos automatizaciones.</li>
+      </ul>
+      <h3>Qué se manda y a quién</h3>
+      <table>
+        <tr><th>Opción</th><th>Qué hace</th></tr>
+        <tr><td>Sucursales</td><td>Las que elijas, o <em>todas las activas</em> (las nuevas entran solas).</td></tr>
+        <tr><td>Consolidado</td><td>Se manda solo a las personas que elijas para el consolidado.</td></tr>
+        <tr><td>Uno por sucursal</td><td>Con <em>a los destinatarios de cada sucursal</em>, cada sucursal recibe <strong>solo su reporte</strong>, a las personas definidas en la sucursal (Administración &rsaquo; Sucursales). Además puedes agregar personas que reciben los reportes de varias sucursales.</td></tr>
+        <tr><td>Cada quien solo sus sucursales</td><td>Las personas agregadas reciben solo las sucursales de su perfil; los correos externos reciben todas.</td></tr>
+        <tr><td>Título, formato e Incluir costos</td><td>Igual que al generar a mano.</td></tr>
+      </table>
+      <p>Cada persona recibe <strong>un solo correo</strong> con todos sus archivos. La lista marca en rojo las sucursales que no tienen destinatarios.</p>
+      <h3>Envío, reintentos y pausa</h3>
+      <ul>
+        <li>La aplicación revisa cada 15 minutos qué toca mandar. Cada periodo se manda <strong>una sola vez</strong>.</li>
+        <li>Si el envío a alguien falla, se reintenta en las siguientes revisiones (hasta {{ max_intentos }} intentos) <strong>solo a quien no le llegó</strong>.</li>
+        <li>Al crear una automatización no se mandan periodos viejos: empieza con el siguiente que le toque.</li>
+        <li><em>Pausar</em> la detiene sin borrarla; <em>Reanudar</em> la vuelve a activar. El último envío y su estado se ven en la lista.</li>
+      </ul>
+    </section>
+
+    <!-- 12 -->
+    <section id="administracion">
+      <h2>12. Administración</h2>
+      <p>Para quien tiene acceso a <em>Administración</em> (enlace arriba a la derecha).</p>
+      <table>
+        <tr><th>Sección</th><th>Para qué</th></tr>
+        <tr><td>Usuarios</td><td>Crear usuarios, asignarles perfiles (grupos) y, en su perfil, sus sucursales o "todas las sucursales". El correo del usuario es el que se usa para enviarle reportes.</td></tr>
+        <tr><td>Sucursales</td><td>Sus identificadores en Wansoft y Odoo, <strong>Considerar costo</strong> y los <strong>destinatarios por defecto</strong> de sus reportes (una sola lista para todos los reportes).</td></tr>
+        <tr><td>Reportes</td><td>El catálogo: qué perfiles ven cada reporte.</td></tr>
+        <tr><td>Clientes de CEDIS</td><td>A qué sucursal corresponde cada cliente o dirección de entrega del CEDIS en Odoo.</td></tr>
+        <tr><td>Automatizaciones, Envíos automáticos, Envíos manuales</td><td>Consulta de lo programado y de todo lo enviado (quién, qué, a quién, cuándo y si hubo error).</td></tr>
+      </table>
+    </section>
+
+    <!-- 13 -->
+    <section id="datos">
+      <h2>13. Cuándo se actualizan los datos</h2>
+      <table>
+        <tr><th>Dato</th><th>Cuándo está disponible</th></tr>
+        <tr><td>Ventas y cortes de caja (Wansoft)</td><td>Al día siguiente, después de la carga nocturna (~1:30 a.m.). Un corte hecho después de medianoche entra con la carga de la noche siguiente.</td></tr>
+        <tr><td>Costo total</td><td>Se recalcula cada noche durante varios días; mientras esté incompleto sale "estimado".</td></tr>
+        <tr><td>Facturación de Odoo</td><td>Se crea con atraso (días); el costo de las sucursales de Odoo se completa al cierre del mes.</td></tr>
+        <tr><td>Costo facturado (Presupuestos AP)</td><td>Preliminar hasta {{ dias_cierre }} días después del cierre del mes.</td></tr>
+        <tr><td>Pedidos al CEDIS (Odoo)</td><td>En vivo, al generar el reporte.</td></tr>
+      </table>
+      <div class="nota">Por eso, un reporte semanal se ve más completo si se genera (o se programa) uno o dos días después de cerrar la semana.</div>
+    </section>
+
+    <!-- 14 -->
+    <section id="faq">
+      <h2>14. Preguntas frecuentes</h2>
+      <details class="faq"><summary>¿Por qué un comparativo dice s/cf?</summary>
+        <p>Porque alguno de los dos periodos tiene datos en menos del {{ cobertura }}% de sus días (por ejemplo, faltan cortes) o el costo facturado todavía es preliminar. El valor se muestra, pero compararlo daría una variación engañosa. La nota del reporte dice el motivo.</p></details>
+      <details class="faq"><summary>La venta de un día no cuadra con lo que veo en Wansoft.</summary>
+        <p>Revisa si ese día tiene una nota de <em>cortes descartados</em>, y recuerda el día operativo: un corte de madrugada cuenta para el día anterior. Si aun así no cuadra, avisa con la sucursal y la fecha.</p></details>
+      <details class="faq"><summary>¿Por qué el costo dice "estimado"?</summary>
+        <p>Porque Odoo todavía no factura todo el periodo o Wansoft no termina de descontar el inventario. La nota del reporte dice cuánto falta y cómo se estimó. Cuando se complete, el mismo reporte saldrá con el costo real sin la etiqueta.</p></details>
+      <details class="faq"><summary>¿Por qué el consolidado no muestra presupuesto ni costo facturado?</summary>
+        <p>Porque no todas las sucursales lo tienen; mostrarlo parcial daría un porcentaje engañoso. Se ven en el reporte de cada sucursal.</p></details>
+      <details class="faq"><summary>No veo una sucursal o un reporte.</summary>
+        <p>Tu perfil no lo tiene asignado. Un administrador lo agrega en <em>Usuarios</em> (sucursales del perfil) o en <em>Reportes</em> (perfiles que lo ven).</p></details>
+      <details class="faq"><summary>Alguien no recibió un correo.</summary>
+        <p>Revisa que tenga correo en su usuario o que esté en los destinatarios de su sucursal, y el estado del último envío en la lista de automatizaciones (o en <em>Envíos automáticos</em>). Pide que revise también su correo no deseado.</p></details>
+      <details class="faq"><summary>¿Puedo contestar el correo del reporte?</summary>
+        <p>No: la cuenta que envía no se revisa. Las dudas van a {{ contacto }}{% if contacto_correo %} ({{ contacto_correo }}){% endif %}.</p></details>
+      <details class="faq"><summary>El reporte tarda en generarse.</summary>
+        <p>Un consolidado de muchas sucursales o un periodo largo lee mucha información; puede tardar hasta un minuto. Si marca error, intenta de nuevo o con un periodo más corto.</p></details>
+    </section>
+
+    <!-- 15 -->
+    <section id="glosario">
+      <h2>15. Glosario</h2>
+      <table>
+        <tr><th>Término</th><th>Significado</th></tr>
+        <tr><td>Corte de caja</td><td>El cierre de ventas que hace la sucursal en Wansoft; de ahí salen la venta, tickets, clientes y controles del día.</td></tr>
+        <tr><td>Día operativo</td><td>El día al que pertenece un corte (antes de las {{ hora_corte }}:00 cuenta para el día anterior).</td></tr>
+        <tr><td>Cheque promedio</td><td>Venta bruta ÷ clientes.</td></tr>
+        <tr><td>Ticket promedio</td><td>Venta bruta ÷ tickets.</td></tr>
+        <tr><td>Mezcla</td><td>Participación de alimentos y bebidas en la venta.</td></tr>
+        <tr><td>Canal</td><td>Salón, para llevar o plataformas.</td></tr>
+        <tr><td>Consolidado</td><td>Varias sucursales sumadas en un solo reporte.</td></tr>
+        <tr><td>Sucursales comparables</td><td>Las que tienen datos completos en ambos periodos que se comparan.</td></tr>
+        <tr><td>s/c, s/cf</td><td>Sin comparativo; sin comparativo fiable.</td></tr>
+        <tr><td>Costo estimado</td><td>Costo calculado mientras el real está incompleto (ver <a href="#costos">Los costos</a>).</td></tr>
+        <tr><td>Automatización</td><td>Envío programado de un reporte por correo, cada periodo.</td></tr>
+      </table>
+    </section>
+  </main>
+</div>
+</body>
+</html>

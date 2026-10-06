@@ -18,11 +18,15 @@ Report data comes from Odoo and the productive Wansoft MySQL. Executive reports 
 | 4 | Report viewing in the web app | Not started |
 | 5 | Scheduled email delivery (subscriptions + dispatcher) | **In progress**: automation model (`Automatizacion`: one period kind, days after the close + hour, branches, consolidated and/or per branch, format, report options, recipients with "each one only their branch"), send log (`EnvioAutomatico`), permission `gestionar_envios` (Director, Administrador general), schedule logic, the "Automatizaciones" section on each report page (list, create, edit, pause) with separate recipients for the consolidated and the per-branch files, each branch's default recipients (one list for every report, in the admin), an "Enviar por correo" option on the generation screen for one-off e-mails (audited), and the dispatcher `enviar_automatizaciones` (every 15 min via Task Scheduler; one e-mail per recipient with all their files; retries; Microsoft 365 SMTP, or .eml files in dev) done; pending: SMTP credentials in production and the weekly send day |
 | 6 | Analysis with Copilot (paid account) | Deferred to last, feasibility unverified |
-| 7 | Production deployment | Not started |
+| 7 | Production deployment | **In progress**: deploy kit ready (`deploy/update.ps1`, `deploy/windows/`), guide in `docs/PRODUCTION_SETUP.md` (app VM next to Presupuestos AP, port 8040, DB `centraldereportes` on 187.251.203.223, `/central_reportes/` behind Apache) |
 
 Initial reports planned: weekly commercial report for managers (not yet defined), monthly short investor report, monthly Financial & Operational report for partners (PDF), the two weekly purchase-order Excel reports (Bodegón / Empanadas: modifications and by-hour), the weekly Operating Indicators report (Carlos's Power BI table, with traffic-light rules), the monthly profitability-by-delivery-platform report (Uber, Didi, etc.), the payroll incidents report from Buk for the payroll staff (pending: Buk API token and documentation), and more later.
 
 **Rollout:** everything is built and tested locally first (owner's PC, local database). Production comes once a few reports are validated; there it will run a scheduled script that updates the code daily and restarts the app. Users get their own report view and can generate reports by hand. See `docs/DECISIONS.md`.
+
+## Help
+
+In-app user manual at `/ayuda/` (link "Ayuda" in the header and in the admin), in the same style as ControlPresupuestos_AP's; its thresholds are read from the engine's constants.
 
 ## Structure
 

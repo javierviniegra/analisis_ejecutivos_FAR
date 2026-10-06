@@ -24,6 +24,7 @@
 
 {% block userlinks %}
     <a href="{% url 'home' %}">Inicio</a> /
+    <a href="{% url 'ayuda' %}">Ayuda</a> /
     {% if user.has_usable_password %}
     <a href="{% url 'admin:password_change' %}">{% translate 'Change password' %}</a> /
     {% endif %}
