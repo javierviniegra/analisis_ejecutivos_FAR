@@ -145,6 +145,74 @@ class GenerarTests(TestCase):
         self.client.post(self.url, datos)  # unchecked box: not sent
         self.assertEqual(self._generador().call_args.args[5], {"incluir_costos": False})
 
+    def test_enviar_por_correo(self):
+        from django.core import mail
+
+        from .models import EnvioManual
+        otro = User.objects.create_user("o", email="otro@x.com", first_name="Otro")
+        datos = {"sucursales": [self.puebla.pk], "tipo": "semana", "fecha": "2026-09-16", "modo": "por_sucursal",
+                 "formato": "pdf", "incluir_costos": "on", "accion": "correo"}
+        r = self.client.post(self.url, datos)  # nobody chosen
+        self.assertContains(r, "Elige a quién enviarlo")
+        self.assertEqual(mail.outbox, [])
+        r = self.client.post(self.url, {**datos, "destinatarios": [otro.pk], "correos": "externo@y.com, mal correo",
+                                        "mensaje": "Revisa Puebla"})
+        self.assertContains(r, "Correo no válido: mal correo")
+        r = self.client.post(self.url, {**datos, "destinatarios": [otro.pk], "correos": "externo@y.com",
+                                        "mensaje": "Revisa Puebla", "titulo": "Ventas de Puebla"})
+        previa = r["Location"]  # first the preview, nothing sent yet
+        self.assertEqual(mail.outbox, [])
+        r = self.client.get(previa)
+        self.assertContains(r, "otro@x.com, externo@y.com")
+        self.assertContains(r, "Revisa Puebla")
+        self.assertContains(r, "Reporte.pdf")
+        adjunto = self.client.get(previa + "adjunto/0/")
+        self.assertEqual(adjunto["Content-Type"], "application/pdf")
+        self.assertEqual(adjunto["X-Frame-Options"], "SAMEORIGIN")  # the viewer can show it
+        self.assertContains(r, "CENTRAL DE REPORTES -RODIVA- Ventas de Puebla · Semana 38")
+        # someone else cannot see or send it
+        intruso = User.objects.create_user("i")
+        intruso.groups.add(self.gerentes)
+        PerfilUsuario.objects.create(usuario=intruso).sucursales.add(self.puebla)
+        self.client.force_login(intruso)
+        self.assertEqual(self.client.get(previa).status_code, 404)
+        self.assertEqual(self.client.post(previa).status_code, 404)
+        self.client.force_login(self.gerente)
+        r = self.client.post(previa, follow=True)
+        self.assertContains(r, "Enviado por correo a: otro@x.com<br>externo@y.com")
+        self.assertNotContains(r, "Automatizar este envío")  # a Gerente cannot automate
+        self.assertEqual(self.client.get(previa).status_code, 404)  # sent: the preview is gone
+        (m,) = mail.outbox
+        self.assertEqual(m.to, ["otro@x.com", "externo@y.com"])
+        self.assertIn("Revisa Puebla", m.body)
+        self.assertIn("no respondas a esta cuenta", m.body)
+        self.assertIn("Grupo Hospitalario Rodiva te comparte", m.body)  # never the user's name
+        self.assertNotIn(self.gerente.username + " te comparte", m.body)
+        self.assertIn("AVISO DE CONFIDENCIALIDAD", m.body)
+        with self.settings(CORREO_CONTACTO="cgi.inventarios@x.com"):
+            from . import envios
+            from .motor.periodo import Periodo
+            c = envios.correo_manual(self.reporte, Periodo.semana_de(date(2026, 9, 16)), [], ["a@x.com"])
+            self.assertEqual(c.reply_to, ["cgi.inventarios@x.com"])  # replies go to the contact team
+            self.assertIn("el equipo de CGI Inventarios (cgi.inventarios@x.com)", c.body)
+        self.assertEqual([a[0] for a in m.attachments], ["Reporte.pdf"])
+        self.assertEqual(EnvioManual.objects.get().usuario, self.gerente)
+
+    def test_correo_abre_el_zip_en_archivos(self):
+        import io
+        import zipfile
+
+        from django.core import mail
+
+        from .generadores import _zip
+        archivo = _zip([("A.pdf", b"%PDF-a"), ("A.xlsx", b"PK")], "Reportes.zip")
+        self._generador().return_value = archivo
+        r = self.client.post(self.url, {"sucursales": [self.puebla.pk], "tipo": "semana", "fecha": "2026-09-16",
+                                        "modo": "por_sucursal", "formato": "ambos", "accion": "correo",
+                                        "correos": "a@x.com"})
+        self.client.post(r["Location"])
+        self.assertEqual(sorted(a[0] for a in mail.outbox[0].attachments), ["A.pdf", "A.xlsx"])
+
 
 class ZipTests(TestCase):
     def test_zip_con_un_pdf_por_archivo(self):

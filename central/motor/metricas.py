@@ -55,6 +55,7 @@ class Metricas:
     costo_ventas_real_con_ppto: Decimal | None = None
     costo_ventas_ppto_con_real: Decimal | None = None
     n_con_presupuesto: int = 0
+    n_con_costo_ventas: int = 0  # branches with invoiced cost (Presupuestos AP) in the period
     # Real spend still being captured (presupuestos.es_preliminar): shown, not compared.
     costo_preliminar: bool = False
     # Net sales of the branches that have real Costo de Ventas: the base of
@@ -71,6 +72,8 @@ class Metricas:
     venta_dias_odoo: Decimal | None = None
     facturado_odoo: Decimal | None = None
     costo_odoo_sin_leer: bool = False  # Odoo could not be read: Odoo-cost days may be partial
+    # Cash closings left out because another closing of the day matches its tickets: (branch, day, total)
+    cortes_descartados: list = field(default_factory=list)
     # Branches with Wansoft cost: cost of what was sold not yet discounted from
     # inventory (added to the cost while above 0, which makes it an estimate).
     pendiente_wansoft: Decimal | None = None
@@ -202,6 +205,11 @@ def estimar_costo_odoo(costo_periodo: Decimal | None, dias_odoo: list[date], cos
     return CostoOdoo(costo_periodo - costo_odoo + estimado, True, venta, facturado)
 
 
+def _tickets_de(sucursales: list) -> dict[int, str]:
+    return {s.wansoft_subsidiary_id: s.wansoft_ticket_nombre for s in sucursales
+            if s.wansoft_subsidiary_id is not None and s.wansoft_ticket_nombre}
+
+
 def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo, hoy: date | None = None,
                odoo=None, incluir_costos: bool = True) -> list[Metricas]:
     """Read every metric of `periodo` for each branch (`cuentas.Sucursal`),
@@ -213,8 +221,10 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
     preliminar = presupuestos.es_preliminar(h, hoy or date.today())
     # Branches whose cost is not taken into account (cuentas.Sucursal.considerar_costo) get no cost at all.
     con_costo = [s for s in sucursales if incluir_costos and getattr(s, "considerar_costo", True)]
+    descartados = []
     cierres = wansoft.cierres_por_dia(
-        cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None], d, h)
+        cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None], d, h,
+        tickets_de=_tickets_de(sucursales), descartados=descartados)
     nombres = [s.wansoft_ticket_nombre for s in sucursales]
     detalle = wansoft.detalle_por_sucursal(cur_wansoft, nombres, d, h)
     mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h)
@@ -248,6 +258,8 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
         m.tickets_por_dia = {dia: t["tickets"] for dia, t in dias.items()}
         m.clientes_por_dia = {dia: t["clientes"] for dia, t in dias.items()}
         m.dias_con_cierre = len(dias)
+        m.cortes_descartados = [(sucursal.nombre, dia, total) for sid, dia, total in descartados
+                                if sid == sucursal.wansoft_subsidiary_id]
         if sucursal.wansoft_subsidiary_id in costos:
             m.costo_total = costos[sucursal.wansoft_subsidiary_id]
             m.venta_neta_con_costo_total = m.venta_neta
@@ -278,6 +290,7 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             m.costo_ventas_real = real
             if real is not None:
                 m.venta_neta_con_costo = m.venta_neta
+                m.n_con_costo_ventas = 1
             # only where there is something to show (spend recorded, or a budget awaiting it)
             m.costo_preliminar = preliminar and (real is not None or ppto is not None)
             if ppto is not None:  # a budget is shown even before any real spend is recorded
@@ -293,7 +306,7 @@ def recolectar_diario(cur_wansoft, sucursales: list, desde: date, hasta: date) -
     closing only (small table: 24 months for every branch is one fast query).
     Used by the month trend chart."""
     ids = [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None]
-    cierres = wansoft.cierres_por_dia(cur_wansoft, ids, desde, hasta)
+    cierres = wansoft.cierres_por_dia(cur_wansoft, ids, desde, hasta, tickets_de=_tickets_de(sucursales))
     return {s.nombre: {d: t["venta_bruta"] for d, t in cierres.get(s.wansoft_subsidiary_id, {}).items()}
             for s in sucursales}
 
@@ -315,10 +328,12 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
             for dia, v in getattr(m, campo).items():
                 suma[dia] = suma.get(dia, CERO) + v
         total.dias_con_cierre += m.dias_con_cierre
+        total.cortes_descartados += m.cortes_descartados
         total.dias_con_detalle += m.dias_con_detalle
         if m.costo_ventas_real is not None:
             total.costo_ventas_real = (total.costo_ventas_real or CERO) + m.costo_ventas_real
             total.venta_neta_con_costo = (total.venta_neta_con_costo or CERO) + (m.venta_neta_con_costo or CERO)
+            total.n_con_costo_ventas += m.n_con_costo_ventas
         if m.costo_total is not None:
             total.costo_total = (total.costo_total or CERO) + m.costo_total
             total.venta_neta_con_costo_total = (total.venta_neta_con_costo_total or CERO) + (m.venta_neta_con_costo_total or CERO)
@@ -381,3 +396,14 @@ def sin_presupuesto(m: Metricas | None) -> None:
         return
     m.costo_ventas_ppto = m.costo_ventas_real_con_ppto = m.costo_ventas_ppto_con_real = None
     m.n_con_presupuesto = 0
+
+
+def sin_costo_facturado(m: Metricas | None) -> None:
+    """Drop the invoiced cost (Presupuestos AP) from a metrics object (the
+    consolidated report shows it only when every branch has it)."""
+    if m is None:
+        return
+    m.costo_ventas_real = m.venta_neta_con_costo = None
+    m.costo_ventas_real_con_ppto = None
+    m.costo_preliminar = False
+    m.n_con_costo_ventas = 0

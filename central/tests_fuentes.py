@@ -1,5 +1,6 @@
 from datetime import datetime, date
 from decimal import Decimal
+from decimal import Decimal as D
 
 from django.test import SimpleTestCase
 
@@ -97,3 +98,44 @@ class ConsultasEnLoteTests(SimpleTestCase):
         r = w.mix_alimentos_bebidas(cur, ["PUEBLA"], date(2026, 7, 15), date(2026, 9, 10))
         self.assertEqual(llamadas, [("2026-07-15", "2026-08-01"), ("2026-08-01", "2026-09-01"), ("2026-09-01", "2026-09-11")])
         self.assertEqual(r, {"PUEBLA": {"Alimentos": Decimal("30")}})  # 3 months added, "Otro" ignored
+
+
+class VariosCortesTests(SimpleTestCase):
+    """Owner, 2026-10-06: Puebla 28-Sep had a $48,780 closing (its 12 tickets)
+    and a stray $6,063 one; only the one matching the tickets counts."""
+
+    def _fila(self, sid, dia, total):
+        return (sid, dia, D(total), D(total) / D("1.16"), 1, 1, 1, 0, 0, 0, 0)
+
+    def test_se_queda_el_corte_que_coincide_con_los_tickets(self):
+        from datetime import date as d_
+        dia = d_(2026, 9, 28)
+        cur = _CursorVarios([
+            [self._fila(1, dia, "48780"), self._fila(1, dia, "6063"), self._fila(2, dia, "1000"), self._fila(2, dia, "500")],
+            [("Puebla", dia, 48780.0), ("Napoles", dia, 1234.0)],  # Napoles: no closing matches -> both added
+        ])
+        descartados = []
+        r = w.cierres_por_dia(cur, [1, 2], dia, dia, tickets_de={1: "Puebla", 2: "Napoles"}, descartados=descartados)
+        self.assertEqual(r[1][dia]["venta_bruta"], D("48780"))
+        self.assertEqual(r[2][dia]["venta_bruta"], D("1500"))
+        self.assertEqual(descartados, [(1, dia, D("6063"))])
+
+    def test_un_solo_corte_no_consulta_tickets(self):
+        from datetime import date as d_
+        dia = d_(2026, 9, 28)
+        cur = _CursorVarios([[self._fila(1, dia, "48780")]])
+        self.assertEqual(w.cierres_por_dia(cur, [1], dia, dia, tickets_de={1: "Puebla"})[1][dia]["venta_bruta"],
+                         D("48780"))
+        self.assertEqual(cur.consultas, 1)
+
+
+class _CursorVarios:
+    def __init__(self, resultados):
+        self.resultados, self.consultas = list(resultados), 0
+
+    def execute(self, sql, params=()):
+        self.consultas += 1
+        self.actual = self.resultados.pop(0)
+
+    def fetchall(self):
+        return self.actual

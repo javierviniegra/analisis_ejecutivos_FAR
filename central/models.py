@@ -154,6 +154,10 @@ class Automatizacion(models.Model):
     reporte = models.ForeignKey(Reporte, on_delete=models.CASCADE, related_name="automatizaciones")
     nombre = models.CharField(max_length=120)
     activa = models.BooleanField(default=True)
+    titulo = models.CharField(
+        "título en el correo", max_length=150, blank=True,
+        help_text="Cómo se llama el reporte en el asunto y el texto del correo (vacío: el nombre del reporte). "
+                  "El periodo se agrega solo.")
     tipo = models.CharField("frecuencia", max_length=12, choices=Tipo.choices, default=Tipo.SEMANA)
     dias_despues = models.PositiveSmallIntegerField(
         "días después del cierre", default=1,
@@ -258,3 +262,30 @@ class EnvioAutomatico(models.Model):
 
     def __str__(self):
         return f"{self.automatizacion} · {self.desde:%d/%m/%Y} · {self.get_estado_display()}"
+
+
+class EnvioManual(models.Model):
+    """A report sent by e-mail from the generation screen ("Enviar por correo"):
+    who sent what, for which period and to whom (audit)."""
+
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    reporte = models.ForeignKey(Reporte, on_delete=models.CASCADE, related_name="envios_manuales")
+    periodo = models.CharField(max_length=120)
+    desde = models.DateField()
+    hasta = models.DateField()
+    destinatarios = models.TextField()
+    archivos = models.TextField(blank=True)
+    mensaje = models.TextField(blank=True)
+    # What was chosen (period kind, branches, consolidated / per branch, format,
+    # options, users, e-mails): "Automatizar este envío" pre-fills from it.
+    parametros = models.JSONField(default=dict, blank=True)
+    enviado_en = models.DateTimeField(auto_now_add=True)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-enviado_en"]
+        verbose_name = "envío manual"
+        verbose_name_plural = "envíos manuales"
+
+    def __str__(self):
+        return f"{self.reporte} · {self.periodo} · {self.enviado_en:%d/%m/%Y %H:%M}"

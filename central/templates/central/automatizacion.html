@@ -5,6 +5,7 @@
 
 <p><a href="{% url 'reporte_detalle' reporte.clave %}" class="muted">&larr; {{ reporte.nombre }}</a></p>
 <h1>{% if instancia %}Editar automatización{% else %}Nueva automatización{% endif %}</h1>
+{% if origen %}<p class="muted" style="margin-top:-8px">A partir del correo enviado el {{ origen.enviado_en|date:"d/m/Y H:i" }} ({{ origen.periodo }}): elige cada cuándo se manda y revisa lo demás.</p>{% endif %}
 
 <form method="post" class="card" id="automatizacion">
   {% csrf_token %}
@@ -17,13 +18,19 @@
   </div>
 
   <div class="campo">
+    <label for="{{ form.titulo.id_for_label }}">Título del reporte en el correo</label>
+    {{ form.titulo }}
+    <p class="ayuda">Vacío: «{{ reporte.nombre }}». El periodo se agrega solo (p. ej. «… · Semana 41 · 5 – 11 oct 2026»).</p>
+  </div>
+
+  <div class="campo">
     <label>Cuándo</label>
     <div class="fila">
       <div><label for="{{ form.tipo.id_for_label }}">Frecuencia</label>{{ form.tipo }}</div>
-      <div><label for="{{ form.dias_despues.id_for_label }}">Días después del cierre</label>{{ form.dias_despues }}</div>
+      <div><label for="{{ form.dias_despues.id_for_label }}" id="etiqueta-dia">Día de envío</label>{{ form.dias_despues }}</div>
       <div><label for="{{ form.hora.id_for_label }}">Hora</label>{{ form.hora }}</div>
     </div>
-    <p class="ayuda">Manda siempre el último periodo cerrado. 1 = el día siguiente al cierre (lunes para una semana, día 1 para un mes); 2 en una semana = martes.</p>
+    <p class="exito" id="resumen-envio" style="margin:12px 0 0"></p>
     {{ form.dias_despues.errors }}{{ form.hora.errors }}
   </div>
 
@@ -78,6 +85,37 @@
 </form>
 
 <script>
+  // "When", in words: which period goes out and on which day (the value stored
+  // is the number of days after the close; here it reads as a weekday or a day of the month).
+  (function () {
+    var tipo = document.getElementById("{{ form.tipo.id_for_label }}");
+    var dia = document.getElementById("{{ form.dias_despues.id_for_label }}");
+    var hora = document.getElementById("{{ form.hora.id_for_label }}");
+    var resumen = document.getElementById("resumen-envio"), etiqueta = document.getElementById("etiqueta-dia");
+    var DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+    var PERIODO = {semana: "la última semana cerrada (lunes a domingo)", mes: "el mes anterior",
+                   bimestre: "el último bimestre cerrado", trimestre: "el último trimestre cerrado",
+                   semestre: "el último semestre cerrado", anio: "el año anterior"};
+    var CADA = {semana: "cada", mes: "cada mes, el día", bimestre: "al cerrar cada bimestre, el día",
+                trimestre: "al cerrar cada trimestre, el día", semestre: "al cerrar cada semestre, el día",
+                anio: "cada año, el día"};
+    function actualizar() {
+      var semanal = tipo.value === "semana", elegido = parseInt(dia.value || "1", 10);
+      Array.prototype.forEach.call(dia.options, function (o) {
+        var n = parseInt(o.value, 10);
+        o.hidden = semanal && n > 7;
+        o.textContent = semanal ? (n <= 7 ? DIAS[n - 1] : n) : n;
+      });
+      if (semanal && elegido > 7) { dia.value = "2"; elegido = 2; }
+      etiqueta.textContent = semanal ? "Día de la semana" : "Día del mes siguiente";
+      var cuando = semanal ? "cada " + DIAS[elegido - 1] : CADA[tipo.value] + " " + elegido +
+        (tipo.value === "mes" ? "" : " después del cierre");
+      resumen.textContent = "Se envía " + PERIODO[tipo.value] + ", " + cuando + " a las " + (hora.value || "--:--") + ".";
+    }
+    [tipo, dia, hora].forEach(function (c) { c.addEventListener("change", actualizar); c.addEventListener("input", actualizar); });
+    actualizar();
+  })();
+
   (function () {
     var todas = document.getElementById("{{ form.todas_las_sucursales.id_for_label }}");
     var lista = document.getElementById("lista-sucursales");

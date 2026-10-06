@@ -26,6 +26,8 @@ log = logging.getLogger(__name__)
 
 # Budget rows of the indicators table (left out of a consolidated report without a complete budget).
 FILAS_PRESUPUESTO = {"costo_ventas_ppto", "costo_ventas_ejercido"}
+# Invoiced cost rows (left out of a consolidated report unless every branch has invoices).
+FILAS_COSTO_FACTURADO = {"costo_ventas_real", "costo_ventas_pct"}
 
 
 @dataclass
@@ -105,15 +107,19 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
         comp_anio = metricas.comparables(nombres, ma, my, periodo, anio_ant)
         # Owner, 2026-10-05: the budget is shown in the consolidated only when every
         # branch has one; a partial budget would stain the whole report.
-        # Each period on its own: a period with a budget for only some of its branches loses it.
-        presupuesto_incompleto = False
+        # Each period on its own: a period with a budget / invoiced cost for only
+        # some of its branches loses it (the invoiced cost: owner, same day).
+        presupuesto_incompleto = facturado_incompleto = False
         for m in (actual, comp_ant.actual, comp_ant.base, comp_anio.actual, comp_anio.base):
             if m is not None and 0 < m.n_con_presupuesto < m.n_sucursales:
                 metricas.sin_presupuesto(m)
                 presupuesto_incompleto = True
+            if m is not None and 0 < m.n_con_costo_ventas < m.n_sucursales:
+                metricas.sin_costo_facturado(m)
+                facturado_incompleto = True
         r = _uno("Consolidado", nombres, periodo, actual, comp_ant, comp_anio, diario, incluir_costos)
-        if actual.costo_ventas_ppto is None:  # no budget rows at all rather than a column of dashes
-            r.filas = [f for f in r.filas if f.indicador.clave not in FILAS_PRESUPUESTO]
+        fuera = (FILAS_PRESUPUESTO if actual.costo_ventas_ppto is None else set()) |             (FILAS_COSTO_FACTURADO if actual.costo_ventas_real is None else set())
+        r.filas = [f for f in r.filas if f.indicador.clave not in fuera]  # no rows of dashes
         r.por_sucursal = [(n, ma[i], mp[i]) for i, n in enumerate(nombres)]
         sin_considerar = [s.nombre for s in sucursales if not getattr(s, "considerar_costo", True)]
         if incluir_costos and sin_considerar:
@@ -122,6 +128,9 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
         if incluir_costos and presupuesto_incompleto:
             r.cobertura.append("El presupuesto de Costo de Ventas no se muestra en el consolidado: no todas las "
                                "sucursales lo tienen capturado (se ve en el reporte de cada sucursal).")
+        if incluir_costos and facturado_incompleto:
+            r.cobertura.append("El costo facturado (Presupuestos AP) no se muestra en el consolidado: no todas las "
+                               "sucursales tienen facturas registradas (se ve en el reporte de cada sucursal).")
         sin_costo = [n for (n, m, _), s in zip(r.por_sucursal, sucursales)
                      if m.costo_total is None and m.dias_con_cierre and getattr(s, "considerar_costo", True)]
         if incluir_costos and sin_costo and periodo.tipo != TipoPeriodo.RANGO:

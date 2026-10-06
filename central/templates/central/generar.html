@@ -12,6 +12,9 @@
 <form method="post" class="card" id="generar">
   {% csrf_token %}
   {% if error %}<div class="errores">{{ error }}</div>{% endif %}
+  {% if envio %}<div class="exito">Enviado por correo a: {{ envio.destinatarios|linebreaksbr }}
+    {% if automatiza %}<br><a class="btn" style="margin-top:8px;display:inline-block" href="{% url 'automatizacion_nueva' reporte.clave %}?desde_envio={{ envio.pk }}">Automatizar este envío</a>
+    <span class="muted">— mismo reporte y mismos destinatarios; solo eliges cada cuándo.</span>{% endif %}</div>{% endif %}
   {% if form.non_field_errors %}<div class="errores">{{ form.non_field_errors|join:" " }}</div>{% endif %}
 
   <fieldset class="campo">
@@ -62,8 +65,24 @@
     {{ form.entrega.errors }}
   </fieldset>
 
-  <button class="btn" id="enviar" {% if not form.fields.sucursales.queryset %}disabled{% endif %}>Generar</button>
+  <button class="btn" id="enviar" name="accion" value="descargar" {% if not form.fields.sucursales.queryset %}disabled{% endif %}>Generar</button>
+  <button type="button" class="btn secundario" id="abrir-correo" {% if not form.fields.sucursales.queryset %}disabled{% endif %}>Enviar por correo…</button>
   <span class="muted aviso" id="aviso">Generando… puede tardar hasta un minuto con muchas sucursales o periodos largos.</span>
+
+  <fieldset class="campo correo" id="correo" style="{% if not abrir_correo %}display:none{% endif %}">
+    <legend>Enviar por correo</legend>
+    <p class="ayuda" style="margin:0 0 8px">Se genera el mismo reporte que eliges arriba; antes de enviarlo ves la vista previa del correo. Va en un solo correo a nombre de la organización; las dudas se dirigen al equipo de contacto.</p>
+    <div class="sucursales">{{ form.destinatarios }}</div>
+    {{ form.destinatarios.errors }}
+    <p class="ayuda" style="margin-top:10px">Otros correos, uno por renglón:</p>
+    {{ form.correos }}
+    {{ form.correos.errors }}
+    <p class="ayuda" style="margin-top:10px">Título del reporte en el correo (opcional; el periodo se agrega solo):</p>
+    {{ form.titulo }}
+    <p class="ayuda" style="margin-top:10px">Mensaje (opcional):</p>
+    {{ form.mensaje }}
+    <p style="margin:12px 0 0"><button class="btn" name="accion" value="correo">Vista previa</button></p>
+  </fieldset>
 </form>
 
 <script>
@@ -97,6 +116,11 @@
 
     // The answer is a file download, so the page stays: show that it is working
     // and re-enable the button after a while so another report can be generated.
+    document.getElementById("abrir-correo").onclick = function () {
+      var caja = document.getElementById("correo");
+      caja.style.display = caja.style.display === "none" ? "" : "none";
+    };
+
     document.getElementById("generar").addEventListener("submit", function () {
       var boton = document.getElementById("enviar"), aviso = document.getElementById("aviso");
       setTimeout(function () { boton.disabled = true; }, 0);

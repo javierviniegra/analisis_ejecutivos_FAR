@@ -72,25 +72,42 @@ def _marcadores(valores) -> str:
     return ", ".join(["%s"] * len(valores))
 
 
-def cierres_por_dia(cur, subsidiary_ids: list[int], desde: date, hasta: date) -> dict[int, dict[date, dict]]:
+CLAVES_CIERRE = ("venta_bruta", "venta_neta", "tickets", "clientes", "mesas", "cortesias", "cancelaciones",
+                 "anulaciones", "descuentos")
+TOLERANCIA_TICKETS = Decimal("1")  # pesos: a closing "matches" the day's tickets within this
+
+
+def cierres_por_dia(cur, subsidiary_ids: list[int], desde: date, hasta: date,
+                    tickets_de: dict[int, str] | None = None,
+                    descartados: list | None = None) -> dict[int, dict[date, dict]]:
     """Daily totals from the cash closing, per branch and operating day,
     deduplicated: {subsidiary_id: {day: totals}}.
 
     Amounts are as recorded by the POS: `venta_bruta` includes IVA,
     `venta_neta` does not; cortesias / cancelaciones / anulaciones /
     descuentos are valued at sale price (not ingredient cost).
+
+    **Several closings in one day (owner, 2026-10-06).** When a branch has
+    more than one distinct closing for a day and exactly the sum of that day's
+    tickets equals ONE of them, only that one counts; the others are partial
+    or spurious (an afternoon closing repeated by the cumulative night one,
+    a stray one-order closing after midnight, the 1-Oct morning re-closing of
+    the October wave) -- 13 days in 2026, every one matching one closing to
+    the peso. Without a match, or without ticket detail, all are added as
+    before (two real shifts match their sum). `tickets_de` maps
+    subsidiary_id -> ticket `Sucursal` name; each discarded closing is
+    appended to `descartados` as (subsidiary_id, day, total_ventas).
     """
     if not subsidiary_ids:
         return {}
     inicio, fin = _limites_cierre(desde, hasta)
     cur.execute(
         f"""
-        SELECT subsidiary_id, dia,
-               SUM(total_ventas), SUM(subtotal), SUM(no_ordenes), SUM(total_personas), SUM(total_mesas_atendidas),
-               SUM(cortesias_en_cuentas + cortesias_en_platillos),
-               SUM(cancelaciones_en_cuentas + cancelaciones_en_platillos),
-               SUM(anulaciones_en_cuentas + anulaciones_en_platillos),
-               SUM(descuentos_en_cuentas + descuentos_en_platillos)
+        SELECT subsidiary_id, dia, total_ventas, subtotal, no_ordenes, total_personas, total_mesas_atendidas,
+               cortesias_en_cuentas + cortesias_en_platillos,
+               cancelaciones_en_cuentas + cancelaciones_en_platillos,
+               anulaciones_en_cuentas + anulaciones_en_platillos,
+               descuentos_en_cuentas + descuentos_en_platillos
         FROM (
             SELECT g.*, DATE(fecha_corte - INTERVAL %s HOUR) AS dia,
                    ROW_NUMBER() OVER (
@@ -101,15 +118,43 @@ def cierres_por_dia(cur, subsidiary_ids: list[int], desde: date, hasta: date) ->
             WHERE subsidiary_id IN ({_marcadores(subsidiary_ids)}) AND fecha_corte >= %s AND fecha_corte < %s
         ) x
         WHERE rn = 1
-        GROUP BY subsidiary_id, dia
         """,
         (HORA_CORTE_DIA, HORA_CORTE_DIA, *subsidiary_ids, inicio, fin),
     )
-    claves = ("venta_bruta", "venta_neta", "tickets", "clientes", "mesas", "cortesias", "cancelaciones", "anulaciones", "descuentos")
-    resultado: dict[int, dict[date, dict]] = {}
+    cortes: dict[tuple[int, date], list[dict]] = {}
     for fila in cur.fetchall():
-        resultado.setdefault(fila[0], {})[fila[1]] = dict(zip(claves, (Decimal(v or 0) for v in fila[2:])))
+        cortes.setdefault((fila[0], fila[1]), []).append(
+            dict(zip(CLAVES_CIERRE, (Decimal(v or 0) for v in fila[2:]))))
+
+    varios = [k for k, lista in cortes.items() if len(lista) > 1 and tickets_de and k[0] in tickets_de]
+    if varios:
+        tickets = _tickets_por_dia(cur, {tickets_de[sid] for sid, _ in varios},
+                                   min(d for _, d in varios), max(d for _, d in varios))
+        for sid, dia in varios:
+            total = tickets.get((tickets_de[sid], dia))
+            if total is None:
+                continue
+            iguales = [c for c in cortes[(sid, dia)] if abs(c["venta_bruta"] - total) <= TOLERANCIA_TICKETS]
+            if len(iguales) == 1:
+                if descartados is not None:
+                    descartados += [(sid, dia, c["venta_bruta"]) for c in cortes[(sid, dia)] if c is not iguales[0]]
+                cortes[(sid, dia)] = iguales
+
+    resultado: dict[int, dict[date, dict]] = {}
+    for (sid, dia), lista in cortes.items():
+        resultado.setdefault(sid, {})[dia] = {k: sum((c[k] for c in lista), Decimal("0")) for k in CLAVES_CIERRE}
     return resultado
+
+
+def _tickets_por_dia(cur, nombres: set[str], desde: date, hasta: date) -> dict[tuple[str, date], Decimal]:
+    """Sum of the tickets (gross, as `total_ventas`) per branch name and day."""
+    nombres = sorted(nombres)
+    cur.execute(
+        f"SELECT Sucursal, DATE(Fecha), SUM(Total) FROM getallordenesbyday_new_venta "
+        f"WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s GROUP BY Sucursal, DATE(Fecha)",
+        (*nombres, datetime.combine(desde, time.min), datetime.combine(hasta + timedelta(days=1), time.min)),
+    )
+    return {(n, d): Decimal(str(t)) for n, d, t in cur.fetchall() if t is not None}
 
 
 def _rango_fecha_texto(desde: date, hasta: date) -> tuple[str, str]:

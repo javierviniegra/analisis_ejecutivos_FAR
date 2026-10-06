@@ -143,6 +143,7 @@ class ConsiderarCostoYPresupuestoTests(SimpleTestCase):
                     m.costo_total, m.venta_neta_con_costo_total = D(385), D(1000)
                 if s.nombre == "Acoxpa":
                     m.costo_ventas_ppto, m.n_con_presupuesto = D(400), 1
+                    m.costo_ventas_real, m.venta_neta_con_costo, m.n_con_costo_ventas = D(390), D(1000), 1
                 salida.append(m)
             return salida
 
@@ -166,6 +167,9 @@ class ConsiderarCostoYPresupuestoTests(SimpleTestCase):
         self.assertTrue(any("presupuesto de Costo de Ventas no se muestra" in n for n in r.cobertura))
         self.assertIsNone(r.actual.costo_ventas_ppto)
         self.assertIsNone(r.anterior.base.costo_ventas_ppto)  # the comparison periods too
-        self.assertFalse([f for f in r.filas if f.indicador.clave == "costo_ventas_ppto"])
+        self.assertFalse([f for f in r.filas if f.indicador.clave in ("costo_ventas_ppto", "costo_ventas_real")])
+        self.assertIsNone(r.actual.pct_costo_ventas)
+        self.assertTrue(any(n.startswith("El costo facturado (Presupuestos AP) no se muestra") for n in r.cobertura))
+        self.assertEqual(r.lectura.observaciones[-1].texto.count("facturado"), 0)
         self.assertEqual(r.actual.pct_costo_total, D("0.385"))  # Acoxpa only: Metepec's sales out of the base
         self.assertFalse(any("sin dato" in n for n in r.cobertura))  # Metepec is not "missing", it is excluded

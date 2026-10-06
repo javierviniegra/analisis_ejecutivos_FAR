@@ -138,11 +138,40 @@ SESSION_COOKIE_SECURE = _SECURE
 CSRF_COOKIE_SECURE = _SECURE
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 
-# Email (report delivery lands in a later phase; console backend until then).
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-
 LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
+
+# Email (automations, Phase 5). CORREO_MODO chooses how mail leaves:
+#   "archivo" (default in dev): each e-mail saved as an .eml file under
+#             logs/correos/ to open in Outlook -- nothing is sent;
+#   "smtp"    (default in prod): Microsoft 365 with the account in config/.env;
+#   "consola": printed (debugging).
+# (An empty value in .env means the default, like a missing one.)
+CORREO_MODO = (os.getenv("CORREO_MODO") or ("archivo" if ENV == "dev" else "smtp")).lower()
+EMAIL_BACKEND = {
+    "archivo": "central.correo.EmlBackend",
+    "smtp": "django.core.mail.backends.smtp.EmailBackend",
+    "consola": "django.core.mail.backends.console.EmailBackend",
+}[CORREO_MODO]
+EMAIL_FILE_PATH = LOGS_DIR / "correos"
+EMAIL_HOST = os.getenv("EMAIL_HOST") or "smtp.office365.com"
+EMAIL_PORT = int(os.getenv("EMAIL_PORT") or "587")
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+_FROM = (os.getenv("EMAIL_FROM") or "").strip()
+if _FROM and "@" not in _FROM and EMAIL_HOST_USER:
+    # only a name was given ("Grupo Hospitalario Rodiva"): send as that name with the account's address
+    _FROM = f'"{_FROM.replace(chr(34), "")}" <{EMAIL_HOST_USER}>'
+DEFAULT_FROM_EMAIL = _FROM or EMAIL_HOST_USER or "central-reportes@localhost"
+EMAIL_TIMEOUT = 60
+# Shown in every e-mail (owner, 2026-10-06): who sends it, and whom to write to
+# with questions (the sending mailbox is not read). Replies go to the contact.
+CORREO_REMITENTE = os.getenv("CORREO_REMITENTE") or "Grupo Hospitalario Rodiva"
+CORREO_CONTACTO_NOMBRE = os.getenv("CORREO_CONTACTO_NOMBRE") or "el equipo de CGI Inventarios"
+CORREO_CONTACTO = os.getenv("CORREO_CONTACTO", "")
+# Every subject starts with this (owner, 2026-10-06).
+CORREO_PREFIJO_ASUNTO = os.getenv("CORREO_PREFIJO_ASUNTO") or "CENTRAL DE REPORTES -RODIVA-"  # e-mail of that team (blank: named without address)
 
 LOGGING = {
     "version": 1,

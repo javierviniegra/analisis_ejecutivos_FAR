@@ -167,3 +167,19 @@ class AutomatizacionWebTests(TestCase):
         self.puebla.correos_reporte = "gerente.puebla@x.com"
         self.assertEqual(self.puebla.correos, ["gerente.puebla@x.com"])
         self.assertTrue(self.puebla.tiene_destinatarios)
+
+    def test_automatizar_un_correo_enviado(self):
+        from .models import EnvioManual
+        envio = EnvioManual.objects.create(
+            usuario=self.director, reporte=self.reporte, periodo="Semana 40", desde=date(2026, 9, 28),
+            hasta=date(2026, 10, 4), destinatarios="d@x.com\nexterno@y.com",
+            parametros={"tipo": "mes", "sucursales": [self.puebla.pk], "modo": "por_sucursal", "formato": "pdf",
+                        "opciones": {"incluir_costos": False}, "usuarios": [self.director.pk],
+                        "correos": ["externo@y.com"]})
+        self.client.force_login(self.director)
+        r = self.client.get(self.nueva + f"?desde_envio={envio.pk}")
+        self.assertContains(r, "A partir del correo enviado")
+        inicial = r.context["form"].initial
+        self.assertEqual((inicial["tipo"], inicial["sucursales"], inicial["particulares_destinatarios"],
+                          inicial["particulares_correos"], inicial["incluir_costos"], inicial["particulares_a_sucursal"]),
+                         ("mes", [self.puebla.pk], [self.director.pk], "externo@y.com", False, False))

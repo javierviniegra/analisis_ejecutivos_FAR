@@ -35,6 +35,7 @@ def _zip(archivos: list[tuple[str, bytes]], nombre: str) -> Archivo:
 
 
 PDF, EXCEL = "pdf", "excel"
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 # Options a report admits beyond branches / period / format, with their default.
 INCLUIR_COSTOS = "incluir_costos"
@@ -47,26 +48,26 @@ def opciones_de(clave: str) -> dict[str, bool]:
     return dict(OPCIONES.get(clave, {}))
 
 
+def _archivos_comercial(grupo: list, formatos: set[str]) -> list[tuple[str, bytes, str]]:
+    archivos = []
+    if PDF in formatos:
+        archivos.append((pdf_comercial.nombre_archivo(grupo), pdf_comercial.generar(grupo), "application/pdf"))
+    if EXCEL in formatos:
+        archivos.append((excel_comercial.nombre_archivo(grupo), excel_comercial.generar(grupo), XLSX))
+    return archivos
+
+
 def _comercial(sucursales: list, periodo: Periodo, consolidado: bool, separados: bool, formatos: set[str],
                opciones: dict | None = None) -> Archivo:
     incluir_costos = (opciones or {}).get(INCLUIR_COSTOS, True)
     reportes = reporte_comercial.armar(sucursales, periodo, consolidado, incluir_costos)
     grupos = [[r] for r in reportes] if separados else [reportes]  # one file per branch, or all together
-    archivos = []
-    for grupo in grupos:
-        if PDF in formatos:
-            archivos.append((pdf_comercial.nombre_archivo(grupo), pdf_comercial.generar(grupo), "application/pdf"))
-        if EXCEL in formatos:
-            archivos.append((excel_comercial.nombre_archivo(grupo), excel_comercial.generar(grupo),
-                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+    archivos = [a for grupo in grupos for a in _archivos_comercial(grupo, formatos)]
     if len(archivos) == 1:
         nombre, contenido, tipo = archivos[0]
         return Archivo(contenido, nombre, tipo)
     # several files (one per branch and/or PDF + Excel): downloaded together in a .zip
     return _zip([(n, c) for n, c, _ in archivos], reporte_comercial.nombre_base(reportes) + ".zip")
-
-
-XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _cedis(tipo: str, construir):
@@ -89,3 +90,33 @@ GENERADORES: dict[str, Callable[..., Archivo]] = {
 
 def tiene_generador(clave: str) -> bool:
     return clave in GENERADORES
+
+
+# -- automations: the files of one send, grouped by who they are about --------
+@dataclass(frozen=True)
+class GrupoArchivos:
+    sucursal: object | None  # cuentas.Sucursal of a per-branch report; None = consolidated
+    archivos: list[tuple[str, bytes, str]]  # (file name, content, MIME type), attached as they are
+
+
+def _grupos_comercial(sucursales, periodo, consolidado, formatos, opciones) -> list[GrupoArchivos]:
+    incluir_costos = (opciones or {}).get(INCLUIR_COSTOS, True)
+    reportes = reporte_comercial.armar(sucursales, periodo, consolidado, incluir_costos)
+    if consolidado:
+        return [GrupoArchivos(None, _archivos_comercial(reportes, formatos))]
+    return [GrupoArchivos(s, _archivos_comercial([r], formatos)) for s, r in zip(sucursales, reportes)]
+
+
+def _grupos_cedis(tipo, construir):
+    def grupos(sucursales, periodo, consolidado, formatos, opciones) -> list[GrupoArchivos]:
+        datos = reporte_cedis.leer(sucursales, periodo.desde, periodo.hasta)
+        return [GrupoArchivos(None, [(excel_cedis.nombre_archivo(tipo, datos), construir(datos), XLSX)])]
+    return grupos
+
+
+# (branches, period, consolidated, formats, options) -> files per branch / consolidated
+GRUPOS: dict[str, Callable[..., list[GrupoArchivos]]] = {
+    "comercial-semanal-gerentes": _grupos_comercial,
+    "oc-bodegon-empanadas-modificaciones": _grupos_cedis("modificaciones", excel_cedis.modificaciones),
+    "oc-bodegon-empanadas-por-hora": _grupos_cedis("por_hora", excel_cedis.por_hora),
+}

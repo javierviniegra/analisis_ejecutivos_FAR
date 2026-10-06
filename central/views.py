@@ -5,14 +5,17 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.http import require_POST
 
 from cuentas.models import Sucursal, puede_automatizar, puede_generar, sucursales_de
 
+from . import envios, previas
 from .forms import CONSOLIDADO, AutomatizacionForm, GenerarForm
 from .generadores import GENERADORES, opciones_de, tiene_generador
-from .models import Automatizacion, Reporte
+from .models import Automatizacion, EnvioManual, Reporte
 from .motor.fuentes import conexiones
 from .motor.periodo import TipoPeriodo
 from .motor.programacion import proximo_envio
@@ -82,7 +85,11 @@ def automatizacion(request, clave, pk=None):
     reporte = _automatizable(request, clave)
     instancia = get_object_or_404(Automatizacion, pk=pk, reporte=reporte) if pk else None
     usuarios = get_user_model().objects.filter(is_active=True).order_by("first_name", "username")
-    form = AutomatizacionForm(request.POST or None, instance=instancia, reporte=reporte,
+    inicial, origen = {}, None
+    if instancia is None and request.GET.get("desde_envio", "").isdigit():
+        origen = EnvioManual.objects.filter(pk=request.GET["desde_envio"], reporte=reporte).first()
+        inicial = desde_envio(origen) if origen else {}
+    form = AutomatizacionForm(request.POST or None, instance=instancia, reporte=reporte, initial=inicial,
                               sucursales=Sucursal.objects.filter(activa=True), usuarios=usuarios,
                               opciones=opciones_de(clave))
     if request.method == "POST" and form.is_valid():
@@ -92,7 +99,32 @@ def automatizacion(request, clave, pk=None):
         nueva.save()
         form.save_m2m()
         return redirect("reporte_detalle", clave=clave)
-    return render(request, "central/automatizacion.html", {"reporte": reporte, "form": form, "instancia": instancia})
+    return render(request, "central/automatizacion.html", {"reporte": reporte, "form": form, "instancia": instancia,
+                                                           "origen": origen})
+
+
+def desde_envio(envio: EnvioManual) -> dict:
+    """Initial values of an automation that repeats a one-off e-mail: same
+    branches, presentation, format, options, and the same people receiving
+    every file (so per-branch files go to them, not to each branch's list).
+    The user only picks how often and when."""
+    p = envio.parametros or {}
+    consolidado = p.get("modo") == "consolidado"
+    correos = "\n".join(p.get("correos", []))
+    tipo = p.get("tipo") if p.get("tipo") in Automatizacion.Tipo.values else Automatizacion.Tipo.SEMANA
+    inicial = {"nombre": f"{envio.reporte.nombre} · {Automatizacion.Tipo(tipo).label.lower()}", "tipo": tipo,
+               "titulo": p.get("titulo", ""),
+               "todas_las_sucursales": False, "sucursales": p.get("sucursales", []),
+               "enviar_consolidado": consolidado, "enviar_particulares": not consolidado,
+               "formato": p.get("formato") or Automatizacion.Formato.PDF, "particulares_a_sucursal": False,
+               "particulares_solo_sus_sucursales": False}
+    if consolidado:
+        inicial.update(consolidado_destinatarios=p.get("usuarios", []), consolidado_correos=correos)
+    else:
+        inicial.update(particulares_destinatarios=p.get("usuarios", []), particulares_correos=correos)
+    for nombre, valor in (p.get("opciones") or {}).items():
+        inicial[nombre] = valor
+    return inicial
 
 
 @login_required
@@ -116,8 +148,11 @@ def generar(request, clave):
     if not puede_generar(request.user):
         raise PermissionDenied
     sucursales = sucursales_de(request.user).filter(wansoft_subsidiary_id__isnull=False)
-    form = GenerarForm(request.POST or None, reporte=reporte, sucursales=sucursales, opciones=opciones_de(clave))
+    usuarios = get_user_model().objects.filter(is_active=True).exclude(email="").order_by("first_name", "username")
+    form = GenerarForm(request.POST or None, reporte=reporte, sucursales=sucursales, opciones=opciones_de(clave),
+                       usuarios=usuarios)
     error = None
+    por_correo = request.POST.get("accion") == "correo"
     if request.method == "POST" and form.is_valid():
         datos = form.cleaned_data
         try:
@@ -128,8 +163,72 @@ def generar(request, clave):
             log.exception("Report generation failed: %s", clave)
             error = "No se pudo generar el reporte (fuente de datos no disponible o consulta demasiado larga). Intenta de nuevo o con un periodo más corto."
         else:
-            respuesta = HttpResponse(archivo.contenido, content_type=archivo.tipo)
-            respuesta["Content-Disposition"] = f'attachment; filename="{archivo.nombre}"'
-            return respuesta
+            if not por_correo:
+                respuesta = HttpResponse(archivo.contenido, content_type=archivo.tipo)
+                respuesta["Content-Disposition"] = f'attachment; filename="{archivo.nombre}"'
+                return respuesta
+            token = previas.guardar(request.user.pk, {
+                "clave": clave, "periodo": datos["periodo"], "para": datos["para"], "mensaje": datos["mensaje"],
+                "titulo": datos["titulo"], "adjuntos": envios.adjuntos_de(archivo),
+                "parametros": {"tipo": datos["periodo"].tipo.value, "sucursales": [s.pk for s in datos["sucursales"]],
+                               "modo": datos["modo"], "formato": request.POST.get("formato"),
+                               "opciones": datos["opciones"],
+                               "usuarios": [u.pk for u in datos["destinatarios"]],
+                               "correos": datos["otros_correos"], "titulo": datos["titulo"]}})
+            return redirect("correo_previa", clave=clave, token=token)
+    envio = None
+    if request.GET.get("envio", "").isdigit():
+        envio = EnvioManual.objects.filter(pk=request.GET["envio"], usuario=request.user, reporte=reporte).first()
     return render(request, "central/generar.html", {"reporte": reporte, "form": form, "error": error,
+                                                    "envio": envio, "automatiza": puede_automatizar(request.user),
+                                                    "abrir_correo": por_correo,
                                                     "bases": conexiones.bases()})
+
+
+def _previa(request, clave, token) -> tuple[Reporte, dict]:
+    reporte = _visible(request, clave)
+    if not puede_generar(request.user):
+        raise PermissionDenied
+    datos = previas.cargar(token, request.user.pk)
+    if datos is None or datos["clave"] != clave:
+        raise Http404  # expired, already sent, or someone else's
+    return reporte, datos
+
+
+@login_required
+def correo_previa(request, clave, token):
+    """Preview of a one-off e-mail (recipients, subject, text, attachments with
+    the PDF shown); "Enviar" sends exactly that."""
+    reporte, datos = _previa(request, clave, token)
+    correo = envios.correo_manual(reporte, datos["periodo"], datos["adjuntos"], datos["para"], datos["mensaje"],
+                                  datos.get("titulo", ""))
+    error = None
+    if request.method == "POST":
+        try:
+            envio = envios.enviar_manual(request.user, reporte, datos["periodo"], datos["adjuntos"], datos["para"],
+                                         datos["mensaje"], datos.get("parametros"), datos.get("titulo", ""))
+        except Exception:
+            log.exception("Manual e-mail failed: %s", clave)
+            error = "No se pudo enviar el correo. Revisa la configuración de correo e intenta de nuevo."
+        else:
+            previas.borrar(token)
+            return redirect(f"{reverse('reporte_generar', args=[clave])}?envio={envio.pk}")
+    adjuntos = [{"n": i, "nombre": n, "pdf": t == "application/pdf", "kb": len(c) // 1024 or 1}
+                for i, (n, c, t) in enumerate(datos["adjuntos"])]
+    return render(request, "central/correo_previa.html", {
+        "reporte": reporte, "token": token, "correo": correo, "adjuntos": adjuntos, "error": error,
+        "primer_pdf": next((a for a in adjuntos if a["pdf"]), None)})
+
+
+@login_required
+@xframe_options_sameorigin  # shown inside the preview page (the default DENY left the viewer blank)
+def correo_adjunto(request, clave, token, n):
+    """One attachment of a preview: a PDF opens in the browser, anything else downloads."""
+    _, datos = _previa(request, clave, token)
+    if not 0 <= n < len(datos["adjuntos"]):
+        raise Http404
+    nombre, contenido, tipo = datos["adjuntos"][n]
+    respuesta = HttpResponse(contenido, content_type=tipo)
+    modo = "inline" if tipo == "application/pdf" else "attachment"
+    respuesta["Content-Disposition"] = f'{modo}; filename="{nombre}"'
+    return respuesta

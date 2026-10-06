@@ -3,6 +3,10 @@
 from datetime import date
 
 from django import forms
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
+
+from cuentas.models import separar_correos
 
 from .models import Automatizacion, Reporte
 from .motor.periodo import Periodo, TipoPeriodo
@@ -42,9 +46,20 @@ class GenerarForm(forms.Form):
                                 choices=[(PDF, "PDF"), (EXCEL, "Excel"), (AMBOS, "PDF y Excel (en un .zip)")])
     # Report options (generadores.OPCIONES); only the ones the report admits are kept.
     incluir_costos = forms.BooleanField(required=False, initial=True, label="Incluir costos")
+    # "Enviar por correo" (owner, 2026-10-06): the same report, e-mailed to whom the user picks.
+    destinatarios = forms.ModelMultipleChoiceField(queryset=None, required=False, widget=forms.CheckboxSelectMultiple,
+                                                   label="Usuarios")
+    correos = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Otros correos")
+    mensaje = forms.CharField(required=False, max_length=2000, widget=forms.Textarea(attrs={"rows": 3}),
+                              label="Mensaje (opcional)")
+    titulo = forms.CharField(required=False, max_length=150, label="Título en el correo")
 
-    def __init__(self, *args, reporte: Reporte, sucursales, opciones: dict | None = None, **kwargs):
+    def __init__(self, *args, reporte: Reporte, sucursales, opciones: dict | None = None, usuarios=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["destinatarios"].queryset = usuarios if usuarios is not None else \
+            self.fields["sucursales"].queryset.none()
+        self.fields["destinatarios"].label_from_instance = lambda u: f"{u.get_full_name() or u.username} ({u.email})"
+        self.fields["titulo"].widget.attrs.update(placeholder=reporte.nombre, size=60)
         self.opciones = opciones or {}
         for nombre in ("incluir_costos",):
             if nombre in self.opciones:
@@ -75,6 +90,18 @@ class GenerarForm(forms.Form):
         datos["separados"] = varias and datos.get("entrega") == SEPARADOS
         formato = datos.get("formato")
         datos["formatos"] = {PDF, EXCEL} if formato == AMBOS else {formato}
+        if self.data.get("accion") == "correo":
+            otros = separar_correos(datos.get("correos", ""))
+            for correo in otros:
+                try:
+                    validate_email(correo)
+                except ValidationError:
+                    self.add_error("correos", f"Correo no válido: {correo}")
+            para = [u.email for u in datos.get("destinatarios") or [] if u.email] + otros
+            if not para:
+                self.add_error("destinatarios", "Elige a quién enviarlo (usuarios u otros correos).")
+            datos["para"] = list(dict.fromkeys(para))
+            datos["otros_correos"] = otros
         datos["opciones"] = {nombre: bool(datos.get(nombre)) for nombre in self.opciones}
         tipo = datos.get("tipo")
         if not tipo:
@@ -109,7 +136,7 @@ class AutomatizacionForm(forms.ModelForm):
 
     class Meta:
         model = Automatizacion
-        fields = ["nombre", "activa", "tipo", "dias_despues", "hora", "todas_las_sucursales", "sucursales",
+        fields = ["nombre", "activa", "titulo", "tipo", "dias_despues", "hora", "todas_las_sucursales", "sucursales",
                   "enviar_consolidado", "enviar_particulares", "formato",
                   "consolidado_destinatarios", "consolidado_correos",
                   "particulares_a_sucursal", "particulares_destinatarios", "particulares_correos",
@@ -120,6 +147,9 @@ class AutomatizacionForm(forms.ModelForm):
             "particulares_destinatarios": forms.CheckboxSelectMultiple,
             "formato": forms.RadioSelect,
             "hora": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
+            # 1..28 = days after the close; the page relabels them per frequency
+            # (a week: the weekday it goes out; a month: the day of the next month).
+            "dias_despues": forms.Select(choices=[(i, str(i)) for i in range(1, 29)]),
             "consolidado_correos": forms.Textarea(attrs={"rows": 2}),
             "particulares_correos": forms.Textarea(attrs={"rows": 2}),
         }

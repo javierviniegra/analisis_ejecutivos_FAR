@@ -52,3 +52,11 @@ waitress-serve --port=8040 config.wsgi:application
 ```
 
 A deploy/update script (like ControlPresupuestos_AP's `update.ps1`) will be added in Phase 7.
+
+## 5. Automations (scheduled e-mails)
+
+In `config/.env`: `CORREO_MODO=smtp`, `EMAIL_HOST=smtp.office365.com`, `EMAIL_PORT=587`, `EMAIL_HOST_USER` / `EMAIL_FROM` = the sending Microsoft 365 account (the owner's corporate account), `EMAIL_HOST_PASSWORD` = its password (or an app password). The account needs **SMTP AUTH enabled** in Microsoft 365 (admin center > user > Mail > Manage email apps > Authenticated SMTP). Check with IT whether the tenant still allows it, since Microsoft is retiring basic authentication for SMTP; if it does not, sending moves to Microsoft Graph (an app registration), a change limited to the mail backend.
+
+Task Scheduler, on the app machine: a task that runs `deploy\windows\enviar_automatizaciones.cmd` **every 15 minutes, indefinitely**, whether the user is logged on or not. Output goes to `logs\enviar_automatizaciones.log`; each send is also in the admin ("Envíos automáticos") and on each report page.
+
+Check before enabling: `python manage.py enviar_automatizaciones --pendientes` (what is due, sends nothing) and `--probar <id>` (one automation now, without touching the send log).

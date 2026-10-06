@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Vista previa del correo · {{ reporte.nombre }}{% endblock %}
+{% block content %}
+{% include "central/_estilos_formulario.html" %}
+<style>
+  .previa th { text-align:left; color:var(--verde-oscuro); font-size:14px; padding:4px 16px 4px 0; vertical-align:top; white-space:nowrap; }
+  .previa td { font-size:14px; padding:4px 0; }
+  .cuerpo { white-space:pre-wrap; font-family:inherit; font-size:14px; background:#faf8f3; border:1px solid #eee; border-radius:10px; padding:14px 16px; margin:12px 0; }
+  .visor { width:100%; height:720px; border:1px solid #ddd; border-radius:10px; }
+</style>
+
+<p><a href="{% url 'reporte_generar' reporte.clave %}" class="muted">&larr; {{ reporte.nombre }}</a></p>
+<h1>Vista previa del correo</h1>
+
+<div class="card">
+  {% if error %}<div class="errores">{{ error }}</div>{% endif %}
+  <table class="previa">
+    <tr><th>Para</th><td>{{ correo.to|join:", " }}</td></tr>
+    <tr><th>De</th><td>{{ correo.from_email }}</td></tr>
+    <tr><th>Asunto</th><td><strong>{{ correo.subject }}</strong></td></tr>
+    <tr><th>Adjuntos</th><td>{% for a in adjuntos %}<a href="{% url 'correo_adjunto' reporte.clave token a.n %}" target="_blank">{{ a.nombre }}</a> <span class="muted">({{ a.kb }} KB)</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td></tr>
+  </table>
+  <div class="cuerpo">{{ correo.body }}</div>
+  <form method="post" style="display:inline">{% csrf_token %}
+    <button class="btn" id="enviar">Enviar</button>
+  </form>
+  <button type="button" class="btn secundario" onclick="history.back()">Volver a editar</button>
+  <span class="muted aviso" id="aviso">Enviando…</span>
+</div>
+
+{% if primer_pdf %}
+<div class="card">
+  <p class="muted" style="margin-top:0">{{ primer_pdf.nombre }}{% if adjuntos|length > 1 %} · los demás adjuntos se abren desde la lista de arriba{% endif %}</p>
+  <iframe class="visor" src="{% url 'correo_adjunto' reporte.clave token primer_pdf.n %}"></iframe>
+</div>
+{% endif %}
+
+<script>
+  document.querySelector("form").addEventListener("submit", function () {
+    setTimeout(function () { document.getElementById("enviar").disabled = true; }, 0);
+    document.getElementById("aviso").style.display = "inline";
+  });
+</script>
+{% endblock %}
