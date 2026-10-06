@@ -19,7 +19,7 @@ New-Item -ItemType Directory -Force -Path $LogsDir | Out-Null
 
 $escuchando = Test-NetConnection -ComputerName 127.0.0.1 -Port $Port -WarningAction SilentlyContinue
 if ($escuchando.TcpTestSucceeded -and -not $Reiniciar) {
-    Write-Host "Central de Reportes ya está escuchando en el puerto $Port."
+    Write-Host "Central de Reportes ya esta escuchando en el puerto $Port."
     exit 0
 }
 
@@ -41,5 +41,5 @@ $escuchando = Test-NetConnection -ComputerName 127.0.0.1 -Port $Port -WarningAct
 if ($escuchando.TcpTestSucceeded) {
     Write-Host "Listo: Central de Reportes escucha en el puerto $Port."
 } else {
-    Write-Host "AVISO: el puerto $Port no responde todavía. Revisa logs\waitress.err.log."
+    Write-Host "AVISO: el puerto $Port no responde todavia. Revisa logs\waitress.err.log."
 }

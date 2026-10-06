@@ -38,4 +38,4 @@ Register-ScheduledTask -TaskName "Central de Reportes - Arranque" -Action $Arran
     -Principal $Principal -Settings $Ajustes -Force | Out-Null
 
 Get-ScheduledTask -TaskName "Central de Reportes*" | Format-Table TaskName, State -AutoSize
-Write-Host "Listo. Historial de envíos: logs\enviar_automatizaciones.log y, en la app, Admin > Envíos automáticos."
+Write-Host "Listo. Historial de envios: logs\enviar_automatizaciones.log y, en la app, Admin > Envios automaticos."
