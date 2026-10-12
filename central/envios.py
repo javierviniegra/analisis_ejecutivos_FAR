@@ -226,6 +226,21 @@ def pendientes(ahora: datetime) -> list[tuple[Automatizacion, Periodo, datetime,
     return salida
 
 
+def forzar(a: Automatizacion, ahora: datetime | None = None) -> EnvioAutomatico:
+    """Send the automation's last closed period again, now, to ALL its
+    recipients, even if it was already sent (owner, 2026-10-12: e.g. after a
+    correction in the data). The log row of that period is updated."""
+    ahora = ahora or ahora_local()
+    periodo = periodo_a_enviar(TipoPeriodo(a.tipo), a.dias_despues, a.hora, ahora)
+    programado = fecha_envio(periodo, a.dias_despues, a.hora)
+    try:
+        resultado = ejecutar(a, periodo)
+    except Exception as e:
+        log.exception("Reenvío forzado %s falló al generar %s", a.pk, periodo.etiqueta())
+        resultado = (EnvioAutomatico.Estado.ERROR, [], [], f"No se pudo generar el reporte: {e}")
+    return _registrar(a, periodo, programado, *resultado)
+
+
 def despachar(ahora: datetime | None = None) -> list[EnvioAutomatico]:
     hechos = []
     for a, periodo, programado, envio in pendientes(ahora or ahora_local()):

@@ -2,6 +2,12 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-12 — "Forzar envío" on each automation
+
+- **Owner:** the automation's edit page has a **"Forzar envío"** button: it sends the last closed period again, now, to **all** its recipients, even if it was already sent (e.g. after a data correction such as Coyoacán's missing Sunday). It asks for confirmation naming the period, and shows the last send (period, state, time, error).
+- A full send can take minutes, longer than the proxy waits, so the button starts `manage.py enviar_automatizaciones --forzar <id>` as a separate process (output appended to `logs/enviar_automatizaciones.log`) and the page answers at once ("Reenvío de ... en proceso"); the result lands in the same log row of that period (state, recipients, files, attempts + 1). Same permission as editing automations. It respects `CORREO_MODO` (in `archivo` mode nothing leaves).
+- Checked in dev 2026-10-12 with the owner's monthly Puebla automation (its only recipient is the owner): September resent through Microsoft 365, log "Enviado".
+
 ## 2026-10-12 — A day with tickets but no cash closing takes its sales from the tickets
 
 - **Found by the owner:** week 41, La Esquina Coyoacán showed Sunday 11-Oct with no sales; the closing exists in Wansoft (generated 22:09:56) but had not reached the database. Same day: Antenas, Taquería Parroquia, Versalles and Vía Vallejo. `created_at` shows closings reaching the database 1-2 nights late (Antenas' 08-Oct closing loaded 10-Oct 01:41) -- reported to the Wansoft chat.

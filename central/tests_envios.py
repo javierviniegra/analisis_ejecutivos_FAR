@@ -117,3 +117,12 @@ class EnviosTests(TestCase):
         self.assertEqual(envio.estado, EnvioAutomatico.Estado.ERROR)
         self.assertIn("fuente caída", envio.error)
         self.assertEqual(len(envios.pendientes(MARTES)), 1)
+
+    def test_forzar_reenvia_a_todos_aunque_ya_se_haya_enviado(self):
+        envios.despachar(MARTES)
+        mail.outbox.clear()
+        self.assertEqual(envios.despachar(MARTES), [])  # already sent: the dispatcher skips it
+        envio = envios.forzar(self.a, MARTES)  # forced: again, to everyone
+        self.assertEqual(len(mail.outbox), 5)
+        self.assertEqual((envio.estado, envio.intentos), (EnvioAutomatico.Estado.ENVIADO, 2))
+        self.assertEqual(EnvioAutomatico.objects.count(), 1)  # same log row, updated

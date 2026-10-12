@@ -7,6 +7,24 @@
 <h1>{% if instancia %}Editar automatización{% else %}Nueva automatización{% endif %}</h1>
 {% if origen %}<p class="muted" style="margin-top:-8px">A partir del correo enviado el {{ origen.enviado_en|date:"d/m/Y H:i" }} ({{ origen.periodo }}): elige cada cuándo se manda y revisa lo demás.</p>{% endif %}
 
+{% if forzado %}<div class="exito card">Reenvío de <strong>{{ reenvio.etiqueta }}</strong> en proceso. Puede tardar unos minutos; el resultado aparece abajo en «Último envío» y en la lista del reporte (recarga la página).</div>{% endif %}
+
+{% if instancia %}
+<div class="card">
+  <h2 style="margin-top:0;font-size:18px">Forzar envío</h2>
+  <p class="muted" style="margin-top:0">Manda otra vez, ahora mismo, el último periodo cerrado
+    (<strong>{{ reenvio.etiqueta }}</strong>) a <strong>todos</strong> sus destinatarios, aunque ya se haya enviado
+    (por ejemplo, después de corregir datos).</p>
+  {% if ultimo %}<p class="muted">Último envío: {{ ultimo.desde|date:"d/m" }}–{{ ultimo.hasta|date:"d/m/Y" }} ·
+    <strong>{{ ultimo.get_estado_display }}</strong>{% if ultimo.enviado_en %} el {{ ultimo.enviado_en|date:"d/m/Y H:i" }}{% endif %}
+    {% if ultimo.error %}<br><span style="color:#8a1c14">{{ ultimo.error|linebreaksbr }}</span>{% endif %}</p>{% endif %}
+  <form method="post" action="{% url 'automatizacion_forzar' reporte.clave instancia.pk %}"
+        onsubmit="return confirm('¿Reenviar {{ reenvio.etiqueta|escapejs }} a todos los destinatarios de esta automatización?');">
+    {% csrf_token %}<button class="btn">Forzar envío</button>
+  </form>
+</div>
+{% endif %}
+
 <form method="post" class="card" id="automatizacion">
   {% csrf_token %}
   {% if form.errors %}<div class="errores">Revisa los campos marcados.{% if form.non_field_errors %} {{ form.non_field_errors|join:" " }}{% endif %}</div>{% endif %}

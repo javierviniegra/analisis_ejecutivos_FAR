@@ -183,3 +183,18 @@ class AutomatizacionWebTests(TestCase):
         self.assertEqual((inicial["tipo"], inicial["sucursales"], inicial["particulares_destinatarios"],
                           inicial["particulares_correos"], inicial["incluir_costos"], inicial["particulares_a_sucursal"]),
                          ("mes", [self.puebla.pk], [self.director.pk], "externo@y.com", False, False))
+
+    def test_boton_forzar_lanza_el_reenvio_en_segundo_plano(self):
+        from unittest import mock
+        a = Automatizacion.objects.create(reporte=self.reporte, nombre="Semanal", enviar_particulares=True)
+        self.client.force_login(self.gerente)
+        url = reverse("automatizacion_forzar", args=[self.CLAVE, a.pk])
+        self.assertEqual(self.client.post(url).status_code, 403)  # only who may automate
+        self.client.force_login(self.director)
+        self.assertContains(self.client.get(reverse("automatizacion_editar", args=[self.CLAVE, a.pk])), "Forzar envío")
+        with mock.patch("subprocess.Popen") as popen:
+            r = self.client.post(url)
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("--forzar", popen.call_args.args[0])
+        self.assertIn(str(a.pk), popen.call_args.args[0])
+        self.assertContains(self.client.get(r["Location"]), "en proceso")

@@ -19,7 +19,7 @@ from .generadores import GENERADORES, opciones_de, tiene_generador
 from .models import Automatizacion, EnvioManual, Reporte
 from .motor.fuentes import conexiones
 from .motor.periodo import TipoPeriodo
-from .motor.programacion import proximo_envio
+from .motor.programacion import periodo_a_enviar, proximo_envio
 
 log = logging.getLogger(__name__)
 
@@ -100,8 +100,14 @@ def automatizacion(request, clave, pk=None):
         nueva.save()
         form.save_m2m()
         return redirect("reporte_detalle", clave=clave)
+    reenvio = None
+    if instancia is not None:
+        ahora = timezone.localtime().replace(tzinfo=None)
+        reenvio = periodo_a_enviar(TipoPeriodo(instancia.tipo), instancia.dias_despues, instancia.hora, ahora)
     return render(request, "central/automatizacion.html", {"reporte": reporte, "form": form, "instancia": instancia,
-                                                           "origen": origen})
+                                                           "origen": origen, "reenvio": reenvio,
+                                                           "forzado": request.GET.get("forzado"),
+                                                           "ultimo": instancia.envios.first() if instancia else None})
 
 
 def desde_envio(envio: EnvioManual) -> dict:
@@ -126,6 +132,26 @@ def desde_envio(envio: EnvioManual) -> dict:
     for nombre, valor in (p.get("opciones") or {}).items():
         inicial[nombre] = valor
     return inicial
+
+
+@login_required
+@require_POST
+def automatizacion_forzar(request, clave, pk):
+    """"Forzar envío": resend the last closed period now to all recipients.
+    A full send can take minutes (several branches, PDF + Excel), longer than
+    the proxy waits, so it runs as a separate process and the page answers at
+    once; the result shows up in "Último envío" like any other send."""
+    import subprocess
+    import sys
+
+    reporte = _automatizable(request, clave)
+    a = get_object_or_404(Automatizacion, pk=pk, reporte=reporte)
+    bitacora = open(settings.LOGS_DIR / "enviar_automatizaciones.log", "a", encoding="utf-8")
+    banderas = (subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS) if sys.platform == "win32" else 0
+    subprocess.Popen([sys.executable, str(settings.BASE_DIR / "manage.py"), "enviar_automatizaciones", "--forzar", str(a.pk)],
+                     cwd=settings.BASE_DIR, stdout=bitacora, stderr=subprocess.STDOUT, creationflags=banderas)
+    log.info("Reenvío forzado de la automatización %s por %s", a.pk, request.user)
+    return redirect(f"{reverse('automatizacion_editar', args=[clave, a.pk])}?forzado=1")
 
 
 @login_required
