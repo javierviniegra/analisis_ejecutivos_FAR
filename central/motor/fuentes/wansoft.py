@@ -79,7 +79,8 @@ TOLERANCIA_TICKETS = Decimal("1")  # pesos: a closing "matches" the day's ticket
 
 def cierres_por_dia(cur, subsidiary_ids: list[int], desde: date, hasta: date,
                     tickets_de: dict[int, str] | None = None,
-                    descartados: list | None = None) -> dict[int, dict[date, dict]]:
+                    descartados: list | None = None,
+                    por_tickets: list | None = None) -> dict[int, dict[date, dict]]:
     """Daily totals from the cash closing, per branch and operating day,
     deduplicated: {subsidiary_id: {day: totals}}.
 
@@ -97,6 +98,13 @@ def cierres_por_dia(cur, subsidiary_ids: list[int], desde: date, hasta: date,
     before (two real shifts match their sum). `tickets_de` maps
     subsidiary_id -> ticket `Sucursal` name; each discarded closing is
     appended to `descartados` as (subsidiary_id, day, total_ventas).
+
+    **A day with tickets but no cash closing (owner, 2026-10-12)** -- e.g. La
+    Esquina Coyoacán, Sunday 11-Oct: the closing exists in Wansoft (22:09) but
+    did not reach the database -- takes the day's sales from the tickets:
+    gross, net, tickets and guests (they match the closing to the peso);
+    tables, courtesies, cancellations, voids and discounts stay 0. Each such
+    day is appended to `por_tickets` as (subsidiary_id, day, venta_bruta).
     """
     if not subsidiary_ids:
         return {}
@@ -131,9 +139,10 @@ def cierres_por_dia(cur, subsidiary_ids: list[int], desde: date, hasta: date,
         tickets = _tickets_por_dia(cur, {tickets_de[sid] for sid, _ in varios},
                                    min(d for _, d in varios), max(d for _, d in varios))
         for sid, dia in varios:
-            total = tickets.get((tickets_de[sid], dia))
-            if total is None:
+            del_dia = tickets.get((tickets_de[sid], dia))
+            if del_dia is None:
                 continue
+            total = del_dia["venta_bruta"]
             iguales = [c for c in cortes[(sid, dia)] if abs(c["venta_bruta"] - total) <= TOLERANCIA_TICKETS]
             if len(iguales) == 1:
                 if descartados is not None:
@@ -143,18 +152,42 @@ def cierres_por_dia(cur, subsidiary_ids: list[int], desde: date, hasta: date,
     resultado: dict[int, dict[date, dict]] = {}
     for (sid, dia), lista in cortes.items():
         resultado.setdefault(sid, {})[dia] = {k: sum((c[k] for c in lista), Decimal("0")) for k in CLAVES_CIERRE}
+
+    con_tickets = {sid: n for sid, n in (tickets_de or {}).items() if sid in subsidiary_ids}
+    if con_tickets:
+        dias = [desde + timedelta(days=i) for i in range((hasta - desde).days + 1)]
+        faltan = {sid: [x for x in dias if x not in resultado.get(sid, {})] for sid in con_tickets}
+        faltan = {sid: xs for sid, xs in faltan.items() if xs}
+        if faltan:
+            tickets = _tickets_por_dia(cur, {con_tickets[sid] for sid in faltan},
+                                       min(min(xs) for xs in faltan.values()), max(max(xs) for xs in faltan.values()))
+            for sid, xs in faltan.items():
+                for dia in xs:
+                    del_dia = tickets.get((con_tickets[sid], dia))
+                    if del_dia is None or not del_dia["venta_bruta"]:
+                        continue
+                    resultado.setdefault(sid, {})[dia] = {k: del_dia.get(k, Decimal("0")) for k in CLAVES_CIERRE}
+                    if por_tickets is not None:
+                        por_tickets.append((sid, dia, del_dia["venta_bruta"]))
     return resultado
 
 
-def _tickets_por_dia(cur, nombres: set[str], desde: date, hasta: date) -> dict[tuple[str, date], Decimal]:
-    """Sum of the tickets (gross, as `total_ventas`) per branch name and day."""
+def _tickets_por_dia(cur, nombres: set[str], desde: date, hasta: date) -> dict[tuple[str, date], dict]:
+    """The day's tickets per branch name: gross (`Total`, as `total_ventas`),
+    net (`Subtotal`), ticket count and guests (`Personas`). Checked against
+    the cash closings, 5-10 Oct 2026: 113 of 114 branch-days equal to the
+    peso in gross, net and tickets. Discounts, courtesies and cancellations
+    are NOT in this table the way the closing has them."""
     nombres = sorted(nombres)
     cur.execute(
-        f"SELECT Sucursal, DATE(Fecha), SUM(Total) FROM getallordenesbyday_new_venta "
+        f"SELECT Sucursal, DATE(Fecha), SUM(Total), SUM(Subtotal), COUNT(*), SUM(Personas) "
+        f"FROM getallordenesbyday_new_venta "
         f"WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s GROUP BY Sucursal, DATE(Fecha)",
         (*nombres, datetime.combine(desde, time.min), datetime.combine(hasta + timedelta(days=1), time.min)),
     )
-    return {(n, d): Decimal(str(t)) for n, d, t in cur.fetchall() if t is not None}
+    return {(n, d): {"venta_bruta": Decimal(str(t)), "venta_neta": Decimal(str(s or 0)), "tickets": Decimal(c),
+                     "clientes": Decimal(str(p or 0))}
+            for n, d, t, s, c, p in cur.fetchall() if t is not None}
 
 
 def _rango_fecha_texto(desde: date, hasta: date) -> tuple[str, str]:

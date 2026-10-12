@@ -74,6 +74,8 @@ class Metricas:
     costo_odoo_sin_leer: bool = False  # Odoo could not be read: Odoo-cost days may be partial
     # Cash closings left out because another closing of the day matches its tickets: (branch, day, total)
     cortes_descartados: list = field(default_factory=list)
+    # Days without a cash closing whose sales came from the tickets: (branch, day, gross)
+    dias_por_tickets: list = field(default_factory=list)
     # Branches with Wansoft cost: cost of what was sold not yet discounted from
     # inventory (added to the cost while above 0, which makes it an estimate).
     pendiente_wansoft: Decimal | None = None
@@ -221,10 +223,10 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
     preliminar = presupuestos.es_preliminar(h, hoy or date.today())
     # Branches whose cost is not taken into account (cuentas.Sucursal.considerar_costo) get no cost at all.
     con_costo = [s for s in sucursales if incluir_costos and getattr(s, "considerar_costo", True)]
-    descartados = []
+    descartados, por_tickets = [], []
     cierres = wansoft.cierres_por_dia(
         cur_wansoft, [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None], d, h,
-        tickets_de=_tickets_de(sucursales), descartados=descartados)
+        tickets_de=_tickets_de(sucursales), descartados=descartados, por_tickets=por_tickets)
     nombres = [s.wansoft_ticket_nombre for s in sucursales]
     detalle = wansoft.detalle_por_sucursal(cur_wansoft, nombres, d, h)
     mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h)
@@ -260,6 +262,8 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
         m.dias_con_cierre = len(dias)
         m.cortes_descartados = [(sucursal.nombre, dia, total) for sid, dia, total in descartados
                                 if sid == sucursal.wansoft_subsidiary_id]
+        m.dias_por_tickets = [(sucursal.nombre, dia, total) for sid, dia, total in por_tickets
+                              if sid == sucursal.wansoft_subsidiary_id]
         if sucursal.wansoft_subsidiary_id in costos:
             m.costo_total = costos[sucursal.wansoft_subsidiary_id]
             m.venta_neta_con_costo_total = m.venta_neta
@@ -329,6 +333,7 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
                 suma[dia] = suma.get(dia, CERO) + v
         total.dias_con_cierre += m.dias_con_cierre
         total.cortes_descartados += m.cortes_descartados
+        total.dias_por_tickets += m.dias_por_tickets
         total.dias_con_detalle += m.dias_con_detalle
         if m.costo_ventas_real is not None:
             total.costo_ventas_real = (total.costo_ventas_real or CERO) + m.costo_ventas_real

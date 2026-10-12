@@ -112,7 +112,7 @@ class VariosCortesTests(SimpleTestCase):
         dia = d_(2026, 9, 28)
         cur = _CursorVarios([
             [self._fila(1, dia, "48780"), self._fila(1, dia, "6063"), self._fila(2, dia, "1000"), self._fila(2, dia, "500")],
-            [("Puebla", dia, 48780.0), ("Napoles", dia, 1234.0)],  # Napoles: no closing matches -> both added
+            [("Puebla", dia, 48780.0, 42051.74, 12, 30), ("Napoles", dia, 1234.0, 1063.79, 3, 5)],  # Napoles: none matches
         ])
         descartados = []
         r = w.cierres_por_dia(cur, [1, 2], dia, dia, tickets_de={1: "Puebla", 2: "Napoles"}, descartados=descartados)
@@ -125,8 +125,21 @@ class VariosCortesTests(SimpleTestCase):
         dia = d_(2026, 9, 28)
         cur = _CursorVarios([[self._fila(1, dia, "48780")]])
         self.assertEqual(w.cierres_por_dia(cur, [1], dia, dia, tickets_de={1: "Puebla"})[1][dia]["venta_bruta"],
-                         D("48780"))
+                         D("48780"))  # every day has its closing: no ticket query at all
         self.assertEqual(cur.consultas, 1)
+
+    def test_dia_con_tickets_y_sin_corte_toma_los_tickets(self):
+        from datetime import date as d_
+        sab, dom = d_(2026, 10, 10), d_(2026, 10, 11)
+        cur = _CursorVarios([
+            [self._fila(1, sab, "99306")],  # Saturday's closing only
+            [("Coyoacan", dom, 74523.2, 64244.14, 52, 120)],  # Sunday's tickets
+        ])
+        por_tickets = []
+        r = w.cierres_por_dia(cur, [1], sab, dom, tickets_de={1: "Coyoacan"}, por_tickets=por_tickets)
+        self.assertEqual(r[1][dom]["venta_bruta"], D("74523.2"))
+        self.assertEqual((r[1][dom]["tickets"], r[1][dom]["clientes"], r[1][dom]["descuentos"]), (D(52), D(120), D(0)))
+        self.assertEqual(por_tickets, [(1, dom, D("74523.2"))])
 
 
 class _CursorVarios:

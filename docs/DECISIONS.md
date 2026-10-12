@@ -2,6 +2,12 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-12 — A day with tickets but no cash closing takes its sales from the tickets
+
+- **Found by the owner:** week 41, La Esquina Coyoacán showed Sunday 11-Oct with no sales; the closing exists in Wansoft (generated 22:09:56) but had not reached the database. Same day: Antenas, Taquería Parroquia, Versalles and Vía Vallejo. `created_at` shows closings reaching the database 1-2 nights late (Antenas' 08-Oct closing loaded 10-Oct 01:41) -- reported to the Wansoft chat.
+- **Rule (owner):** if a branch-day has tickets and no cash closing, the day's gross, net, tickets and guests come from the tickets (`getallordenesbyday_new_venta`: Total, Subtotal, count, Personas -- equal to the closing to the peso in 113 of 114 branch-days, 5-10 Oct); tables, courtesies, cancellations, voids and discounts stay 0 (not reliable there). The day counts as covered; a note lists each day ("Sin corte de caja en la base; la venta del día se tomó de los tickets..."), and the rule is in "Reglas y umbrales". When the closing arrives, it replaces the tickets automatically. One grouped ticket query, only when some day lacks a closing.
+- Week 41 consolidated: 133/133 days (5 Sundays from tickets).
+
 ## 2026-10-06 — Live in production
 
 - **Deployed and used by the owner** (2026-10-06): app on `SVR-HIKCENTER` (C:\Apps\CentralDeReportes, Waitress 8040), database `centraldereportes` on 187.251.203.223 (dev copy imported, migrations up to date), Apache `/central_reportes/`; the owner logged in and generated a report at `http://187.251.203.223:8088/central_reportes/`. `verificar_fuentes`: 8 checks, 0 FAIL, 2 WARN.

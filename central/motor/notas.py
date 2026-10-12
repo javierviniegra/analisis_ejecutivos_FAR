@@ -52,6 +52,11 @@ def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Comparacion | 
                                                                               key=lambda x: (x[1], x[0])))
         notas.append("Se descartaron cortes de caja que no coinciden con los tickets del día (otro corte del mismo "
                      f"día sí coincide): {lista}.")
+    if actual.dias_por_tickets:
+        lista = "; ".join(f"{n} {d:%d/%m} (${t:,.0f})" for n, d, t in sorted(actual.dias_por_tickets,
+                                                                              key=lambda x: (x[1], x[0])))
+        notas.append("Sin corte de caja en la base; la venta del día se tomó de los tickets (venta, tickets y "
+                     f"clientes; sin cancelaciones, cortesías ni descuentos): {lista}.")
     comparaciones = [(como_comparacion(actual, anterior), lectura.vs_anterior(periodo))]
     if periodo.tipo != TipoPeriodo.ANIO:  # for a year both comparisons are the same period
         comparaciones.append((como_comparacion(actual, anio_anterior), lectura.vs_anio(periodo)))
@@ -132,7 +137,8 @@ def notas_reglas(periodo: Periodo | None = None, incluir_costos: bool = True) ->
         "periodo de comparación (nueva o sin operación) sale de ambos lados; la columna del periodo es el total.",
         f"Día operativo: un cierre de caja hecho antes de las {HORA_CORTE_DIA}:00 cuenta para el día anterior; "
         "los cierres duplicados (mismo día y mismos totales) se cuentan una sola vez; si un día tiene varios "
-        "cierres y uno coincide con los tickets del día, solo cuenta ese.",
+        "cierres y uno coincide con los tickets del día, solo cuenta ese; un día con tickets y sin cierre toma la "
+        "venta de los tickets.",
         f"Lectura: controles solo si suben y pesan al menos {_pct(lectura.UMBRAL_PESO_CONTROL)} de la venta neta; "
         f"mezcla y canal solo si se mueven más de {_pp(lectura.UMBRAL_PUNTOS_MEZCLA)}"
         + ("; Costo de Ventas solo si supera el presupuesto prorrateado por días." if incluir_costos else "."),
