@@ -143,6 +143,8 @@ Full text, newest first, in `docs/DECISIONS.md` (read it). Highlights of 2026-09
 
 # 10. Backlog / next steps (in order)
 
+> **Owner's note (2026-10-06), for AFTER production is running:** the commercial report for managers must include **Mystery Shopper, monitoring (monitoreo) and Google Reviews**, and **cross them** with each other (and with the branch's sales). Sources and the exact cross are to be defined with the owner then.
+
 1. **Thursday 2026-10-01 cutover validation** (Section 6).
 2. Owner answers: the 8 CEDIS customers; payroll period cut-offs (weekly paid Fridays; biweekly paid on the 14th and the day before month end).
 3. **Buk payroll report** (`incidencias-nomina`) as soon as the owner gets the API token and docs: incidents as Buk provides them, per branch (map Buk areas to branches), Excel + PDF, read at generation time (personal data, no copy stored), Nominista only.

@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-06 — Live in production
+
+- **Deployed and used by the owner** (2026-10-06): app on `SVR-HIKCENTER` (C:\Apps\CentralDeReportes, Waitress 8040), database `centraldereportes` on 187.251.203.223 (dev copy imported, migrations up to date), Apache `/central_reportes/`; the owner logged in and generated a report at `http://187.251.203.223:8088/central_reportes/`. `verificar_fuentes`: 8 checks, 0 FAIL, 2 WARN.
+- **The 2 WARN are accepted (owner):** the production `.env` keeps the owner's usual accounts for `wansoft` and `presupuestos_ap` instead of the read-only `central_reportes` (sessions stay read-only by construction).
+- Tasks registered: "Arranque" active; **"Envios" disabled until real e-mail works** -- with `CORREO_MODO=archivo` the dispatcher would mark periods as sent into .eml files and they would not be re-sent later. To enable: `CORREO_MODO=smtp`, `iniciar_servidor.ps1 -Reiniciar`, `Enable-ScheduledTask -TaskName "Central de Reportes - Envios"`.
+- **E-mail working (2026-10-06 ~15:00):** after SMTP AUTH was enabled on the mailbox the error moved from 5.7.139 (SMTP AUTH disabled) to **5.7.3** -- the Entra sign-in log showed the account still had a pending first sign-in step (Outlook web: error -> interrupted -> completed); once completed, with the current password in `.env`, Microsoft 365 accepted the login. First real e-mail sent from production to the owner: 19 branches x PDF + Excel (38 attachments, ~6 MB), subject prefix, sender name, notices and attachments as designed. Keep an eye on size: Microsoft 365 caps a message around 25-35 MB.
+
 ## 2026-10-06 — In-app help ("Ayuda"), same style as ControlPresupuestos_AP
 
 - **Owner:** before going to production the app gets a help page like Presupuestos AP's: `/ayuda/` (login required), linked from the header and the admin. Same look (the CSS is taken from Presupuestos' page): sticky contents index, banner, step-by-step flow, examples with numbers, tables, FAQ, glossary, print button.
