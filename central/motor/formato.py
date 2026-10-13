@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from .tabla_comercial import ENTERO, MONEDA, PORCENTAJE
+from .tabla_comercial import DECIMAL, ENTERO, MONEDA, PORCENTAJE
 
 SIN_DATO = "—"
 
@@ -16,6 +16,8 @@ def valor(v: Decimal | None, formato: str) -> str:
         return f"{v:,.0f}"
     if formato == PORCENTAJE:
         return f"{v * 100:.1f}%"
+    if formato == DECIMAL:
+        return f"{v:,.1f}"
     raise ValueError(f"unknown format {formato!r}")
 
 

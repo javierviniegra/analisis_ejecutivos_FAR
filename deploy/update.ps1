@@ -26,6 +26,9 @@ Write-Host "=== Applying database migrations ==="
 Write-Host "=== Base profiles (only creates missing ones; admin edits are kept) ==="
 & $Python manage.py crear_perfiles
 
+Write-Host "=== Report catalog (only creates new reports; admin edits are kept) ==="
+& $Python manage.py cargar_catalogo
+
 Write-Host "=== Collecting static files ==="
 & $Python manage.py collectstatic --noinput
 

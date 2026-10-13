@@ -18,7 +18,7 @@ from ..motor.comparativos import BAJA, IGUAL, NARANJA, ROJO, SUBE, VERDE
 from ..motor import detalle
 from ..motor.periodo import TipoPeriodo
 from ..motor.reporte_comercial import TITULO, ReporteComercial, filas_visibles, nombre_base
-from ..motor.tabla_comercial import ENTERO, MONEDA, PORCENTAJE
+from ..motor.tabla_comercial import DECIMAL, ENTERO, MONEDA, PORCENTAJE
 
 VERDE_MARCA = "10564E"
 VERDE_CLARO = "A7C2BC"
@@ -27,7 +27,7 @@ GRIS = "8A8A8A"
 FONDO_CAJA = "F2F5F4"
 FONDO_SEMAFORO = {VERDE: "CDEBD9", NARANJA: "FBE0C3", ROJO: "F6CFCB"}  # light fills behind the value
 
-FORMATO_VALOR = {MONEDA: '"$"#,##0.00', ENTERO: "#,##0", PORCENTAJE: "0.0%"}
+FORMATO_VALOR = {MONEDA: '"$"#,##0.00', ENTERO: "#,##0", PORCENTAJE: "0.0%", DECIMAL: "#,##0.0"}
 FORMATO_VAR_RELATIVA = '+0.0%;-0.0%;0.0%'
 FORMATO_VAR_PUNTOS = '+0.0" pp";-0.0" pp";0.0" pp"'  # the value is already in points
 SIMBOLO = {SUBE: "▲", BAJA: "▼", IGUAL: "="}
@@ -63,7 +63,7 @@ def _variacion(ws, fila: int, col: int, var, fmt: str):
 def _resumen(ws, r: ReporteComercial):
     p = r.periodo
     nombre = r.nombre if r.nombre != "Consolidado" else f"Consolidado ({len(r.sucursales)} sucursales)"
-    ws["A1"] = f"{TITULO} · {nombre}"
+    ws["A1"] = f"{getattr(r, 'titulo', TITULO)} · {nombre}"
     ws["A1"].font = TITULO_F
     ws["A2"] = f"{p.etiqueta()}  ({p.desde:%d/%m/%Y} al {p.hasta:%d/%m/%Y})"
     anio = p.mismo_periodo_anio_anterior()

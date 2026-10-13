@@ -50,6 +50,19 @@ CATALOGO = [
         perfiles_iniciales=["Gerente"],
     ),
     dict(
+        clave="meseros",
+        nombre="Reporte de meseros",
+        descripcion="Desempeño de los meseros para cualquier periodo, por sucursal o consolidado, con las mismas reglas "
+        "que el comercial: venta de meseros (cuentas de salón), mesas, personas, cheque promedio, mix alimentos/bebidas, "
+        "propina, tiempo de mesa, cortesías, plantilla (meseros activos) y venta por mesero por día trabajado; "
+        "cancelaciones y anulaciones de la sucursal. Ranking de meseros con semáforo de cheque y comparativos.",
+        categoria=C.SUCURSALES, periodicidad=P.SEMANAL, plantilla=F.EJECUTIVA, fuente=S.MYSQL_PROD,
+        alcance=A.AMBOS, admite_pdf=True, admite_excel=True, estado=E.IMPLEMENTADO,
+        notas="Definido 2026-10-13. Plantilla = meseros con al menos una cuenta en el periodo (la real vendra de Buk). "
+        "Cancelaciones/anulaciones solo por sucursal: Wansoft no las trae por mesero (pedido al proyecto Wansoft).",
+        perfiles_iniciales=["Gerente"],
+    ),
+    dict(
         clave="inversionistas-corto-mensual",
         nombre="Reporte corto de inversionistas",
         descripcion="Informe financiero, operativo y comercial de una pagina: venta neta vs meta, costo de insumos, "

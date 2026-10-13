@@ -91,6 +91,7 @@ class Grafica:
     nombre_base: str
     nota: str | None  # comparable branches / no comparison
     resaltar: int | None = None  # index of the bucket to highlight (the report's month in a trend)
+    rotar: bool = False  # long labels (names): slanted
 
 
 def construir_grafica(periodo: Periodo, periodo_base: Periodo | None, comp: Comparacion, vs: str,

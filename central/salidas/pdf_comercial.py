@@ -95,7 +95,7 @@ def _titulo(c, r: ReporteComercial, y: float) -> float:
     c.setFillColor(VERDE_MARCA)
     c.setFont(FB, 15)
     nombre = r.nombre if r.nombre != "Consolidado" else f"Consolidado ({len(r.sucursales)} sucursales)"
-    c.drawString(MARGEN, y, f"{TITULO} · {nombre}")
+    c.drawString(MARGEN, y, f"{getattr(r, 'titulo', TITULO)} · {nombre}")
     y -= 15
     c.setFillColor(TEXTO)
     c.setFont(F, 9)

@@ -54,7 +54,9 @@ def dibujar(g: Grafica) -> bytes:
 
     paso = max(1, -(-n // MAX_ETIQUETAS))  # ceil: at most MAX_ETIQUETAS labels
     ax.set_xticks([x for x in xs if x % paso == 0])
-    ax.set_xticklabels([e for i, e in enumerate(g.etiquetas) if i % paso == 0], fontsize=6, color=TEXTO)
+    ax.set_xticklabels([e for i, e in enumerate(g.etiquetas) if i % paso == 0], fontsize=5.6 if g.rotar else 6,
+                       color=TEXTO, rotation=35 if g.rotar else 0, ha="right" if g.rotar else "center",
+                       rotation_mode="anchor")
     if g.resaltar is not None and g.resaltar % paso == 0:  # the report's own bucket, in bold
         ax.get_xticklabels()[g.resaltar // paso].set_fontweight("bold")
     ax.yaxis.set_major_formatter(FuncFormatter(_pesos))

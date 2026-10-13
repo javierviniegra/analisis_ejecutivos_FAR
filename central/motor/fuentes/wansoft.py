@@ -43,8 +43,11 @@ COLUMNAS_REQUERIDAS = {
         "cancelaciones_en_platillos", "anulaciones_en_cuentas", "anulaciones_en_platillos",
         "descuentos_en_cuentas", "descuentos_en_platillos",
     ],
-    "getallordenesbyday_new_venta": ["Sucursal", "Fecha", "TipoOrden", "Total", "Movimento"],
-    "getallordenesbyday_new_detalleventa": ["Movimiento_Id", "Sucursal", "TipoGrupo", "Total"],
+    "getallordenesbyday_new_venta": ["Sucursal", "Fecha", "TipoOrden", "Total", "Movimento", "Subtotal", "Personas",
+                                     "Mesero", "HoraApertura", "HoraCierre"],
+    "getallordenesbyday_new_detalleventa": ["Movimiento_Id", "Sucursal", "TipoGrupo", "Total", "Cortesia", "Cantidad",
+                                            "PrecioUnitario"],
+    "getallordenesbyday_new_pago": ["Movimiento_Id", "Sucursal", "Propina"],
     "costeomensual": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo",
                       "CostoIdealDeProductosPendientesDeRebaja"],
     "costeomensual_semanapyq": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo",
@@ -413,3 +416,119 @@ def inicio_costos_odoo(cur, sucursales: list) -> dict[str, date]:
             inicio = max(inicio, cambio)
         inicios[s.wansoft_ticket_nombre] = inicio
     return inicios
+
+
+# -- waiters (reporte de meseros) ---------------------------------------------
+# Owner, 2026-10-13: the waiters' sales are the DINING-ROOM orders only; the
+# pseudo-waiters of the other order types (APLICACIONES, Apps Llevar...) are
+# reported apart as sales without a waiter.
+TIPO_SALON = "Restaurant"
+# A table is "open" from the ticket's opening to its closing; a time outside
+# this range (a ticket left open, a clock reset) is left out of the average.
+MINUTOS_MESA_MIN, MINUTOS_MESA_MAX = 1, 360
+
+
+def ventas_meseros(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, dict]]:
+    """Per branch (ticket-table name) and waiter, the dining-room tickets of the
+    range: accounts (tables served), guests, gross and net sales, days worked
+    and table time. {branch: {waiter: {...}}}."""
+    nombres = [n for n in nombres if n]
+    if not nombres:
+        return {}
+    a, b = _rango_fecha_texto(desde, hasta)
+    cur.execute(
+        f"""
+        SELECT Sucursal, Mesero, COUNT(*), SUM(CAST(Personas AS DECIMAL(12,0))),
+               SUM(CAST(Total AS DECIMAL(14,2))), SUM(CAST(Subtotal AS DECIMAL(14,2))),
+               COUNT(DISTINCT LEFT(Fecha, 10)),
+               SUM(CASE WHEN TIMESTAMPDIFF(MINUTE, HoraApertura, HoraCierre) BETWEEN %s AND %s
+                        THEN TIMESTAMPDIFF(MINUTE, HoraApertura, HoraCierre) END),
+               SUM(TIMESTAMPDIFF(MINUTE, HoraApertura, HoraCierre) BETWEEN %s AND %s)
+        FROM getallordenesbyday_new_venta
+        WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s AND TipoOrden = %s
+        GROUP BY Sucursal, Mesero
+        """,
+        (MINUTOS_MESA_MIN, MINUTOS_MESA_MAX, MINUTOS_MESA_MIN, MINUTOS_MESA_MAX, *nombres, a, b, TIPO_SALON),
+    )
+    claves = ("cuentas", "personas", "venta_bruta", "venta_neta", "dias", "minutos_mesa", "mesas_con_tiempo")
+    resultado: dict[str, dict[str, dict]] = {}
+    for sucursal, mesero, *valores in cur.fetchall():
+        resultado.setdefault(sucursal, {})[(mesero or "").strip() or "(sin nombre)"] = dict(
+            zip(claves, (Decimal(v or 0) for v in valores)))
+    return resultado
+
+
+def venta_fuera_de_salon(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, Decimal]]:
+    """Gross sales and accounts per branch of the orders that are not dining
+    room (platforms, take-away): {branch: {"venta_bruta", "cuentas"}}."""
+    nombres = [n for n in nombres if n]
+    if not nombres:
+        return {}
+    a, b = _rango_fecha_texto(desde, hasta)
+    cur.execute(
+        f"SELECT Sucursal, COUNT(*), SUM(CAST(Total AS DECIMAL(14,2))) FROM getallordenesbyday_new_venta "
+        f"WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s AND TipoOrden <> %s "
+        f"GROUP BY Sucursal",
+        (*nombres, a, b, TIPO_SALON),
+    )
+    return {s: {"cuentas": Decimal(n or 0), "venta_bruta": Decimal(t or 0)} for s, n, t in cur.fetchall()}
+
+
+def mix_meseros(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, dict]]:
+    """Per branch and waiter, from the order lines of the dining-room tickets:
+    gross sales of Alimentos and Bebidas, and courtesies valued at list price
+    (quantity x unit price; their line total is 0). One statement per month,
+    as `mix_alimentos_bebidas` (the 12 M-row line table)."""
+    nombres = [n for n in nombres if n]
+    if not nombres:
+        return {}
+    resultado: dict[str, dict[str, dict]] = {}
+    for inicio, fin in _tramos_mensuales(desde, hasta):
+        a, b = _rango_fecha_texto(inicio, fin)
+        cur.execute(
+            f"""
+            SELECT v.Sucursal, v.Mesero, d.TipoGrupo, SUM(CAST(d.Total AS DECIMAL(14,2))),
+                   SUM(CASE WHEN d.Cortesia = '1'
+                            THEN CAST(d.Cantidad AS DECIMAL(12,4)) * CAST(d.PrecioUnitario AS DECIMAL(14,4)) ELSE 0 END)
+            FROM getallordenesbyday_new_venta v
+            JOIN getallordenesbyday_new_detalleventa d
+              ON d.Movimiento_Id = v.Movimento AND d.Sucursal = v.Sucursal
+            WHERE v.Sucursal IN ({_marcadores(nombres)}) AND v.Fecha >= %s AND v.Fecha < %s AND v.TipoOrden = %s
+            GROUP BY v.Sucursal, v.Mesero, d.TipoGrupo
+            """,
+            (*nombres, a, b, TIPO_SALON),
+        )
+        for sucursal, mesero, grupo, total, cortesia in cur.fetchall():
+            m = resultado.setdefault(sucursal, {}).setdefault((mesero or "").strip() or "(sin nombre)", {
+                "alimentos": Decimal("0"), "bebidas": Decimal("0"), "cortesias": Decimal("0")})
+            if grupo == "Alimentos":
+                m["alimentos"] += Decimal(total or 0)
+            elif grupo == "Bebidas":
+                m["bebidas"] += Decimal(total or 0)
+            m["cortesias"] += Decimal(cortesia or 0)
+    return resultado
+
+
+def propinas_meseros(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, Decimal]]:
+    """Tips per branch and waiter, from the payments of the dining-room tickets."""
+    nombres = [n for n in nombres if n]
+    if not nombres:
+        return {}
+    resultado: dict[str, dict[str, Decimal]] = {}
+    for inicio, fin in _tramos_mensuales(desde, hasta):  # the payments join is slow (8 s for a week): per month
+        a, b = _rango_fecha_texto(inicio, fin)
+        cur.execute(
+            f"""
+            SELECT v.Sucursal, v.Mesero, SUM(CAST(p.Propina AS DECIMAL(14,2)))
+            FROM getallordenesbyday_new_venta v
+            JOIN getallordenesbyday_new_pago p ON p.Movimiento_Id = v.Movimento AND p.Sucursal = v.Sucursal
+            WHERE v.Sucursal IN ({_marcadores(nombres)}) AND v.Fecha >= %s AND v.Fecha < %s AND v.TipoOrden = %s
+            GROUP BY v.Sucursal, v.Mesero
+            """,
+            (*nombres, a, b, TIPO_SALON),
+        )
+        for sucursal, mesero, propina in cur.fetchall():
+            por = resultado.setdefault(sucursal, {})
+            clave = (mesero or "").strip() or "(sin nombre)"
+            por[clave] = por.get(clave, Decimal("0")) + Decimal(propina or 0)
+    return resultado

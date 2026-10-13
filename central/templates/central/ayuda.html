@@ -203,6 +203,7 @@
     <a href="#catalogo">3. El catálogo de reportes</a>
     <a href="#generar">4. Generar un reporte</a>
     <a href="#comercial">5. El reporte comercial</a>
+    <a href="#meseros">5b. El reporte de meseros</a>
     <a href="#reglas">6. Reglas de negocio</a>
     <a href="#costos">7. Los costos</a>
     <a href="#ejemplos">8. Ejemplos con números</a>
@@ -328,6 +329,19 @@
         <tr><td>s/c</td><td><strong>Sin comparativo:</strong> no hay datos del periodo de comparación.</td></tr>
         <tr><td>s/cf</td><td><strong>Sin comparativo fiable:</strong> alguno de los dos periodos tiene datos en menos del {{ cobertura }}% de sus días; se muestra el valor pero no se compara.</td></tr>
       </table>
+    </section>
+
+    <!-- 5b -->
+    <section id="meseros">
+      <h2>5b. El reporte de meseros</h2>
+      <p>Mismas características que el comercial (cualquier periodo, por sucursal o consolidado, comparativos, Lectura, gráficas, notas, PDF/Excel, envío y automatizaciones), sobre el desempeño de los meseros.</p>
+      <ul>
+        <li><strong>Venta de meseros:</strong> solo cuentas de <em>salón</em>. Plataformas y para llevar se muestran aparte como venta sin mesero.</li>
+        <li><strong>Plantilla:</strong> meseros con al menos una cuenta en el periodo. <strong>Venta por día trabajado</strong> = venta ÷ días en que el mesero tuvo cuentas: la comparación justa entre quien trabajó 3 días y quien trabajó 6.</li>
+        <li><strong>Por mesero:</strong> mesas, personas, venta, cheque promedio (con semáforo contra el promedio de la sucursal: verde igual o arriba, naranja abajo, rojo más de 10% abajo), % de bebidas, propina, cortesías y tiempo promedio de mesa.</li>
+        <li><strong>Cancelaciones y anulaciones:</strong> solo por sucursal; Wansoft las quita del ticket y no trae el mesero.</li>
+        <li><strong>Consolidado:</strong> compara sucursales (venta por mesero por día, cheque), nunca meseros de sucursales distintas; trae el mejor mesero de cada una.</li>
+      </ul>
     </section>
 
     <!-- 6 -->

@@ -33,5 +33,6 @@ class VerificacionTests(SimpleTestCase):
         self.assertEqual(set(wansoft.COLUMNAS_REQUERIDAS),
                          {"getglobalcashclosing", "getallordenesbyday_new_venta", "getallordenesbyday_new_detalleventa",
                           "costeomensual", "costeomensual_semanapyq", "dim_company_analytical", "gettotalcostbydate",
-                          "odoo_company_migration_policy", "costs_odoo_switch"})
+                          "odoo_company_migration_policy", "costs_odoo_switch",
+                          "getallordenesbyday_new_pago"})
         self.assertIn("presupuestos_gastoreal", presupuestos.COLUMNAS_REQUERIDAS)

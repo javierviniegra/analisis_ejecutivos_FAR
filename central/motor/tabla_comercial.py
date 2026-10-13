@@ -27,6 +27,7 @@ from .comparativos import GRIS, IGUAL, cobertura_fiable, no_fiable, semaforo_cos
 from .metricas import Comparacion, Metricas, como_comparacion
 
 MONEDA, ENTERO, PORCENTAJE = "moneda", "entero", "porcentaje"
+DECIMAL = "decimal"  # a ratio shown with one decimal (e.g. guests per table)
 
 
 @dataclass(frozen=True)
