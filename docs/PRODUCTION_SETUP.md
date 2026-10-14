@@ -121,10 +121,10 @@ Check `Test-NetConnection 127.0.0.1 -Port 8040` on the VM, then `http://187.251.
 .\deploy\windows\registrar_tareas.ps1
 ```
 
-Registers **"Central de Reportes - Envios"** (every 15 min: `deploy\windows\enviar_automatizaciones.cmd`, log `logs\enviar_automatizaciones.log`) and **"Central de Reportes - Arranque"** (at VM startup: starts the web server, so a reboot does not leave the app down -- the limitation Presupuestos still has). Both run whether or not anyone is logged on (S4U, no stored password).
+Registers **"Central de Reportes - Envios"** (every 15 min: `deploy\windows\enviar_automatizaciones.cmd`, log `logs\enviar_automatizaciones.log`) and **"Central de Reportes - Arranque"** (at VM startup: starts the web server, so a reboot does not leave the app down -- the limitation Presupuestos still has) and **"Central de Reportes - Actualizar"** (daily 06:00: `deploy\windows\actualizar_diario.ps1` fetches GitHub and runs `update.ps1` only when `main` has new commits; log `logs\update.log`). All run whether or not anyone is logged on (S4U, no stored password).
 
 Before relying on them: `.venv\Scripts\python.exe manage.py enviar_automatizaciones --pendientes` (what is due; sends nothing) and `--probar <id>` (one automation now, without touching the send log).
 
 ## Updates
 
-Push to GitHub from dev, then on the app VM: `.\deploy\update.ps1`.
+Push to GitHub from dev; the "Actualizar" task deploys it the next day at 06:00. To deploy right away, on the app VM: `.\deploy\update.ps1`.

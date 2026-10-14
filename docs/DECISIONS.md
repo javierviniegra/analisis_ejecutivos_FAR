@@ -303,6 +303,7 @@ Found by the owner testing week 39 (21-27 Sep 2026) on `wansoft_prueba`:
 - **Own database on the database server**, separate from report data. Report data is read from Odoo or the productive Wansoft MySQL (read-only).
 - **Copilot integration deferred to the last phase.** Feasibility of calling a paid Copilot seat from a custom app is unverified; the analysis layer will be designed as interchangeable.
 - **PDF library: reportlab** (already used by the proven generator) instead of ControlPresupuestos_AP's xhtml2pdf. Revisit only if the financial-report template proves easier in HTML/CSS.
+- **Daily automatic deploy at 06:00** (owner, 2026-10-14, same idea as Wansoft's `Wansoft_Update_Repo_Diario`): what is pushed to `main` reaches production the next morning without anyone running `update.ps1`, only when `main` has new commits and before the 08:00 sends. Pushing to `main` therefore means deploying; nothing goes to `main` without the owner's approval.
 - **Every report carries an automatic-generation footer** (owner, 2026-10-14): one shared text (`central/salidas/AVISO_AUTOMATICO`) saying the report and its data are produced automatically from Wansoft and Odoo; on every PDF page (bottom left) and in Excel as the printed footer of every sheet plus the last line of the Notas sheet. One wording for all reports by the owner's choice, even where a report reads only one of the systems.
 - **Generated report files are not versioned** (`docs/Mensuales/**/*.pdf` gitignored): they are regenerable output. Revisit if report history must be auditable via git.
 

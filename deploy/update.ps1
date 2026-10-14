@@ -1,7 +1,8 @@
 # deploy/update.ps1
 #
-# Run this by hand on the production VM whenever there's a new version to
-# deploy (same routine as ControlPresupuestos_AP). Pulls the latest code from
+# Runs by itself every day at 06:00 when GitHub has new commits (task
+# "Central de Reportes - Actualizar", deploy\windows\actualizar_diario.ps1);
+# run it by hand on the production VM to deploy right away. Pulls the latest code from
 # GitHub, installs any new dependencies, applies migrations, refreshes static
 # files, restarts the server and checks the data sources.
 #

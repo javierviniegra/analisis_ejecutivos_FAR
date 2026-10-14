@@ -1,6 +1,6 @@
 # deploy/windows/registrar_tareas.ps1
 #
-# Registers (or updates) the two Windows Scheduled Tasks of Central de
+# Registers (or updates) the three Windows Scheduled Tasks of Central de
 # Reportes on the production VM. Run once, in an administrator PowerShell,
 # from the project folder; safe to run again (-Force replaces them).
 #
@@ -9,8 +9,11 @@
 #   2. "Central de Reportes - Arranque": at VM startup, starts the web server
 #      (deploy\windows\iniciar_servidor.ps1), so a reboot does not leave the
 #      app down.
+#   3. "Central de Reportes - Actualizar": daily at 06:00 (before the 08:00
+#      sends), deploys what was pushed to GitHub (deploy\windows\actualizar_diario.ps1
+#      runs update.ps1 only when main has new commits; log in logs\update.log).
 #
-# Both run as the current user with logon type S4U: they run whether or not
+# All run as the current user with logon type S4U: they run whether or not
 # anyone is logged on, without storing a password (they only need the
 # network - MySQL and Microsoft 365 - not Windows file shares).
 
@@ -35,6 +38,14 @@ $Arranque = New-ScheduledTaskAction -Execute "powershell.exe" `
     -WorkingDirectory $ProjectDir
 $AlIniciar = New-ScheduledTaskTrigger -AtStartup
 Register-ScheduledTask -TaskName "Central de Reportes - Arranque" -Action $Arranque -Trigger $AlIniciar `
+    -Principal $Principal -Settings $Ajustes -Force | Out-Null
+
+# 3. Daily update from GitHub.
+$Actualizar = New-ScheduledTaskAction -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $ProjectDir 'deploy\windows\actualizar_diario.ps1')`"" `
+    -WorkingDirectory $ProjectDir
+$Diario = New-ScheduledTaskTrigger -Daily -At "06:00"
+Register-ScheduledTask -TaskName "Central de Reportes - Actualizar" -Action $Actualizar -Trigger $Diario `
     -Principal $Principal -Settings $Ajustes -Force | Out-Null
 
 Get-ScheduledTask -TaskName "Central de Reportes*" | Format-Table TaskName, State -AutoSize
