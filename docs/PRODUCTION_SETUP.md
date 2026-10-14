@@ -128,3 +128,5 @@ Before relying on them: `.venv\Scripts\python.exe manage.py enviar_automatizacio
 ## Updates
 
 Push to GitHub from dev; the "Actualizar" task deploys it the next day at 06:00. To deploy right away, on the app VM: `.\deploy\update.ps1`.
+
+If code reaches the VM by a manual `git pull` without `update.ps1`, the task sees no new commits and does not restart the server: the running app stays on the old code until the next push (or a manual `update.ps1`). First automatic deploy: 2026-10-15 06:00, checked by the automatic-generation footer appearing on the reports.
