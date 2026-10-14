@@ -120,5 +120,11 @@ class SalidasTests(SimpleTestCase):
             from types import SimpleNamespace
             reportes = rm.armar([SimpleNamespace(nombre="Acoxpa")], SEM, False)
         self.assertTrue(pdf_meseros.generar(reportes).startswith(b"%PDF"))
-        self.assertTrue(excel_meseros.generar(reportes).startswith(b"PK"))
+        libro_bytes = excel_meseros.generar(reportes)
+        self.assertTrue(libro_bytes.startswith(b"PK"))
+        import io
+        from openpyxl import load_workbook
+        from .salidas import AVISO_AUTOMATICO
+        libro = load_workbook(io.BytesIO(libro_bytes))
+        self.assertTrue(all(ws.oddFooter.left.text == AVISO_AUTOMATICO for ws in libro.worksheets))  # every sheet
         self.assertEqual(pdf_meseros.nombre_archivo(reportes), "Reporte_Meseros_Acoxpa_Semana_41_5_oct_11_oct_2026.pdf")

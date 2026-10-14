@@ -9,6 +9,7 @@ from openpyxl.utils import get_column_letter
 
 from ..motor import reporte_cedis as rc
 from ..motor.reporte_cedis import BODEGON, EMPANADAS, HORAS, DatosCedis
+from . import AVISO_AUTOMATICO, pie_excel
 
 VERDE_MARCA = "10564E"
 ENCABEZADO_F = Font(bold=True, color="FFFFFF")
@@ -39,6 +40,8 @@ def _notas(wb: Workbook, notas: list[str], datos: DatosCedis):
     ws["A1"].font, ws["A1"].fill = ENCABEZADO_F, ENCABEZADO_R
     for n in notas:
         ws.append([n])
+    ws.append([AVISO_AUTOMATICO])
+    ws.cell(ws.max_row, 1).font = Font(italic=True, color="555555")
     ws.append([])
     ws.append(["Sucursal", "Inicio en Odoo"])
     for c in ws[ws.max_row]:
@@ -52,6 +55,7 @@ def _notas(wb: Workbook, notas: list[str], datos: DatosCedis):
 
 
 def _guardar(wb: Workbook) -> bytes:
+    pie_excel(wb)
     salida = io.BytesIO()
     wb.save(salida)
     return salida.getvalue()

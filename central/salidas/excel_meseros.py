@@ -8,6 +8,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
 from ..motor.reporte_meseros import ReporteMeseros, nombre_base
+from . import pie_excel
 from ..motor.tabla_comercial import ENTERO, MONEDA, PORCENTAJE
 from .excel_comercial import (FONDO_SEMAFORO, SECCION_F, _datos_grafica, _encabezado, _hoja, _notas, _numero,
                               _resumen, _variacion)
@@ -91,6 +92,7 @@ def generar(reportes: list[ReporteMeseros]) -> bytes:
             _datos_grafica(_hoja(wb, r, nombre, varios), g)
         _detalle(_hoja(wb, r, "Meseros" if not r.por_sucursal else "Sucursales", varios), r)
         _notas(_hoja(wb, r, "Notas", varios), r)
+    pie_excel(wb)
     salida = io.BytesIO()
     wb.save(salida)
     return salida.getvalue()

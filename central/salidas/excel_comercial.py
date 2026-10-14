@@ -19,6 +19,7 @@ from ..motor import detalle
 from ..motor.periodo import TipoPeriodo
 from ..motor.reporte_comercial import TITULO, ReporteComercial, filas_visibles, nombre_base
 from ..motor.tabla_comercial import DECIMAL, ENTERO, MONEDA, PORCENTAJE
+from . import AVISO_AUTOMATICO, pie_excel
 
 VERDE_MARCA = "10564E"
 VERDE_CLARO = "A7C2BC"
@@ -258,6 +259,7 @@ def _notas(ws, r: ReporteComercial):
         c = ws.cell(i, 1, "• " + nota)
         c.alignment = Alignment(wrap_text=True, vertical="top")
         ws.row_dimensions[i].height = 15 * (1 + len(nota) // 120)
+    ws.cell(len(r.notas) + 4, 1, AVISO_AUTOMATICO).font = Font(italic=True, color="555555")
     ws.column_dimensions["A"].width = 130
 
 
@@ -275,6 +277,7 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
             _datos_grafica(_hoja(wb, r, nombre, varios), g)
         _detalle(_hoja(wb, r, "Detalle", varios), r)
         _notas(_hoja(wb, r, "Notas", varios), r)
+    pie_excel(wb)
     salida = io.BytesIO()
     wb.save(salida)
     return salida.getvalue()

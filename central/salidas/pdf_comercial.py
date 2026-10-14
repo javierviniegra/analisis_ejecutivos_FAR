@@ -33,6 +33,7 @@ from ..motor.lectura import AVISO, NEGATIVO, POSITIVO
 from ..motor.periodo import _MESES_ES
 from ..motor.reporte_comercial import TITULO, ReporteComercial, filas_visibles, nombre_base
 from ..motor.tabla_comercial import ENTERO, MONEDA, PORCENTAJE
+from . import AVISO_AUTOMATICO
 
 FONDO = str(Path(__file__).resolve().parent / "recursos" / "fondo_fonda.jpeg")
 
@@ -89,6 +90,8 @@ def _pagina(c):
     c.drawRightString(ANCHO - MARGEN, ALTO - 50, "Fonda Argentina · Central de Reportes")
     c.setFillColor(TEXTO_SUAVE)
     c.drawRightString(ANCHO - MARGEN, ALTO - 61, f"Generado el {_fecha(date.today())}")
+    c.setFont(FI, 6.3)  # footer, below Y_MIN
+    c.drawString(MARGEN, 18, AVISO_AUTOMATICO)
 
 
 def _titulo(c, r: ReporteComercial, y: float) -> float:
