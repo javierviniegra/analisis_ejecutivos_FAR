@@ -43,9 +43,12 @@ class ReporteComercial:
     graficas: list[Grafica]
     cobertura: list[str]  # footnotes about this period's data
     reglas: list[str]  # the rules and thresholds the report applies
-    # Consolidated only: each branch's own period and previous period, for the detail page.
+    # Consolidated only: each branch's own period and the same period last year, for the detail page.
     por_sucursal: list[tuple[str, Metricas, Metricas | None]] = field(default_factory=list)
     incluir_costos: bool = True  # option of the generation screen / automation (default on)
+    # Owner, 2026-10-14: the commercial report compares against the same period last
+    # year (table, charts, detail); the previous period only in the Lectura.
+    solo_anio: bool = True
 
     @property
     def notas(self) -> list[str]:
@@ -120,7 +123,7 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
         r = _uno("Consolidado", nombres, periodo, actual, comp_ant, comp_anio, diario, incluir_costos)
         fuera = (FILAS_PRESUPUESTO if actual.costo_ventas_ppto is None else set()) |             (FILAS_COSTO_FACTURADO if actual.costo_ventas_real is None else set())
         r.filas = [f for f in r.filas if f.indicador.clave not in fuera]  # no rows of dashes
-        r.por_sucursal = [(n, ma[i], mp[i]) for i, n in enumerate(nombres)]
+        r.por_sucursal = [(n, ma[i], my[i] if my else None) for i, n in enumerate(nombres)]  # base: last year
         sin_considerar = [s.nombre for s in sucursales if not getattr(s, "considerar_costo", True)]
         if incluir_costos and sin_considerar:
             r.cobertura.append(f"No se considera el costo de {', '.join(sin_considerar)} (así está configurada la "

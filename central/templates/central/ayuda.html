@@ -309,14 +309,15 @@
       <h2>5. El reporte comercial</h2>
       <h3>Página 1</h3>
       <ul>
-        <li><strong>Lectura:</strong> frases que resumen el periodo: la venta bruta contra el periodo anterior y el año anterior, si el cambio vino del tráfico (clientes) o del cheque promedio, los controles que subieron (solo si pesan al menos {{ peso_control }}% de la venta neta), los cambios de mezcla o canal de más de {{ puntos_mezcla }} puntos, y el costo contra la meta.</li>
-        <li><strong>Tabla de indicadores:</strong> Ventas, Mezcla, Control (cancelaciones, cortesías y descuentos a precio de venta) y Costo, con el periodo, el anterior, el año anterior y sus variaciones.</li>
-        <li><strong>Dos gráficas:</strong> venta bruta por día contra el periodo anterior y contra el año anterior. En un mes: la venta por día y la tendencia de 12 meses contra el año anterior.</li>
+        <li><strong>Comparación principal: el mismo periodo del año anterior</strong> (misma semana numérica, mismo mes, mismas fechas en un rango). El encabezado dice contra qué periodo («Contra: Semana 41 · 6–12 oct 2025»).</li>
+        <li><strong>Lectura en bloques:</strong> primero <em>contra el año anterior</em>, luego <em>contra el periodo inmediato anterior</em> (cada uno dice su periodo): la venta bruta, si el cambio vino del tráfico (clientes) o del cheque promedio, los controles que subieron (solo si pesan al menos {{ peso_control }}% de la venta neta) y los cambios de mezcla o canal de más de {{ puntos_mezcla }} puntos. Al final, <em>del periodo</em>: el costo contra la meta y el presupuesto.</li>
+        <li><strong>Tabla de indicadores:</strong> Ventas, Mezcla, Control (cancelaciones, cortesías y descuentos a precio de venta) y Costo, con el periodo, el año anterior y la variación.</li>
+        <li><strong>Dos gráficas, contra el año anterior:</strong> venta bruta por día y clientes por día. En un mes: la venta por día y la tendencia de 12 meses contra el año anterior.</li>
         <li><strong>Notas:</strong> todo lo que haga incompleto un número (días sin corte, sucursales que no se comparan, costos estimados, cortes descartados…).</li>
       </ul>
       <h3>Página 2: Detalle</h3>
       <ul>
-        <li><strong>Consolidado:</strong> una fila por sucursal (venta, variación contra su periodo anterior, clientes, cheque promedio y los dos porcentajes de costo con su semáforo), de mayor a menor venta.</li>
+        <li><strong>Consolidado:</strong> una fila por sucursal (venta, variación contra su mismo periodo del año anterior, clientes, cheque promedio y los dos porcentajes de costo con su semáforo), de mayor a menor venta.</li>
         <li><strong>Una sucursal:</strong> por día, por bloque de 7 días o por mes, según el largo del periodo.</li>
         <li>Al final, <strong>Reglas y umbrales del reporte</strong>: todas las reglas que se aplicaron, escritas en el propio reporte.</li>
       </ul>
@@ -336,7 +337,9 @@
       <h2>5b. El reporte de meseros</h2>
       <p>Mismas características que el comercial (cualquier periodo, por sucursal o consolidado, comparativos, Lectura, gráficas, notas, PDF/Excel, envío y automatizaciones), sobre el desempeño de los meseros.</p>
       <ul>
-        <li><strong>Venta de meseros:</strong> solo cuentas de <em>salón</em>. Plataformas y para llevar se muestran aparte como venta sin mesero.</li>
+        <li><strong>Panel de arriba:</strong> venta total, cheque promedio, personas, cortesías, descuentos, cancelaciones y anulaciones (estas dos, del corte de caja diario) de la sucursal, en tarjetas con su flecha contra el periodo anterior. Venta, cortesías y descuentos son de toda la sucursal; cheque y personas, de salón.</li>
+        <li><strong>Venta de meseros:</strong> solo cuentas de <em>salón</em>. Aplicaciones (plataformas) y para llevar tienen su propio apartado, con sus descuentos y cortesías.</li>
+        <li><strong>Cortesías y descuentos:</strong> las cortesías se valúan al precio de venta del platillo (no al costo); los descuentos son los de las líneas que no son cortesía.</li>
         <li><strong>Plantilla:</strong> meseros con al menos una cuenta en el periodo. <strong>Venta por día trabajado</strong> = venta ÷ días en que el mesero tuvo cuentas: la comparación justa entre quien trabajó 3 días y quien trabajó 6.</li>
         <li><strong>Por mesero:</strong> mesas, personas, venta, cheque promedio (con semáforo contra el promedio de la sucursal: verde igual o arriba, naranja abajo, rojo más de 10% abajo), % de bebidas, propina, cortesías y tiempo promedio de mesa.</li>
         <li><strong>Cancelaciones y anulaciones:</strong> solo por sucursal; Wansoft las quita del ticket y no trae el mesero.</li>

@@ -32,31 +32,41 @@ class TituloTests(SimpleTestCase):
         self.assertEqual(titulo(Periodo.rango(SEM.desde, SEM.hasta)), "Lectura del periodo")
 
 
+def _bloque(lec, inicio):
+    """The block whose subtitle starts with `inicio`."""
+    return next(b for b in lec.bloques if b.subtitulo.startswith(inicio))
+
+
 class LecturaTests(SimpleTestCase):
-    def test_sin_cambios_solo_la_venta(self):
+    """Owner, 2026-10-14: blocks -- against last year first, then against the
+    immediately previous period (each naming its period), then the period itself."""
+
+    def test_dos_bloques_con_su_periodo(self):
         lec = construir_lectura(SEM, _m(), _m(), _m())
-        self.assertEqual(len(lec.observaciones), 1)
-        o = lec.observaciones[0]
-        self.assertEqual(o.tono, NEUTRO)
-        self.assertIn("La venta bruta fue de $11,600", o.texto)
-        self.assertIn("vs la semana anterior", o.texto)
-        self.assertIn("vs la misma semana del año anterior", o.texto)
+        self.assertEqual([b.subtitulo for b in lec.bloques],
+                         ["Contra el año anterior · Semana 39 · 22 sep – 28 sep 2025",
+                          "Contra el periodo inmediato anterior · Semana 38 · 14 sep – 20 sep 2026"])
+        for b in lec.bloques:  # no change: only the sales sentence, neutral
+            self.assertEqual(len(b.observaciones), 1)
+            self.assertEqual(b.observaciones[0].tono, NEUTRO)
+            self.assertIn("La venta bruta fue de $11,600", b.observaciones[0].texto)
 
     def test_venta_sube_por_trafico(self):
         actual = _m(venta_bruta=D("12760"), venta_neta=D("11000"), clientes=D("300"))  # +20% guests, check -8.3%
         lec = construir_lectura(SEM, actual, _m(), None)
-        venta, causa = lec.observaciones[0], lec.observaciones[1]
+        anio, ant = _bloque(lec, "Contra el año"), _bloque(lec, "Contra el periodo")
+        self.assertEqual(anio.observaciones[0].texto, "La venta bruta fue de $12,760, sin comparativo.")
+        venta, causa = ant.observaciones
         self.assertEqual(venta.tono, POSITIVO)
         self.assertIn("▲ +10.0% (+$1,160)", venta.texto)
-        self.assertIn("sin comparativo contra la misma semana del año anterior", venta.texto)
         self.assertIn("sobre todo del tráfico", causa.texto)
 
-    def test_venta_baja_por_cheque(self):
+    def test_venta_baja_por_cheque_contra_el_anio(self):
         actual = _m(venta_bruta=D("10440"), venta_neta=D("9000"))  # same guests, check -10%
-        lec = construir_lectura(SEM, actual, _m(), _m())
-        self.assertEqual(lec.observaciones[0].tono, NEGATIVO)
-        self.assertIn("-$1,160", lec.observaciones[0].texto)
-        self.assertIn("sobre todo del cheque promedio", lec.observaciones[1].texto)
+        anio = _bloque(construir_lectura(SEM, actual, _m(), _m()), "Contra el año")
+        self.assertEqual(anio.observaciones[0].tono, NEGATIVO)
+        self.assertIn("-$1,160", anio.observaciones[0].texto)
+        self.assertIn("sobre todo del cheque promedio", anio.observaciones[1].texto)
 
     def test_controles_solo_si_suben_y_pesan(self):
         actual = _m(cancelaciones=D("80"), cortesias=D("30"), descuentos=D("20"))
@@ -74,11 +84,11 @@ class LecturaTests(SimpleTestCase):
         self.assertIn("Salón 85.0%", mezcla.texto)
         self.assertNotIn("Alimentos", mezcla.texto)  # food mix did not move
 
-    def test_costo_ventas_sobre_presupuesto(self):
+    def test_costo_ventas_sobre_presupuesto_en_del_periodo(self):
         actual = _m(costo_ventas_real=D("1200"), costo_ventas_ppto=D("1000"), costo_ventas_real_con_ppto=D("1200"), costo_ventas_ppto_con_real=D("1000"),
                     n_con_presupuesto=1)
-        texto = " ".join(_textos(construir_lectura(SEM, actual, _m(), None)))
-        self.assertIn("120.0% ejercido", texto)
+        lec = construir_lectura(SEM, actual, _m(), None)
+        self.assertIn("120.0% ejercido", " ".join(o.texto for o in _bloque(lec, "Del periodo").observaciones))
         dentro = _m(costo_ventas_real=D("900"), costo_ventas_ppto=D("1000"), costo_ventas_real_con_ppto=D("900"), costo_ventas_ppto_con_real=D("1000"),
                     n_con_presupuesto=1)
         self.assertNotIn("ejercido", " ".join(_textos(construir_lectura(SEM, dentro, _m(), None))))
@@ -91,16 +101,14 @@ class LecturaTests(SimpleTestCase):
 
     def test_comparativo_no_fiable(self):
         anterior = _m(periodo=SEM.anterior(), venta_neta=D("1000"), dias_con_cierre=6)  # 6/7 = 86% < 90%
-        lec = construir_lectura(SEM, _m(), anterior, _m())
-        self.assertIn("sin comparativo fiable contra la semana anterior", lec.observaciones[0].texto)
-        self.assertNotIn("%", lec.observaciones[0].texto.split(" y ")[0])  # no misleading percentage
-        self.assertEqual(len(lec.observaciones), 1)  # no "causa" on an unreliable comparison
+        ant = _bloque(construir_lectura(SEM, _m(), anterior, _m()), "Contra el periodo")
+        self.assertEqual(ant.observaciones[0].texto, "La venta bruta fue de $11,600, sin comparativo fiable.")
+        self.assertEqual(len(ant.observaciones), 1)  # no "causa" on an unreliable comparison
 
-    def test_anio_no_repite_la_comparacion(self):
+    def test_anio_un_solo_bloque_de_comparacion(self):
         anio, previo = Periodo.anio_completo(2026), Periodo.anio_completo(2025)
         lec = construir_lectura(anio, _m(anio), _m(previo), _m(previo))
-        self.assertIn("vs el año anterior", lec.observaciones[0].texto)
-        self.assertNotIn("del año anterior", lec.observaciones[0].texto)
+        self.assertEqual([b.subtitulo for b in lec.bloques], ["Contra el año anterior · Año 2025"])
 
 
 class ReglaFiableTests(SimpleTestCase):
@@ -185,9 +193,10 @@ class ComparablesTests(SimpleTestCase):
         nombres, actuales, bases = self._caso()
         total = consolidar(actuales, SEM)
         comp = comparables(nombres, actuales, bases, SEM, self.ANT)
-        texto = construir_lectura(SEM, total, comp, None).observaciones[0].texto
+        lec = construir_lectura(SEM, total, comp, None)
+        texto = _bloque(lec, "Contra el periodo").observaciones[0].texto
         self.assertIn("La venta bruta fue de $17,400", texto)
-        self.assertIn("▲ +11.1% (+$1,160) vs la semana anterior en sucursales comparables", texto)
+        self.assertIn("▲ +11.1% (+$1,160) en sucursales comparables", texto)
         notas = notas_cobertura(SEM, total, comp, None)
         self.assertTrue(any("se excluye Nueva por no tener" in n for n in notas))
 

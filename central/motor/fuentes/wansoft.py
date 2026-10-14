@@ -46,7 +46,7 @@ COLUMNAS_REQUERIDAS = {
     "getallordenesbyday_new_venta": ["Sucursal", "Fecha", "TipoOrden", "Total", "Movimento", "Subtotal", "Personas",
                                      "Mesero", "HoraApertura", "HoraCierre"],
     "getallordenesbyday_new_detalleventa": ["Movimiento_Id", "Sucursal", "TipoGrupo", "Total", "Cortesia", "Cantidad",
-                                            "PrecioUnitario"],
+                                            "PrecioUnitario", "Descuento"],
     "getallordenesbyday_new_pago": ["Movimiento_Id", "Sucursal", "Propina"],
     "costeomensual": ["id", "subsidiary_id", "created_at", "CostoTotal", "CostoDeConsumo",
                       "CostoIdealDeProductosPendientesDeRebaja"],
@@ -458,27 +458,68 @@ def ventas_meseros(cur, nombres: list[str], desde: date, hasta: date) -> dict[st
     return resultado
 
 
-def venta_fuera_de_salon(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, Decimal]]:
-    """Gross sales and accounts per branch of the orders that are not dining
-    room (platforms, take-away): {branch: {"venta_bruta", "cuentas"}}."""
+def fuera_de_salon(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, dict]]:
+    """The orders that are not dining room, per branch and channel
+    (plataformas = platforms / apps, llevar = take-away, otros): accounts,
+    gross sales, discounts and courtesies (same definitions as the waiters':
+    discounts of the non-courtesy lines, courtesies at sale price; owner,
+    2026-10-14: apps in their own section, to see their discounts).
+    {branch: {canal: {"cuentas", "venta_bruta", "descuentos", "cortesias"}}}"""
     nombres = [n for n in nombres if n]
     if not nombres:
         return {}
+    cero = Decimal("0")
+    resultado: dict[str, dict[str, dict]] = {}
+
+    def del_canal(sucursal, tipo):
+        canal = CANALES.get(tipo, CANAL_OTROS)
+        return resultado.setdefault(sucursal, {}).setdefault(canal, {
+            "cuentas": cero, "venta_bruta": cero, "descuentos": cero, "cortesias": cero})
+
     a, b = _rango_fecha_texto(desde, hasta)
     cur.execute(
-        f"SELECT Sucursal, COUNT(*), SUM(CAST(Total AS DECIMAL(14,2))) FROM getallordenesbyday_new_venta "
+        f"SELECT Sucursal, TipoOrden, COUNT(*), SUM(CAST(Total AS DECIMAL(14,2))) FROM getallordenesbyday_new_venta "
         f"WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s AND TipoOrden <> %s "
-        f"GROUP BY Sucursal",
+        f"GROUP BY Sucursal, TipoOrden",
         (*nombres, a, b, TIPO_SALON),
     )
-    return {s: {"cuentas": Decimal(n or 0), "venta_bruta": Decimal(t or 0)} for s, n, t in cur.fetchall()}
+    for sucursal, tipo, n, total in cur.fetchall():
+        c = del_canal(sucursal, tipo)
+        c["cuentas"] += Decimal(n or 0)
+        c["venta_bruta"] += Decimal(total or 0)
+    for inicio, fin_tramo in _tramos_mensuales(desde, hasta):  # the 12 M-row line table: per month
+        a, b = _rango_fecha_texto(inicio, fin_tramo)
+        cur.execute(
+            f"""
+            SELECT v.Sucursal, v.TipoOrden,
+                   SUM(CASE WHEN d.Cortesia <> '1' THEN CAST(d.Descuento AS DECIMAL(14,2)) ELSE 0 END),
+                   SUM(CASE WHEN d.Cortesia = '1'
+                            THEN CAST(d.Cantidad AS DECIMAL(12,4)) * CAST(d.PrecioUnitario AS DECIMAL(14,4)) ELSE 0 END)
+            FROM getallordenesbyday_new_venta v
+            JOIN getallordenesbyday_new_detalleventa d
+              ON d.Movimiento_Id = v.Movimento AND d.Sucursal = v.Sucursal
+            WHERE v.Sucursal IN ({_marcadores(nombres)}) AND v.Fecha >= %s AND v.Fecha < %s AND v.TipoOrden <> %s
+            GROUP BY v.Sucursal, v.TipoOrden
+            """,
+            (*nombres, a, b, TIPO_SALON),
+        )
+        for sucursal, tipo, descuento, cortesia in cur.fetchall():
+            c = del_canal(sucursal, tipo)
+            c["descuentos"] += Decimal(descuento or 0)
+            c["cortesias"] += Decimal(cortesia or 0)
+    return resultado
 
 
 def mix_meseros(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, dict]]:
     """Per branch and waiter, from the order lines of the dining-room tickets:
-    gross sales of Alimentos and Bebidas, and courtesies valued at list price
-    (quantity x unit price; their line total is 0). One statement per month,
-    as `mix_alimentos_bebidas` (the 12 M-row line table)."""
+    gross sales of Alimentos and Bebidas; courtesies at their SALE price
+    (quantity x unit price -- the courtesy line keeps the dish's price, its
+    total is 0; no cost involved); and discounts (`Descuento` of the lines
+    that are not courtesies: a courtesy also shows as a 100% discount).
+    September 2026, all branches: courtesies = the cash closings to the peso
+    (19 of 19); discounts = the closings in 13 of 19 (the other 6 have round
+    extra amounts in the detail). One statement per month, as
+    `mix_alimentos_bebidas` (the 12 M-row line table)."""
     nombres = [n for n in nombres if n]
     if not nombres:
         return {}
@@ -489,7 +530,8 @@ def mix_meseros(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, 
             f"""
             SELECT v.Sucursal, v.Mesero, d.TipoGrupo, SUM(CAST(d.Total AS DECIMAL(14,2))),
                    SUM(CASE WHEN d.Cortesia = '1'
-                            THEN CAST(d.Cantidad AS DECIMAL(12,4)) * CAST(d.PrecioUnitario AS DECIMAL(14,4)) ELSE 0 END)
+                            THEN CAST(d.Cantidad AS DECIMAL(12,4)) * CAST(d.PrecioUnitario AS DECIMAL(14,4)) ELSE 0 END),
+                   SUM(CASE WHEN d.Cortesia <> '1' THEN CAST(d.Descuento AS DECIMAL(14,2)) ELSE 0 END)
             FROM getallordenesbyday_new_venta v
             JOIN getallordenesbyday_new_detalleventa d
               ON d.Movimiento_Id = v.Movimento AND d.Sucursal = v.Sucursal
@@ -498,14 +540,16 @@ def mix_meseros(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, 
             """,
             (*nombres, a, b, TIPO_SALON),
         )
-        for sucursal, mesero, grupo, total, cortesia in cur.fetchall():
+        for sucursal, mesero, grupo, total, cortesia, descuento in cur.fetchall():
             m = resultado.setdefault(sucursal, {}).setdefault((mesero or "").strip() or "(sin nombre)", {
-                "alimentos": Decimal("0"), "bebidas": Decimal("0"), "cortesias": Decimal("0")})
+                "alimentos": Decimal("0"), "bebidas": Decimal("0"), "cortesias": Decimal("0"),
+                "descuentos": Decimal("0")})
             if grupo == "Alimentos":
                 m["alimentos"] += Decimal(total or 0)
             elif grupo == "Bebidas":
                 m["bebidas"] += Decimal(total or 0)
             m["cortesias"] += Decimal(cortesia or 0)
+            m["descuentos"] += Decimal(descuento or 0)
     return resultado
 
 

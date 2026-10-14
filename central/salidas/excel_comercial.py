@@ -67,8 +67,13 @@ def _resumen(ws, r: ReporteComercial):
     ws["A1"].font = TITULO_F
     ws["A2"] = f"{p.etiqueta()}  ({p.desde:%d/%m/%Y} al {p.hasta:%d/%m/%Y})"
     anio = p.mismo_periodo_anio_anterior()
-    comparado = p.anterior().etiqueta() if anio is None or anio == p.anterior() else f"{p.anterior().etiqueta()} y {anio.etiqueta()}"
-    ws["A3"] = f"Comparado con: {comparado}"
+    solo_anio = getattr(r, "solo_anio", False)
+    if solo_anio:
+        ws["A3"] = (f"Contra: {anio.etiqueta()}  ({anio.desde:%d/%m/%Y} al {anio.hasta:%d/%m/%Y})" if anio
+                    else "Contra: sin periodo comparable del año anterior")
+    else:
+        comparado = p.anterior().etiqueta() if anio is None or anio == p.anterior() else f"{p.anterior().etiqueta()} y {anio.etiqueta()}"
+        ws["A3"] = f"Comparado con: {comparado}"
     ws["A3"].font = SUAVE_F
     if r.nombre == "Consolidado":
         ws["A4"] = "Sucursales: " + ", ".join(r.sucursales)
@@ -76,14 +81,22 @@ def _resumen(ws, r: ReporteComercial):
 
     fila = 6
     ws.cell(fila, 1, r.lectura.titulo).font = SECCION_F
-    for obs in r.lectura.observaciones:
-        fila += 1
-        ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=7)
-        celda = ws.cell(fila, 1, "• " + obs.texto)
-        celda.alignment = Alignment(wrap_text=True, vertical="top")
-        ws.row_dimensions[fila].height = 15 * (1 + len(obs.texto) // 110)
+    bloques = [(b.subtitulo, b.observaciones) for b in r.lectura.bloques] or [("", r.lectura.observaciones)]
+    for subtitulo, observaciones in bloques:
+        if subtitulo:
+            fila += 1
+            ws.cell(fila, 1, subtitulo).font = Font(bold=True, color=VERDE_MARCA, size=9)
+        for obs in observaciones:
+            fila += 1
+            ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=7)
+            celda = ws.cell(fila, 1, "• " + obs.texto)
+            celda.alignment = Alignment(wrap_text=True, vertical="top")
+            ws.row_dimensions[fila].height = 15 * (1 + len(obs.texto) // 110)
 
     fila += 2
+    if solo_anio:
+        _tabla_anio(ws, r, fila)
+        return
     for col, texto in enumerate(["Indicador", "Periodo", "Anterior", "Var.", "", "Año anterior", "Var.", ""], start=1):
         c = ws.cell(fila, col, texto)
         c.font, c.fill = ENCABEZADO_F, ENCABEZADO_R
@@ -115,6 +128,38 @@ def _resumen(ws, r: ReporteComercial):
         ws.column_dimensions[col].width = ancho
 
 
+def _tabla_anio(ws, r: ReporteComercial, fila: int):
+    """The commercial table against last year only (owner, 2026-10-14)."""
+    for col, texto in enumerate(["Indicador", "Periodo", "Año anterior", "Var.", ""], start=1):
+        c = ws.cell(fila, col, texto)
+        c.font, c.fill = ENCABEZADO_F, ENCABEZADO_R
+    seccion, par = None, False
+    for f in filas_visibles(r.filas):
+        if f.indicador.seccion != seccion:
+            seccion = f.indicador.seccion
+            fila += 1
+            ws.cell(fila, 1, seccion).font = SECCION_F
+            par = False
+        fila += 1
+        fmt = f.indicador.formato
+        ws.cell(fila, 1, "   " + f.etiqueta)
+        for col, valor in ((2, f.actual), (3, f.anio_anterior)):
+            c = ws.cell(fila, col, float(valor) if valor is not None else "—")
+            c.number_format = FORMATO_VALOR[fmt]
+            c.alignment = Alignment(horizontal="right")
+        ws.cell(fila, 2).font = Font(bold=True)
+        if f.semaforo:
+            ws.cell(fila, 2).fill = PatternFill("solid", fgColor=FONDO_SEMAFORO[f.semaforo])
+        _variacion(ws, fila, 4, f.var_anio, fmt)
+        if par:
+            for col in range(1, 6):
+                if not (col == 2 and f.semaforo):
+                    ws.cell(fila, col).fill = PAR_R
+        par = not par
+    for col, ancho in zip("ABCDE", (38, 18, 18, 10, 4)):
+        ws.column_dimensions[col].width = ancho
+
+
 def _datos_grafica(ws, g):
     """The chart's data as a table plus a native column chart."""
     ws["A1"] = g.titulo
@@ -131,7 +176,7 @@ def _datos_grafica(ws, g):
                 continue
             valor = serie[i]
             c = ws.cell(4 + i, col, float(valor) if valor is not None else None)
-            c.number_format = FORMATO_VALOR[MONEDA]
+            c.number_format = FORMATO_VALOR[MONEDA if g.pesos else ENTERO]
     ultima = 3 + len(g.etiquetas)
     if g.nota:
         ws.cell(ultima + 2, 1, g.nota).font = SUAVE_F
@@ -142,7 +187,7 @@ def _datos_grafica(ws, g):
     grafica = BarChart()
     grafica.type, grafica.grouping, grafica.overlap = "col", "clustered", -10
     grafica.title = g.titulo
-    grafica.y_axis.numFmt = '"$"#,##0'
+    grafica.y_axis.numFmt = '"$"#,##0' if g.pesos else "#,##0"
     grafica.height, grafica.width = 8, 18
     columnas = 3 if hay_base else 2
     grafica.add_data(Reference(ws, min_col=2, max_col=columnas, min_row=3, max_row=ultima), titles_from_data=True)
@@ -170,7 +215,7 @@ def _detalle(ws, r: ReporteComercial):
     ws["A1"].font = SECCION_F
     if r.por_sucursal:
         costos = r.incluir_costos
-        _encabezado(ws, 3, ["Sucursal", "Venta bruta", "Var.", "", "Clientes", "Cheque prom."]
+        _encabezado(ws, 3, ["Sucursal", "Venta bruta", "Var. año ant.", "", "Clientes", "Cheque prom."]
                     + (["Costo total", "Costo facturado"] if costos else []))
         filas, total = detalle.por_sucursal(r)
         for i, f in enumerate(filas + [total], start=4):
@@ -191,7 +236,7 @@ def _detalle(ws, r: ReporteComercial):
     else:
         compara = detalle.compara_con_anterior(r)
         _encabezado(ws, 3, ["Periodo", "Venta bruta", "Tickets", "Clientes", "Cheque prom."]
-                    + (["Anterior", "Var.", ""] if compara else []))
+                    + (["Año anterior", "Var.", ""] if compara else []))
         for i, f in enumerate(detalle.por_periodo(r), start=4):
             ws.cell(i, 1, f.etiqueta.replace(chr(10), " "))
             _numero(ws, i, 2, f.venta_bruta, MONEDA)
@@ -225,7 +270,7 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
         if r.periodo.tipo == TipoPeriodo.MES:
             nombres = ["Venta por día", "Venta mensual"]
         else:
-            nombres = ["Vs periodo anterior", "Vs año anterior"]
+            nombres = ["Venta vs año anterior", "Clientes vs año anterior"]
         for g, nombre in zip(r.graficas, nombres):
             _datos_grafica(_hoja(wb, r, nombre, varios), g)
         _detalle(_hoja(wb, r, "Detalle", varios), r)

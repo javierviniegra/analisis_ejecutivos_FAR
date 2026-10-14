@@ -66,12 +66,12 @@ class GraficaTests(SimpleTestCase):
         con = g.construir_grafica(self.SEM, ant, Comparacion(_diaria(self.SEM), _diaria(ant), ["Puebla"]), "x", "x")
         self.assertEqual(con.nota, "Sucursales comparables (sin Puebla).")
 
-    def test_anio_una_sola_grafica(self):
-        anio = Periodo.anio_completo(2026)
-        self.assertEqual(len(g.construir_graficas(anio, _diaria(anio), _diaria(anio.anterior()), None)), 1)
+    def test_ambas_graficas_contra_el_anio_anterior(self):
+        # owner, 2026-10-14: sales and guests, both against the same period last year
         dos = g.construir_graficas(self.SEM, _diaria(self.SEM), _diaria(self.SEM.anterior()), None)
-        self.assertEqual([x.titulo for x in dos], ["Venta bruta por día vs semana anterior",
-                                                   "Venta bruta por día vs año anterior"])
+        self.assertEqual([x.titulo for x in dos], ["Venta bruta por día vs año anterior",
+                                                   "Clientes por día vs año anterior"])
+        self.assertEqual([x.pesos for x in dos], [True, False])
 
     def test_dibuja_png(self):
         gr = g.construir_grafica(self.SEM, None, Comparacion(_diaria(self.SEM), None), "x", "x")

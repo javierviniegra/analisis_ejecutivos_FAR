@@ -1,8 +1,8 @@
 """Chart data of the commercial report (pure: no I/O, no drawing).
 
-Both charts compare gross sales (con IVA: the owner measures the impact of
-sales on gross) of the period, bucket by bucket, against a comparison
-period: the previous period, and the same period last year. Each chart uses a `Comparacion`, so it follows the comparable-branches
+Both charts compare the period, bucket by bucket, against the same period
+last year (owner, 2026-10-14): gross sales (con IVA: the owner measures the
+impact of sales on gross) and guests. Each chart uses a `Comparacion`, so it follows the comparable-branches
 rule like the table (branches left out are named in the chart's note).
 
 Bucket size follows the period length (owner, 2026-09-24): one bar per day
@@ -91,19 +91,21 @@ class Grafica:
     nombre_base: str
     nota: str | None  # comparable branches / no comparison
     resaltar: int | None = None  # index of the bucket to highlight (the report's month in a trend)
+    pesos: bool = True  # y axis in pesos (False: counts, e.g. guests)
     rotar: bool = False  # long labels (names): slanted
 
 
 def construir_grafica(periodo: Periodo, periodo_base: Periodo | None, comp: Comparacion, vs: str,
-                      vs_corto: str) -> Grafica:
-    """`vs` names the comparison in notes; `vs_corto` in the (space-limited) title."""
+                      vs_corto: str, serie: str = "venta_por_dia", que: str = "Venta bruta") -> Grafica:
+    """`vs` names the comparison in notes; `vs_corto` in the (space-limited)
+    title; `serie` the per-day series of `Metricas` drawn."""
     gran = granularidad(periodo)
     rangos = cubetas(periodo, gran)
     etiquetas = [etiqueta(i, gran, periodo.dias, periodo.desde.year != periodo.hasta.year) for i, _ in rangos]
-    actual = sumar(comp.actual.venta_por_dia, rangos)
+    actual = sumar(getattr(comp.actual, serie), rangos)
     base: list[Decimal | None] = [None] * len(rangos)
     if comp.base is not None and periodo_base is not None:
-        valores = sumar(comp.base.venta_por_dia, cubetas(periodo_base, gran))
+        valores = sumar(getattr(comp.base, serie), cubetas(periodo_base, gran))
         base = (valores + [None] * len(rangos))[:len(rangos)]  # match by position
     if all(v is None for v in base):
         notas = [f"Sin comparativo contra {vs}"]  # the footnotes say why
@@ -112,13 +114,14 @@ def construir_grafica(periodo: Periodo, periodo_base: Periodo | None, comp: Comp
     else:
         notas = []
     return Grafica(
-        titulo=f"Venta bruta {_POR[gran]} vs {vs_corto}",
+        titulo=f"{que} {_POR[gran]} vs {vs_corto}",
         etiquetas=etiquetas,
         actual=actual,
         base=base,
         nombre_actual=periodo.etiqueta(),
         nombre_base=periodo_base.etiqueta() if periodo_base else "—",
         nota=". ".join(notas) + "." if notas else None,
+        pesos=serie == "venta_por_dia",
     )
 
 
@@ -241,11 +244,8 @@ def construir_graficas(periodo: Periodo, actual: Metricas, anterior: Comparacion
         if diario is None:
             raise ValueError("a month report needs the daily series (metricas.recolectar_diario)")
         return [grafica_por_dia(periodo, actual), grafica_tendencia_mensual(periodo, diario)]
-    nombre = lectura.vs_anterior(periodo).split(" ", 1)[1]  # "semana anterior", "mes anterior", ...
-    graficas = [construir_grafica(periodo, periodo.anterior(), como_comparacion(actual, anterior),
-                                  lectura.vs_anterior(periodo), nombre)]
-    if periodo.mismo_periodo_anio_anterior() != periodo.anterior():
-        graficas.append(construir_grafica(periodo, periodo.mismo_periodo_anio_anterior(),
-                                          como_comparacion(actual, anio_anterior), lectura.vs_anio(periodo),
-                                          "año anterior"))
-    return graficas
+    # Owner, 2026-10-14: both against the same period last year -- sales and guests.
+    base, comp = periodo.mismo_periodo_anio_anterior(), como_comparacion(actual, anio_anterior)
+    return [construir_grafica(periodo, base, comp, lectura.vs_anio(periodo), "año anterior"),
+            construir_grafica(periodo, base, comp, lectura.vs_anio(periodo), "año anterior",
+                              serie="clientes_por_dia", que="Clientes")]

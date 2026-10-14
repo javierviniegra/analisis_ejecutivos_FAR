@@ -59,7 +59,7 @@ def dibujar(g: Grafica) -> bytes:
                        rotation_mode="anchor")
     if g.resaltar is not None and g.resaltar % paso == 0:  # the report's own bucket, in bold
         ax.get_xticklabels()[g.resaltar // paso].set_fontweight("bold")
-    ax.yaxis.set_major_formatter(FuncFormatter(_pesos))
+    ax.yaxis.set_major_formatter(FuncFormatter(_pesos if g.pesos else (lambda v, _p=None: f"{v:,.0f}")))
     ax.tick_params(axis="y", labelsize=6, colors=TEXTO_SUAVE, length=0)
     ax.tick_params(axis="x", length=0)
     ax.grid(axis="y", color=REJILLA, linewidth=0.6, zorder=0)

@@ -26,12 +26,13 @@ class DetalleTests(SimpleTestCase):
     SEM = Periodo.semana(2026, 39)
 
     def test_por_sucursal_ordena_y_respeta_comparables(self):
-        ant = self.SEM.anterior()
+        # owner, 2026-10-14: each branch against the same period last year
+        ly = self.SEM.mismo_periodo_anio_anterior()
         vieja, nueva = _m(self.SEM, "1000", costo="2730"), _m(self.SEM, "3000")
         vieja.costo_total, vieja.venta_neta_con_costo_total = D("2800"), D("7000")
         r = _uno("Consolidado", ["Vieja", "Nueva"], self.SEM, consolidar([vieja, nueva], self.SEM),
-                 Comparacion(vieja, _m(ant, "900")), Comparacion(vieja, None), None)
-        r.por_sucursal = [("Vieja", vieja, _m(ant, "900")), ("Nueva", nueva, _m(ant, "900", dias=2))]
+                 Comparacion(vieja, None), Comparacion(vieja, _m(ly, "900")), None)
+        r.por_sucursal = [("Vieja", vieja, _m(ly, "900")), ("Nueva", nueva, _m(ly, "900", dias=2))]
         filas, total = detalle.por_sucursal(r)
         self.assertEqual([f.nombre for f in filas], ["Nueva", "Vieja"])  # largest sales first
         self.assertEqual(filas[0].var_anterior.direccion, c.SIN_DATO)  # new branch: 2 of 7 days before, no comparison
@@ -39,12 +40,12 @@ class DetalleTests(SimpleTestCase):
         self.assertEqual((filas[1].pct_costo_total, filas[1].semaforo_total), (D("0.4"), c.ROJO))  # total 2800 / 7000
         self.assertIsNone(filas[0].semaforo_total)  # no cost data: no light
         self.assertEqual(total.venta_bruta, D("28000"))
-        self.assertEqual(total.var_anterior, next(f for f in r.filas if f.indicador.clave == "venta_bruta").var_anterior)
+        self.assertEqual(total.var_anterior, next(f for f in r.filas if f.indicador.clave == "venta_bruta").var_anio)
 
     def test_semana_compara_dia_contra_dia(self):
-        ant = self.SEM.anterior()
-        r = _uno("Puebla", ["Puebla"], self.SEM, _m(self.SEM), Comparacion(_m(self.SEM), _m(ant, "800")),
-                 Comparacion(_m(self.SEM), None), None)
+        ly = self.SEM.mismo_periodo_anio_anterior()  # same ISO week last year: Monday with Monday
+        r = _uno("Puebla", ["Puebla"], self.SEM, _m(self.SEM), Comparacion(_m(self.SEM), None),
+                 Comparacion(_m(self.SEM), _m(ly, "800")), None)
         filas = detalle.por_periodo(r)
         self.assertTrue(detalle.compara_con_anterior(r))
         self.assertEqual((len(filas), filas[0].etiqueta), (7, "Lun 21"))

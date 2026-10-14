@@ -62,8 +62,9 @@ def _fila_sucursal(nombre: str, m: Metricas, var: Variacion) -> FilaSucursal:
 
 
 def _var_sucursal(m: Metricas, previo: Metricas | None) -> Variacion:
-    """Same comparable rule as the table: a branch without full data in the
-    previous period (new, or no data) has no comparison."""
+    """Change against the same period last year (owner, 2026-10-14). Same
+    comparable rule as the table: a branch without full data in that period
+    (new, or no data) has no comparison."""
     fiable = previo is not None and cobertura_fiable(previo.dias_con_cierre, previo.dias_esperados)
     return variacion(m.venta_bruta, previo.venta_bruta if fiable else None)
 
@@ -74,7 +75,7 @@ def por_sucursal(r: ReporteComercial) -> tuple[list[FilaSucursal], FilaSucursal]
     filas = [_fila_sucursal(n, m, _var_sucursal(m, p)) for n, m, p in r.por_sucursal]
     filas.sort(key=lambda f: f.venta_bruta, reverse=True)
     venta = next(f for f in r.filas if f.indicador.clave == "venta_bruta")
-    return filas, _fila_sucursal("Total", r.actual, venta.var_anterior)
+    return filas, _fila_sucursal("Total", r.actual, venta.var_anio)
 
 
 def _suma(por_dia: dict, inicio, fin) -> Decimal | None:
@@ -83,7 +84,9 @@ def _suma(por_dia: dict, inicio, fin) -> Decimal | None:
 
 
 def compara_con_anterior(r: ReporteComercial) -> bool:
-    return r.periodo.tipo != TipoPeriodo.MES and r.anterior.base is not None
+    """Whether the detail pairs each day / block with the same period last year
+    (not in a month: different weekdays; owner 2026-10-14: last year, not the previous period)."""
+    return r.periodo.tipo != TipoPeriodo.MES and r.anio_anterior.base is not None
 
 
 def por_periodo(r: ReporteComercial) -> list[FilaPeriodo]:
@@ -93,12 +96,12 @@ def por_periodo(r: ReporteComercial) -> list[FilaPeriodo]:
     p, m = r.periodo, r.actual
     gran = granularidad(p)
     rangos = cubetas(p, gran)
-    rangos_base = cubetas(p.anterior(), gran) if compara_con_anterior(r) else []
+    rangos_base = cubetas(p.mismo_periodo_anio_anterior(), gran) if compara_con_anterior(r) else []
     filas = []
     for i, (inicio, fin) in enumerate(rangos):
         venta = _suma(m.venta_por_dia, inicio, fin)
         clientes = _suma(m.clientes_por_dia, inicio, fin)
-        anterior = _suma(r.anterior.base.venta_por_dia, *rangos_base[i]) if i < len(rangos_base) else None
+        anterior = _suma(r.anio_anterior.base.venta_por_dia, *rangos_base[i]) if i < len(rangos_base) else None
         texto = (f"{_DIAS_ES[inicio.weekday()]} {inicio.day}" if gran == DIA
                  else etiqueta(inicio, gran, p.dias, p.desde.year != p.hasta.year))
         filas.append(FilaPeriodo(

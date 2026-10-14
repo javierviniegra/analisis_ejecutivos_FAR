@@ -104,14 +104,23 @@ def _titulo(c, r: ReporteComercial, y: float) -> float:
     y -= 11
     c.setFillColor(TEXTO_SUAVE)
     c.setFont(F, 7.5)
-    ant = p.anterior().etiqueta()
     anio = p.mismo_periodo_anio_anterior()
+    if getattr(r, "solo_anio", False):  # commercial: against the same period last year (owner, 2026-10-14)
+        c.setFillColor(TEXTO)
+        c.setFont(F, 8.2)
+        texto = (f"Contra: {anio.etiqueta()}  ({anio.desde:%d/%m/%Y} al {anio.hasta:%d/%m/%Y})" if anio
+                 else "Contra: sin periodo comparable del año anterior")
+        c.drawString(MARGEN, y, texto)
+        return y - 12
+    ant = p.anterior().etiqueta()
     comparado = ant if anio is None or anio == p.anterior() else f"{ant} y {anio.etiqueta()}"
     c.drawString(MARGEN, y, f"Comparado con: {comparado}")
     return y - 12
 
 
 def _lectura(c, r: ReporteComercial, y: float) -> float:
+    if r.lectura.bloques:
+        return _lectura_bloques(c, r, y)
     tam, interlinea, sangria = 7.8, 9.8, 12
     bloques = [(o, _renglones(c, o.texto, F, tam, ANCHO_UTIL - 20 - sangria)) for o in r.lectura.observaciones]
     alto = 20 + sum(len(rs) * interlinea + 2.5 for _, rs in bloques) + 3
@@ -131,6 +140,39 @@ def _lectura(c, r: ReporteComercial, y: float) -> float:
             c.drawString(MARGEN + 12 + sangria, yy, renglon)
             yy -= interlinea
         yy -= 2.5
+    return y - alto - 8
+
+
+def _lectura_bloques(c, r: ReporteComercial, y: float) -> float:
+    """The Lectura in blocks, each under its subtitle (against last year, against
+    the previous period, the period itself)."""
+    tam, interlinea, sangria, alto_sub = 7.8, 9.8, 12, 11
+    bloques = [(b.subtitulo, [(o, _renglones(c, o.texto, F, tam, ANCHO_UTIL - 20 - sangria)) for o in b.observaciones])
+               for b in r.lectura.bloques]
+    alto = 20 + sum((alto_sub if sub else 0) + sum(len(rs) * interlinea + 2.5 for _, rs in obs)
+                    for sub, obs in bloques) + 3
+    c.setFillColor(FONDO_CAJA)
+    c.roundRect(MARGEN, y - alto, ANCHO_UTIL, alto, 6, fill=1, stroke=0)
+    c.setFillColor(VERDE_MARCA)
+    c.rect(MARGEN, y - alto, 3, alto, fill=1, stroke=0)
+    c.setFont(FB, 9.5)
+    c.drawString(MARGEN + 12, y - 14, r.lectura.titulo)
+    yy = y - 26
+    for sub, obs in bloques:
+        if sub:
+            c.setFillColor(VERDE_MARCA)
+            c.setFont(FB, 7.6)
+            c.drawString(MARGEN + 12, yy, sub)
+            yy -= alto_sub
+        for o, renglones in obs:
+            c.setFillColor(COLOR_TONO.get(o.tono, GRIS_VAR))
+            c.circle(MARGEN + 15, yy + 2.8, 2.3, fill=1, stroke=0)
+            c.setFillColor(TEXTO)
+            c.setFont(F, tam)
+            for renglon in renglones:
+                c.drawString(MARGEN + 12 + sangria, yy, renglon)
+                yy -= interlinea
+            yy -= 2.5
     return y - alto - 8
 
 
@@ -161,6 +203,8 @@ def _variacion(c, x_der: float, y: float, var, fmt: str):
 
 
 def _tabla(c, r: ReporteComercial, y: float) -> float:
+    if getattr(r, "solo_anio", False):
+        return _tabla_anio(c, r, y)
     columnas = [170, 80, 80, 53, 80, 53]  # indicator, period, previous, var, last year, var (= ANCHO_UTIL)
     alto = 10.4
     x = [MARGEN]
@@ -209,6 +253,46 @@ def _tabla(c, r: ReporteComercial, y: float) -> float:
     return y - 8
 
 
+def _tabla_anio(c, r: ReporteComercial, y: float) -> float:
+    """Commercial table (owner, 2026-10-14): the period against the same period
+    last year only; the previous period is read in the Lectura."""
+    x = _columnas([236, 100, 100, 80])  # indicator, period, last year, var (= ANCHO_UTIL)
+    alto = 10.4
+    y = _encabezado_tabla(c, x, y, ["Indicador", "Periodo", "Año anterior", "Var."], alto + 0.5)
+    seccion, par = None, False
+    for f in filas_visibles(r.filas):
+        if f.indicador.seccion != seccion:
+            seccion = f.indicador.seccion
+            c.setFillColor(VERDE_MARCA)
+            c.setFont(FB, 7.2)
+            c.drawString(x[0] + 5, y - 6.5, seccion)
+            y -= alto - 1
+            par = False
+        if par:
+            c.setFillColor(FONDO_CAJA)
+            c.rect(MARGEN, y - alto + 2.5, ANCHO_UTIL, alto, fill=1, stroke=0)
+        par = not par
+        fmt = f.indicador.formato
+        base = y - 6.5
+        c.setFillColor(TEXTO)
+        c.setFont(F, 7.6)
+        c.drawString(x[0] + 11, base, f.etiqueta)
+        for i, v in ((1, f.actual), (2, f.anio_anterior)):
+            c.setFont(FB if i == 1 else F, 7.6)
+            c.setFillColor(TEXTO if i == 1 else TEXTO_SUAVE)
+            c.drawRightString(x[i + 1] - 5, base, formato.valor(v, fmt))
+        if f.semaforo:
+            ancho_valor = c.stringWidth(formato.valor(f.actual, fmt), FB, 7.6)
+            c.setFillColor(COLOR_SEMAFORO[f.semaforo])
+            c.circle(x[2] - 5 - ancho_valor - 6, base + 2.6, 2.4, fill=1, stroke=0)
+        _variacion(c, x[4] - 5, base, f.var_anio, fmt)
+        y -= alto
+    c.setStrokeColor(LINEA)
+    c.setLineWidth(0.5)
+    c.line(MARGEN, y + 2.5, MARGEN + ANCHO_UTIL, y + 2.5)
+    return y - 8
+
+
 def _graficas(c, r: ReporteComercial, y: float) -> float:
     separacion = 12
     ancho = (ANCHO_UTIL - separacion) / 2
@@ -237,19 +321,27 @@ def _nueva_pagina(c) -> float:
     return Y_INICIO
 
 
-def _notas(c, r: ReporteComercial, y: float) -> None:
-    """Page 1: the notes about this period's data (they explain its figures)."""
-    if not r.cobertura:
-        return
+def _notas(c, r, y: float, notas: list[str] | None = None, titulo: str = "Notas") -> list[str]:
+    """The notes about this period's data (they explain its figures). Draws
+    what fits above Y_MIN and returns the rest, which the caller continues on
+    the detail page (never a near-blank extra page for two notes)."""
+    notas = r.cobertura if notas is None else notas
+    if not notas:
+        return []
     tam, interlinea = 5.9, 6.8
     c.setFillColor(VERDE_MARCA)
     c.setFont(FB, 7)
-    c.drawString(MARGEN, y, "Notas")
+    c.drawString(MARGEN, y, titulo)
     y -= 9
-    for nota in r.cobertura:
+    for i, nota in enumerate(notas):
         if y - len(_renglones(c, nota, FI, tam, ANCHO_NOTAS - 8)) * interlinea < Y_MIN:
-            y = _nueva_pagina(c)
+            return notas[i:]
         y = _nota(c, nota, MARGEN, y, ANCHO_NOTAS, tam, interlinea)
+    return []
+
+
+def _alto_notas(c, notas: list[str]) -> float:
+    return 9 + sum(len(_renglones(c, n, FI, 5.9, ANCHO_NOTAS - 8)) * 6.8 + 1.2 for n in notas) + 6 if notas else 0
 
 
 def _encabezado_tabla(c, x: list[float], y: float, titulos: list[str], alto: float) -> float:
@@ -294,7 +386,7 @@ def _detalle_sucursales(c, r: ReporteComercial, y: float) -> float:
     alto = 11.0
     costos = r.incluir_costos
     x = _columnas([138, 86, 56, 58, 72, 53, 53] if costos else [178, 106, 76, 78, 78])  # = ANCHO_UTIL
-    y = _encabezado_tabla(c, x, y, ["Sucursal", "Venta bruta", "Var.", "Clientes", "Cheque prom."]
+    y = _encabezado_tabla(c, x, y, ["Sucursal", "Venta bruta", "Var. año ant.", "Clientes", "Cheque prom."]
                           + (["Costo total", "Costo fact."] if costos else []), alto)
     filas, total = detalle.por_sucursal(r)
     for i, f in enumerate(filas + [total]):
@@ -328,7 +420,7 @@ def _detalle_periodo(c, r: ReporteComercial, y: float) -> float:
     anchos = [86, 96, 60, 64, 76, 82, 52] if compara else [120, 120, 90, 90, 96]  # = ANCHO_UTIL
     x = _columnas(anchos)
     titulos = ["Día" if detalle.granularidad(r.periodo) == "dia" else "Periodo", "Venta bruta", "Tickets",
-               "Clientes", "Cheque prom."] + (["Anterior", "Var."] if compara else [])
+               "Clientes", "Cheque prom."] + (["Año anterior", "Var."] if compara else [])
     y = _encabezado_tabla(c, x, y, titulos, alto)
     for i, f in enumerate(detalle.por_periodo(r)):
         if i % 2:
@@ -367,7 +459,7 @@ def _reglas(c, r: ReporteComercial, y: float) -> None:
             yy = _nota(c, regla, MARGEN + i * (ancho + separacion), yy, ancho, tam, interlinea)
 
 
-def _pagina_detalle(c, r: ReporteComercial) -> None:
+def _pagina_detalle(c, r: ReporteComercial, notas_pendientes: list[str] = ()) -> None:
     """Page 2: detail per branch (consolidated) or per day/block (branch), then the rules."""
     _pagina(c)
     y = Y_INICIO
@@ -385,6 +477,9 @@ def _pagina_detalle(c, r: ReporteComercial) -> None:
     c.drawString(MARGEN, y, titulo)
     y -= 6
     y = _detalle_sucursales(c, r, y) if r.por_sucursal else _detalle_periodo(c, r, y)
+    if notas_pendientes:  # page 1's notes that did not fit
+        _notas(c, r, y - 4, list(notas_pendientes), "Notas (continuación)")
+        y -= _alto_notas(c, list(notas_pendientes)) + 4
     _reglas(c, r, y - 8)
 
 
@@ -401,9 +496,9 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
         y = _lectura(c, r, y)
         y = _tabla(c, r, y)
         y = _graficas(c, r, y)
-        _notas(c, r, y)
+        pendientes = _notas(c, r, y)
         c.showPage()
-        _pagina_detalle(c, r)
+        _pagina_detalle(c, r, pendientes)
         c.showPage()
     c.save()
     return salida.getvalue()

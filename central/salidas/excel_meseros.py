@@ -18,7 +18,7 @@ def _detalle(ws, r: ReporteMeseros):
         ws["A1"] = "Detalle por sucursal"
         ws["A1"].font = SECCION_F
         _encabezado(ws, 3, ["Sucursal", "Meseros", "Mesas", "Personas", "Venta salón", "Venta por mesero por día",
-                            "Cheque prom.", "% Bebidas", "Propina %", "Cortesías", "Mejor mesero"])
+                            "Cheque prom.", "% Bebidas", "Propina %", "Cortesías", "Mejor mesero", "Descuentos"])
         for i, f in enumerate(r.por_sucursal, start=4):
             t = f.d.total
             ws.cell(i, 1, f.nombre)
@@ -29,38 +29,55 @@ def _detalle(ws, r: ReporteMeseros):
                                 (10, t.cortesias, MONEDA)):
                 _numero(ws, i, col, v, fmt)
             ws.cell(i, 11, f.mejor or "—")
-        anchos = (30, 10, 10, 10, 16, 16, 14, 11, 11, 13, 30)
+            _numero(ws, i, 12, t.descuentos, MONEDA)
+        anchos = (30, 10, 10, 10, 16, 16, 14, 11, 11, 13, 30, 13)
     else:
         ws["A1"] = "Detalle por mesero (de mayor a menor venta)"
         ws["A1"].font = SECCION_F
         _encabezado(ws, 3, ["Mesero", "Días", "Mesas", "Personas", "Venta", "Venta por día", "Cheque prom.",
-                            "Personas/mesa", "% Bebidas", "Propina", "Propina %", "Cortesías", "Min. por mesa",
-                            "Var. venta/día", ""])
+                            "Personas/mesa", "% Bebidas", "Propina", "Propina %", "Cortesías", "Descuentos",
+                            "% cortesías + desc.", "Min. por mesa", "Var. venta/día", ""])
         for i, f in enumerate(r.detalle, start=4):
             m = f.m
             ws.cell(i, 1, f.nombre)
             for col, v, fmt in ((2, m.dias, ENTERO), (3, m.cuentas, ENTERO), (4, m.personas, ENTERO),
                                 (5, m.venta_bruta, MONEDA), (6, m.venta_por_dia, MONEDA), (7, m.cheque_promedio, MONEDA),
                                 (9, m.pct_bebidas, PORCENTAJE), (10, m.propina, MONEDA), (11, m.pct_propina, PORCENTAJE),
-                                (12, m.cortesias, MONEDA), (13, m.tiempo_mesa, ENTERO)):
+                                (12, m.cortesias, MONEDA), (13, m.descuentos, MONEDA),
+                                (14, m.pct_control, PORCENTAJE), (15, m.tiempo_mesa, ENTERO)):
                 _numero(ws, i, col, v, fmt)
             c = ws.cell(i, 8, float(m.personas_por_mesa) if m.personas_por_mesa is not None else None)
             c.number_format = "0.0"
             if f.semaforo_cheque:
                 ws.cell(i, 7).fill = PatternFill("solid", fgColor=FONDO_SEMAFORO[f.semaforo_cheque])
-            _variacion(ws, i, 14, f.var_venta_dia, MONEDA)
+            _variacion(ws, i, 16, f.var_venta_dia, MONEDA)
         fila = 4 + len(r.detalle)
         t = r.actual.total
         ws.cell(fila, 1, "Total").font = Font(bold=True)
         for col, v, fmt in ((3, t.cuentas, ENTERO), (4, t.personas, ENTERO), (5, t.venta_bruta, MONEDA),
                             (6, r.actual.venta_por_mesero_dia, MONEDA), (7, t.cheque_promedio, MONEDA),
                             (9, t.pct_bebidas, PORCENTAJE), (10, t.propina, MONEDA), (11, t.pct_propina, PORCENTAJE),
-                            (12, t.cortesias, MONEDA), (13, t.tiempo_mesa, ENTERO)):
+                            (12, t.cortesias, MONEDA), (13, t.descuentos, MONEDA), (14, t.pct_control, PORCENTAJE),
+                            (15, t.tiempo_mesa, ENTERO)):
             _numero(ws, fila, col, v, fmt)
             ws.cell(fila, col).font = Font(bold=True)
-        anchos = (32, 7, 8, 9, 14, 14, 13, 12, 10, 12, 10, 12, 12, 12, 4)
+        anchos = (32, 7, 8, 9, 14, 14, 13, 12, 10, 12, 10, 12, 12, 14, 12, 12, 4)
     for col, ancho in enumerate(anchos, start=1):
         ws.column_dimensions[ws.cell(1, col).column_letter].width = ancho
+
+
+def _panel(ws, r: ReporteMeseros):
+    ws["A1"] = "Indicadores principales"
+    ws["A1"].font = SECCION_F
+    _encabezado(ws, 3, ["Indicador", "Periodo", "Anterior", "Var.", ""])
+    for i, f in enumerate(r.panel, start=4):
+        ws.cell(i, 1, f.etiqueta).font = Font(bold=True)
+        _numero(ws, i, 2, f.actual, f.indicador.formato)
+        ws.cell(i, 2).font = Font(bold=True, size=13)
+        _numero(ws, i, 3, f.anterior, f.indicador.formato)
+        _variacion(ws, i, 4, f.var_anterior, f.indicador.formato)
+    for col, ancho in zip("ABCDE", (30, 18, 18, 10, 4)):
+        ws.column_dimensions[col].width = ancho
 
 
 def generar(reportes: list[ReporteMeseros]) -> bytes:
@@ -68,6 +85,7 @@ def generar(reportes: list[ReporteMeseros]) -> bytes:
     wb.remove(wb.active)
     varios = len(reportes) > 1
     for r in reportes:
+        _panel(_hoja(wb, r, "Panel", varios), r)
         _resumen(_hoja(wb, r, "Resumen", varios), r)
         for g, nombre in zip(r.graficas, ["Venta", "Cheque"]):
             _datos_grafica(_hoja(wb, r, nombre, varios), g)

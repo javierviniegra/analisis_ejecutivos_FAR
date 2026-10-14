@@ -112,7 +112,7 @@ class CargarCatalogoTests(TestCase):
         gerente = User.objects.create_user("g2", password="x")
         gerente.groups.add(Group.objects.get(name="Gerente"))
         self.assertEqual(set(Reporte.visibles_para(gerente).values_list("clave", flat=True)),
-                         {"comercial-semanal-gerentes", "indicadores-operativos-semanal"})
+                         {"comercial-semanal-gerentes", "indicadores-operativos-semanal", "meseros"})
         self.assertEqual(set(Reporte.visibles_para(gerente).values_list("categoria", flat=True)), {"sucursales"})
 
     def test_reporte_de_nomina_solo_para_noministas(self):

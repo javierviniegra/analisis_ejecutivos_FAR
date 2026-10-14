@@ -45,7 +45,6 @@ def _t(m: DatosMeseros) -> Mesero:
 INDICADORES = [
     Indicador("venta_bruta", "Venta de meseros (salón, con IVA)", "Ventas de meseros", MONEDA,
               lambda m: _t(m).venta_bruta, True),
-    Indicador("venta_neta", "Venta neta (sin IVA)", "Ventas de meseros", MONEDA, lambda m: _t(m).venta_neta, True),
     Indicador("cuentas", "Mesas atendidas (cuentas)", "Ventas de meseros", ENTERO, lambda m: _t(m).cuentas, True),
     Indicador("personas", "Personas", "Ventas de meseros", ENTERO, lambda m: _t(m).personas, True),
     Indicador("personas_mesa", "Personas por mesa", "Ventas de meseros", DECIMAL, lambda m: _t(m).personas_por_mesa, None),
@@ -62,12 +61,51 @@ INDICADORES = [
               requiere_detalle=True),
     Indicador("propina", "Propina (% de la venta)", "Servicio", PORCENTAJE, lambda m: _t(m).pct_propina, True),
     Indicador("tiempo_mesa", "Tiempo promedio de mesa (min)", "Servicio", ENTERO, lambda m: _t(m).tiempo_mesa, None),
-    Indicador("cortesias", "Cortesías (a precio de lista)", "Control", MONEDA, lambda m: _t(m).cortesias, False),
+    Indicador("cortesias", "Cortesías (a precio de venta)", "Control", MONEDA, lambda m: _t(m).cortesias, False),
+    Indicador("descuentos", "Descuentos", "Control", MONEDA, lambda m: _t(m).descuentos, False),
+    Indicador("pct_control", "Cortesías + descuentos (% de la venta)", "Control", PORCENTAJE,
+              lambda m: _t(m).pct_control, False),
     Indicador("cancelaciones", "Cancelaciones (sucursal)", "Control", MONEDA, lambda m: m.cancelaciones, False),
     Indicador("anulaciones", "Anulaciones (sucursal)", "Control", MONEDA, lambda m: m.anulaciones, False),
-    Indicador("fuera_salon", "Venta sin mesero (plataformas y para llevar)", "Fuera de salón", MONEDA,
-              lambda m: m.fuera_salon_venta, None),
+    # Owner, 2026-10-14: apps (platforms) and take-away in their own section, with their discounts.
+    Indicador("apps_venta", "Venta aplicaciones (plataformas)", "Aplicaciones y para llevar", MONEDA,
+              lambda m: m.canal("plataformas")["venta_bruta"], True),
+    Indicador("apps_cuentas", "Pedidos de aplicaciones", "Aplicaciones y para llevar", ENTERO,
+              lambda m: m.canal("plataformas")["cuentas"], True),
+    Indicador("apps_descuentos", "Descuentos en aplicaciones", "Aplicaciones y para llevar", MONEDA,
+              lambda m: m.canal("plataformas")["descuentos"], False),
+    Indicador("llevar_venta", "Venta para llevar", "Aplicaciones y para llevar", MONEDA,
+              lambda m: m.canal("llevar")["venta_bruta"], True),
+    Indicador("llevar_descuentos", "Descuentos para llevar", "Aplicaciones y para llevar", MONEDA,
+              lambda m: m.canal("llevar")["descuentos"], False),
+    Indicador("fuera_cortesias", "Cortesías en aplicaciones y para llevar", "Aplicaciones y para llevar", MONEDA,
+              lambda m: m._fuera("cortesias"), False),
 ]
+
+# The top panel (owner, 2026-10-14): the branch's main figures as big cards with
+# their arrow against the previous period. Sales, courtesies and discounts are
+# the WHOLE branch (dining room + apps + take-away); check and guests are the
+# dining room's (apps have no guests).
+PANEL = [
+    Indicador("p_venta", "Venta total", "Panel", MONEDA, lambda m: m.venta_total, True),
+    Indicador("p_cheque", "Cheque promedio (salón)", "Panel", MONEDA, lambda m: _t(m).cheque_promedio, True),
+    Indicador("p_personas", "Personas (salón)", "Panel", ENTERO, lambda m: _t(m).personas, True),
+    Indicador("p_cortesias", "Cortesías", "Panel", MONEDA, lambda m: m.cortesias_total, False),
+    Indicador("p_descuentos", "Descuentos", "Panel", MONEDA, lambda m: m.descuentos_total, False),
+    # Owner, 2026-10-14: cancellations and voids as two more cards, from the daily cash closing (branch totals).
+    Indicador("p_cancelaciones", "Cancelaciones (corte)", "Panel", MONEDA, lambda m: m.cancelaciones, False),
+    Indicador("p_anulaciones", "Anulaciones (corte)", "Panel", MONEDA, lambda m: m.anulaciones, False),
+]
+
+
+def construir_panel(actual: DatosMeseros, anterior: Comparacion) -> list[Fila]:
+    """The panel's cards: value of the period and its change against the
+    previous period (comparable branches, s/c and s/cf as the table)."""
+    tarjetas = []
+    for ind in PANEL:
+        p, var = _columna(ind, anterior)
+        tarjetas.append(Fila(ind, _valor(ind, actual), p, var, None, var))
+    return tarjetas
 
 
 def construir_tabla(actual: DatosMeseros, anterior: Comparacion, anio: Comparacion) -> list[Fila]:
@@ -155,6 +193,13 @@ def construir_lectura(periodo: Periodo, actual: DatosMeseros, filas: list[Fila],
         f"La venta de meseros (salón) fue de {_pesos(t.venta_bruta)}, {_var_texto(v.var_anterior)} vs "
         f"{vs_anterior(periodo)} y {_var_texto(v.var_anio)} vs {vs_anio(periodo)}; {t.cuentas:,.0f} mesas y "
         f"{t.personas:,.0f} personas, cheque promedio {_pesos(t.cheque_promedio or 0)}.", tono))
+    fuera = [(n, por[c]) for n, c in (("aplicaciones", "apps_venta"), ("para llevar", "llevar_venta")) if por[c].actual]
+    if fuera:
+        partes = [f"{n} {_pesos(f.actual)} ({_var_texto(f.var_anterior)})" for n, f in fuera]
+        desc = actual._fuera("descuentos")
+        obs.append(Observacion(
+            "Fuera de salón: " + "; ".join(partes) + (f"; con {_pesos(desc)} de descuentos" if desc else "") + ".",
+            NEUTRO))
     vd = por["venta_mesero_dia"]
     obs.append(Observacion(
         f"{actual.plantilla} meseros activos{' (suma de sucursales)' if consolidado else ''}; cada uno vendió en "
@@ -175,22 +220,25 @@ def construir_lectura(periodo: Periodo, actual: DatosMeseros, filas: list[Fila],
             extra = f" y {len(bajos) - 3} más" if len(bajos) > 3 else ""
             obs.append(Observacion(
                 f"Cheque más de {(1 - UMBRAL_CHEQUE_BAJO) * 100:.0f}% abajo del promedio: {nombres}{extra}.", NEGATIVO))
+    con_control = [f for f in elegibles if f.m.control > 0]
+    if con_control and t.control:
+        mayor = max(con_control, key=lambda f: f.m.control)
+        obs.append(Observacion(
+            f"Más cortesías y descuentos: {mayor.nombre} ({_pesos(mayor.m.control)}, {mayor.m.pct_control * 100:.1f}% "
+            f"de su venta) contra {t.pct_control * 100:.1f}% de la sucursal.",
+            NEGATIVO if mayor.m.pct_control > t.pct_control * 2 else NEUTRO))
     ranking = actual.ranking()
     if len(ranking) > 3 and t.venta_bruta:
         top = sum((m.venta_bruta for m in ranking[:3]), Decimal("0")) / t.venta_bruta
         if top >= UMBRAL_CONCENTRACION:
             obs.append(Observacion(f"Los 3 meseros con más venta concentran el {top * 100:.0f}% de la venta de salón.",
                                    AVISO))
-    return Lectura(titulo(periodo), obs + _lectura_control(periodo, por, "de la sucursal"))
+    return Lectura(titulo(periodo), obs + _lectura_control(periodo, por))
 
 
-def _lectura_control(periodo: Periodo, por: dict, de: str) -> list[Observacion]:
+def _lectura_control(periodo: Periodo, por: dict) -> list[Observacion]:
     obs = []
-    for clave, nombre in (("cancelaciones", "cancelaciones"), ("anulaciones", "anulaciones")):
-        f = por[clave]
-        if f.actual and f.var_anterior.color == ROJO:
-            obs.append(Observacion(f"Las {nombre} {de} subieron a {_pesos(f.actual)} "
-                                   f"({_var_texto(f.var_anterior)}); no se pueden atribuir a un mesero.", NEGATIVO))
+    # cancellations and voids: in the panel's cards (owner, 2026-10-14), not repeated here
     p = por["propina"]
     if p.actual is not None:
         obs.append(Observacion(f"Propina: {p.actual * 100:.1f}% de la venta ({_var_texto_pp(p.var_anterior)} vs "
@@ -211,7 +259,7 @@ def _lectura_sucursales(periodo: Periodo, por: dict, ramas: list[tuple[str, Dato
         baja = min(cheques, key=lambda x: x[1].total.cheque_promedio)
         obs.append(Observacion(f"Cheque promedio más alto: {alta[0]} ({_pesos(alta[1].total.cheque_promedio)}); "
                                f"el más bajo: {baja[0]} ({_pesos(baja[1].total.cheque_promedio)}).", NEUTRO))
-    return obs + _lectura_control(periodo, por, "de las sucursales")
+    return obs + _lectura_control(periodo, por)
 
 
 def _var_texto_pp(var) -> str:
@@ -264,9 +312,6 @@ def notas_cobertura(actual: DatosMeseros, anterior: DatosMeseros | None,
                          f"{', '.join(comp.excluidas)} por no tener datos completos en ese periodo.")
     if actual.dias_con_cierre < actual.dias_esperados:
         notas.append(f"El periodo tiene cierres de caja en {actual.dias_con_cierre} de {actual.dias_esperados} días.")
-    if actual.fuera_salon_venta:
-        notas.append(f"No incluye {_pesos(actual.fuera_salon_venta)} de venta sin mesero "
-                     f"({actual.fuera_salon_cuentas:,.0f} cuentas de plataformas y para llevar).")
     pocos = [m for m in actual.ranking() if m.cuentas < MIN_CUENTAS_LECTURA]
     if pocos and not consolidado:  # the consolidated Lectura compares branches, not waiters
         notas.append(f"{len(pocos)} mesero(s) con menos de {MIN_CUENTAS_LECTURA} cuentas (suplentes o pocos días) "
@@ -278,8 +323,10 @@ def notas_cobertura(actual: DatosMeseros, anterior: DatosMeseros | None,
 
 def notas_reglas(periodo: Periodo) -> list[str]:
     reglas = [
-        "Venta de meseros = cuentas de salón (tipo de orden «Restaurant»); plataformas y para llevar se muestran "
-        "aparte como venta sin mesero.",
+        "Venta de meseros = cuentas de salón (tipo de orden «Restaurant»); aplicaciones (plataformas) y para llevar "
+        "van en su propio apartado, con sus descuentos y cortesías.",
+        "Panel: venta, cortesías y descuentos de toda la sucursal (salón + aplicaciones + para llevar); cheque y "
+        "personas, de salón; cancelaciones y anulaciones, del corte de caja diario. Flecha contra el periodo anterior.",
         "Plantilla = meseros con al menos una cuenta en el periodo. Venta por día trabajado = venta ÷ días en que "
         "el mesero tuvo cuentas.",
         "Cheque promedio = venta ÷ personas. En el detalle: verde igual o arriba del promedio de la sucursal, "
@@ -288,7 +335,9 @@ def notas_reglas(periodo: Periodo) -> list[str]:
         f"si los 3 primeros suman {UMBRAL_CONCENTRACION * 100:.0f}% o más de la venta.",
         f"Tiempo de mesa = de la apertura al cierre de la cuenta; se excluyen tiempos fuera de {MINUTOS_MESA_MIN} a "
         f"{MINUTOS_MESA_MAX} minutos (cuentas olvidadas abiertas).",
-        "Propina: la registrada en los pagos de las cuentas de salón. Cortesías: a precio de lista.",
+        "Propina: la registrada en los pagos de las cuentas de salón. Cortesías: cantidad x precio de venta del "
+        "platillo (la línea de cortesía conserva su precio; no se usa el costo). Descuentos: los de las líneas que no "
+        "son cortesía. % control = (cortesías + descuentos) ÷ (venta + cortesías + descuentos).",
         "Cancelaciones y anulaciones: totales de la sucursal del corte de caja; Wansoft las quita del ticket y no "
         "trae el mesero.",
         f"Sucursales comparables: la que no tiene datos en el {UMBRAL_COBERTURA_FIABLE * 100:.0f}% de los días del "
@@ -315,6 +364,7 @@ class ReporteMeseros:
     graficas: list[Grafica]
     cobertura: list[str]
     reglas: list[str]
+    panel: list[Fila] = field(default_factory=list)  # top cards
     detalle: list[FilaMesero] = field(default_factory=list)  # branch report: one row per waiter
     por_sucursal: list[FilaSucursal] = field(default_factory=list)  # consolidated: one row per branch
     titulo: str = TITULO
@@ -338,7 +388,7 @@ def _uno(nombre, sucursales, periodo, actual, anterior, comp_ant, comp_anio, por
                                   [(n, d) for n, d, _ in por_sucursal or []]), filas=filas,
         graficas=construir_graficas(periodo, actual, anterior, por_sucursal or []),
         cobertura=notas_cobertura(actual, anterior, comparaciones, consolidado), reglas=notas_reglas(periodo),
-        detalle=[] if consolidado else detalle,
+        detalle=[] if consolidado else detalle, panel=construir_panel(actual, comp_ant),
     )
     if por_sucursal:
         r.por_sucursal = [FilaSucursal(n, d, d.ranking()[0].nombre if d.ranking() else None) for n, d, _ in por_sucursal]

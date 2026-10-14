@@ -35,11 +35,12 @@ class Mesero:
     mesas_con_tiempo: Decimal = CERO
     alimentos: Decimal = CERO
     bebidas: Decimal = CERO
-    cortesias: Decimal = CERO  # at list price
+    cortesias: Decimal = CERO  # at sale price
+    descuentos: Decimal = CERO  # discounts on the lines that are not courtesies
     propina: Decimal = CERO
 
     CAMPOS = ("cuentas", "personas", "venta_bruta", "venta_neta", "dias", "minutos_mesa", "mesas_con_tiempo",
-              "alimentos", "bebidas", "cortesias", "propina")
+              "alimentos", "bebidas", "cortesias", "descuentos", "propina")
 
     def sumar(self, otro: "Mesero") -> None:
         for c in self.CAMPOS:
@@ -70,6 +71,16 @@ class Mesero:
         return _razon(self.alimentos, self.alimentos + self.bebidas)
 
     @property
+    def control(self) -> Decimal:
+        """Courtesies + discounts: what the waiter gave away."""
+        return self.cortesias + self.descuentos
+
+    @property
+    def pct_control(self) -> Decimal | None:
+        """Courtesies + discounts as a share of what would have been sold without them."""
+        return _razon(self.control, self.venta_bruta + self.control)
+
+    @property
     def pct_propina(self) -> Decimal | None:
         return _razon(self.propina, self.venta_bruta)
 
@@ -87,8 +98,8 @@ class DatosMeseros:
     periodo: Periodo
     n_sucursales: int = 1
     meseros: dict[str, Mesero] = field(default_factory=dict)
-    fuera_salon_venta: Decimal = CERO  # platforms / take-away: no waiter
-    fuera_salon_cuentas: Decimal = CERO
+    # platforms (apps) / take-away / others: no waiter. {canal: {cuentas, venta_bruta, descuentos, cortesias}}
+    fuera: dict[str, dict] = field(default_factory=dict)
     cancelaciones: Decimal = CERO  # branch level, from the cash closing
     anulaciones: Decimal = CERO
     dias_con_cierre: int = 0
@@ -99,6 +110,33 @@ class DatosMeseros:
     @property
     def dias_esperados(self) -> int:
         return self.periodo.dias * self.n_sucursales
+
+    def _fuera(self, clave: str, canales=None) -> Decimal:
+        return sum((v[clave] for c, v in self.fuera.items() if canales is None or c in canales), CERO)
+
+    @property
+    def fuera_salon_venta(self) -> Decimal:
+        return self._fuera("venta_bruta")
+
+    @property
+    def fuera_salon_cuentas(self) -> Decimal:
+        return self._fuera("cuentas")
+
+    def canal(self, canal: str) -> dict:
+        return self.fuera.get(canal, {"cuentas": CERO, "venta_bruta": CERO, "descuentos": CERO, "cortesias": CERO})
+
+    @property
+    def venta_total(self) -> Decimal:
+        """Dining room + platforms + take-away: the branch's whole sales."""
+        return self.total.venta_bruta + self.fuera_salon_venta
+
+    @property
+    def cortesias_total(self) -> Decimal:
+        return self.total.cortesias + self._fuera("cortesias")
+
+    @property
+    def descuentos_total(self) -> Decimal:
+        return self.total.descuentos + self._fuera("descuentos")
 
     @property
     def total(self) -> Mesero:
@@ -137,7 +175,7 @@ def recolectar(cur, sucursales: list, periodo: Periodo) -> list[DatosMeseros]:
     d, h = periodo.desde, periodo.hasta
     nombres = [s.wansoft_ticket_nombre for s in sucursales if s.wansoft_ticket_nombre]
     ventas = wansoft.ventas_meseros(cur, nombres, d, h)
-    fuera = wansoft.venta_fuera_de_salon(cur, nombres, d, h)
+    fuera = wansoft.fuera_de_salon(cur, nombres, d, h)
     mix = wansoft.mix_meseros(cur, nombres, d, h)
     propinas = wansoft.propinas_meseros(cur, nombres, d, h)
     ids = [s.wansoft_subsidiary_id for s in sucursales if s.wansoft_subsidiary_id is not None]
@@ -154,10 +192,10 @@ def recolectar(cur, sucursales: list, periodo: Periodo) -> list[DatosMeseros]:
             extra = mix.get(nombre, {}).get(mesero, {})
             m.alimentos, m.bebidas = extra.get("alimentos", CERO), extra.get("bebidas", CERO)
             m.cortesias = extra.get("cortesias", CERO)
+            m.descuentos = extra.get("descuentos", CERO)
             m.propina = propinas.get(nombre, {}).get(mesero, CERO)
             datos.meseros[mesero] = m
-        f = fuera.get(nombre, {})
-        datos.fuera_salon_venta, datos.fuera_salon_cuentas = f.get("venta_bruta", CERO), f.get("cuentas", CERO)
+        datos.fuera = {c: dict(v) for c, v in fuera.get(nombre, {}).items()}
         dias = cierres.get(s.wansoft_subsidiary_id, {})
         datos.dias_con_cierre = len(dias)
         datos.cancelaciones = sum((t["cancelaciones"] for t in dias.values()), CERO)
@@ -178,8 +216,10 @@ def consolidar(lista: list[DatosMeseros], periodo: Periodo, nombres: list[str] |
             copia = Mesero(prefijo + clave)
             copia.sumar(m)
             total.meseros[prefijo + clave] = copia
-        total.fuera_salon_venta += x.fuera_salon_venta
-        total.fuera_salon_cuentas += x.fuera_salon_cuentas
+        for canal, v in x.fuera.items():
+            suma = total.fuera.setdefault(canal, {k: CERO for k in v})
+            for k, valor in v.items():
+                suma[k] += valor
         total.cancelaciones += x.cancelaciones
         total.anulaciones += x.anulaciones
         total.dias_con_cierre += x.dias_con_cierre
