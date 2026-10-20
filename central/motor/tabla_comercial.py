@@ -170,3 +170,26 @@ def construir_tabla(actual: Metricas, anterior: Comparacion | Metricas | None,
         estimado = ind.clave in ESTIMABLES and actual.costo_total_estimado and valor is not None
         filas.append(Fila(ind, valor, p, var_p, y, var_y, ind.semaforo(valor) if ind.semaforo else None, estimado))
     return filas
+
+
+# Owner, 2026-10-19: in a consolidated report, ticket and check of each format
+# (fondas, taquerias, La Esquina), since each behaves differently.
+SECCION_FORMATO = "Por formato"
+
+
+def filas_por_formato(grupos: list[tuple[str, Metricas, Comparacion, Comparacion]]) -> list[Fila]:
+    """Rows of ticket and check per format. `grupos`: (plural label, the
+    format's current period, its comparison against the previous period, its
+    comparison against last year), each under the comparable-branches rule
+    within the format."""
+    filas = []
+    for etiqueta, actual, ant, anio in grupos:
+        clave = etiqueta.lower().replace(" ", "_")
+        for ind in (Indicador(f"ticket_{clave}", f"Ticket promedio · {etiqueta}", SECCION_FORMATO, MONEDA,
+                              lambda m: m.ticket_promedio, True),
+                    Indicador(f"cheque_{clave}", f"Cheque promedio · {etiqueta}", SECCION_FORMATO, MONEDA,
+                              lambda m: m.cheque_promedio, True)):
+            p, var_p = _columna(ind, ant)
+            y, var_y = _columna(ind, anio)
+            filas.append(Fila(ind, _valor(ind, actual), p, var_p, y, var_y))
+    return filas

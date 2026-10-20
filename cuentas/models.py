@@ -11,9 +11,18 @@ class Sucursal(models.Model):
     """A branch a report can be about. Odoo/Wansoft naming differs per system,
     so `clave` is this project's own stable key (e.g. "Puebla")."""
 
+    class Formato(models.TextChoices):
+        # Owner, 2026-10-19: the consolidated commercial report splits ticket and
+        # check by format, since each one behaves differently.
+        FONDA = "fonda", "Fonda"
+        TAQUERIA = "taqueria", "Taquería"
+        ESQUINA = "esquina", "La Esquina"
+
     clave = models.SlugField(max_length=40, unique=True)
     nombre = models.CharField(max_length=120)
     activa = models.BooleanField(default=True)
+    formato = models.CharField(max_length=10, choices=Formato.choices, default=Formato.FONDA,
+                               help_text="Tipo de restaurante: el consolidado separa ticket y cheque por formato.")
 
     # Identifiers of the same branch in each source system. None of the
     # names match across systems, so queries go by these stable keys.

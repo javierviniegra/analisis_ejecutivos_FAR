@@ -79,6 +79,14 @@ def _resumen(ws, r: ReporteComercial):
     if r.nombre == "Consolidado":
         ws["A4"] = "Sucursales: " + ", ".join(r.sucursales)
         ws["A4"].font = SUAVE_F
+    aviso = getattr(r, "aviso_comparables", None)
+    if aviso:
+        ws.merge_cells("A5:G5")
+        ws["A5"] = aviso
+        ws["A5"].font = Font(bold=True, color="7A4E0F")
+        ws["A5"].fill = PatternFill("solid", fgColor="FDF3E1")
+        ws["A5"].alignment = Alignment(wrap_text=True, vertical="center")
+        ws.row_dimensions[5].height = 30
 
     fila = 6
     ws.cell(fila, 1, r.lectura.titulo).font = SECCION_F

@@ -114,11 +114,34 @@ def _titulo(c, r: ReporteComercial, y: float) -> float:
         texto = (f"Contra: {anio.etiqueta()}  ({anio.desde:%d/%m/%Y} al {anio.hasta:%d/%m/%Y})" if anio
                  else "Contra: sin periodo comparable del año anterior")
         c.drawString(MARGEN, y, texto)
-        return y - 12
+        y -= 12
+        aviso = getattr(r, "aviso_comparables", None)
+        if aviso:
+            y = _aviso(c, aviso, y + 2)
+        return y
     ant = p.anterior().etiqueta()
     comparado = ant if anio is None or anio == p.anterior() else f"{ant} y {anio.etiqueta()}"
     c.drawString(MARGEN, y, f"Comparado con: {comparado}")
     return y - 12
+
+
+FONDO_AVISO, BORDE_AVISO = HexColor("#FDF3E1"), HexColor("#B7791F")
+
+
+def _aviso(c, texto: str, y: float) -> float:
+    """A highlighted one/two-line notice (amber band) under the title."""
+    tam, interlinea = 7.6, 9.4
+    renglones = _renglones(c, texto, F, tam, ANCHO_UTIL - 20)
+    alto = 7 + len(renglones) * interlinea
+    c.setFillColor(FONDO_AVISO)
+    c.roundRect(MARGEN, y - alto, ANCHO_UTIL, alto, 4, fill=1, stroke=0)
+    c.setFillColor(BORDE_AVISO)
+    c.rect(MARGEN, y - alto, 3, alto, fill=1, stroke=0)
+    c.setFillColor(TEXTO)
+    for i, renglon in enumerate(renglones):
+        c.setFont(FB if i == 0 else F, tam)
+        c.drawString(MARGEN + 10, y - 9.5 - i * interlinea, renglon)
+    return y - alto - 8
 
 
 def _lectura(c, r: ReporteComercial, y: float) -> float:

@@ -18,7 +18,7 @@ from .lectura import Lectura, construir_lectura
 from .metricas import Comparacion, Metricas
 from .notas import notas_cobertura, notas_reglas
 from .periodo import Periodo, TipoPeriodo
-from .tabla_comercial import Fila, construir_tabla
+from .tabla_comercial import Fila, construir_tabla, filas_por_formato
 
 TITULO = "Reporte comercial"
 
@@ -54,6 +54,19 @@ class ReporteComercial:
     def notas(self) -> list[str]:
         return self.cobertura + self.reglas
 
+    @property
+    def aviso_comparables(self) -> str | None:
+        """Consolidated only (owner, 2026-10-20): a visible notice at the top that
+        every comparison against last year uses comparable branches only."""
+        if self.nombre != "Consolidado" or not self.solo_anio or self.anio_anterior.base is None:
+            return None
+        texto = ("Comparativos contra el año anterior solo con sucursales comparables (las que operaron completo "
+                 "ambos periodos).")
+        fuera = self.anio_anterior.excluidas
+        if not fuera:
+            return texto + " Este periodo todas las sucursales son comparables."
+        return texto + f" Fuera de la comparación: {', '.join(fuera)}."
+
 
 def _uno(nombre, sucursales, periodo, actual, anterior, anio_anterior, diario, incluir_costos=True) -> ReporteComercial:
     return ReporteComercial(
@@ -70,6 +83,34 @@ def _uno(nombre, sucursales, periodo, actual, anterior, anio_anterior, diario, i
         reglas=notas_reglas(periodo, incluir_costos),
         incluir_costos=incluir_costos,
     )
+
+
+# Format of each branch (cuentas.Sucursal.formato) as shown in the report, in this order.
+FORMATOS = [("fonda", "Fondas"), ("taqueria", "Taquerías"), ("esquina", "La Esquina")]
+
+
+def _grupos_formato(sucursales, ma, mp, my, periodo, anterior, anio_ant):
+    """Per format present in the selection: (label, current, vs previous, vs
+    last year); empty when the selection has a single format (nothing to split)."""
+    grupos = []
+    for clave, etiqueta in FORMATOS:
+        idx = [i for i, s in enumerate(sucursales) if getattr(s, "formato", "fonda") == clave]
+        if not idx:
+            continue
+        nombres = [sucursales[i].nombre for i in idx]
+        actuales = [ma[i] for i in idx]
+        grupos.append((etiqueta, metricas.consolidar(actuales, periodo),
+                       metricas.comparables(nombres, actuales, [mp[i] for i in idx], periodo, anterior),
+                       metricas.comparables(nombres, actuales, [my[i] for i in idx] if my else None, periodo, anio_ant)))
+    return grupos if len(grupos) > 1 else []
+
+
+def _con_formatos(filas: list[Fila], por_formato: list[Fila]) -> list[Fila]:
+    """The format rows right after the Ventas section."""
+    if not por_formato:
+        return filas
+    ultima = max(i for i, f in enumerate(filas) if f.indicador.seccion == "Ventas")
+    return filas[:ultima + 1] + por_formato + filas[ultima + 1:]
 
 
 def _abrir_odoo():
@@ -123,6 +164,8 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
         r = _uno("Consolidado", nombres, periodo, actual, comp_ant, comp_anio, diario, incluir_costos)
         fuera = (FILAS_PRESUPUESTO if actual.costo_ventas_ppto is None else set()) |             (FILAS_COSTO_FACTURADO if actual.costo_ventas_real is None else set())
         r.filas = [f for f in r.filas if f.indicador.clave not in fuera]  # no rows of dashes
+        r.filas = _con_formatos(r.filas, filas_por_formato(
+            _grupos_formato(sucursales, ma, mp, my, periodo, anterior, anio_ant)))
         r.por_sucursal = [(n, ma[i], my[i] if my else None) for i, n in enumerate(nombres)]  # base: last year
         sin_considerar = [s.nombre for s in sucursales if not getattr(s, "considerar_costo", True)]
         if incluir_costos and sin_considerar:

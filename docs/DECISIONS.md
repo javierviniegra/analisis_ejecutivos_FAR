@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-20 — Consolidated commercial report: ticket and check per branch format
+
+- **Branch format** (owner, 2026-10-19): `cuentas.Sucursal.formato` = Fonda / Taquería / La Esquina, editable in the admin (migration 0005 sets Taquería Parroquia, Taquería Viaducto and Versalles as taquerías and La Esquina Coyoacán as La Esquina; every other branch is a fonda, also the default for new branches).
+- **Section "Por formato"** in the consolidated report, right after Ventas: ticket promedio and cheque promedio of each format present, against last year. Each format applies the comparable-branches rule within itself (e.g. Puebla and CentroMyJ stay out of the fondas' variation until they have a year). As in the rest of the table, the period column shows every branch of the format and the variation only the comparable ones, so a format with new branches can show a lower value than last year next to an arrow up. Shown only when the selection has more than one format; a single-branch report does not change.
+- **Visible comparable-branches notice** (owner, 2026-10-20): the consolidated report opens, under the "Contra:" line, with an amber band saying that every comparison against last year uses comparable branches only, and which branches are left out (PDF; row 5 of the Excel Resumen). Week 42: CentroMyJ, La Esquina Coyoacán, Puebla.
+- Week 42 / September 2026: fondas ticket +2.2% / +2.6%, check +4.5% / +5.2%; taquerías ticket +7.0% / +9.4%, check +9.2% / +11.9%; La Esquina s/c (opened 2026-01-30). Both PDFs still two pages.
+
 ## 2026-10-14 — Commercial report: the main comparison is the same period last year
 
 - **Owner:** the commercial report compares against the **same period last year** (same ISO week number, same month / block, same dates for a free range). The waiters' report stays as it was (many waiters are new: no last year to compare).

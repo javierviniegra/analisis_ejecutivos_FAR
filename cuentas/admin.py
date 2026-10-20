@@ -7,12 +7,12 @@ from .models import PerfilUsuario, Sucursal
 
 @admin.register(Sucursal)
 class SucursalAdmin(admin.ModelAdmin):
-    list_display = ("nombre", "clave", "activa", "considerar_costo")
-    list_filter = ("activa",)
+    list_display = ("nombre", "clave", "formato", "activa", "considerar_costo")
+    list_filter = ("activa", "formato")
     search_fields = ("nombre", "clave")
     filter_horizontal = ("destinatarios",)
     fieldsets = (
-        (None, {"fields": ("clave", "nombre", "activa", "considerar_costo")}),
+        (None, {"fields": ("clave", "nombre", "formato", "activa", "considerar_costo")}),
         ("Identificadores en cada sistema", {"fields": ("wansoft_subsidiary_id", "wansoft_ticket_nombre", "odoo_company_id")}),
         ("Destinatarios por defecto de sus reportes", {"fields": ("destinatarios", "correos_reporte")}),
     )

@@ -36,6 +36,11 @@ SUCURSALES = [
 ]
 
 
+# Branches that are not a fonda (owner, 2026-10-19); only used when a branch is created.
+FORMATOS = {"taqueria-parroquia": Sucursal.Formato.TAQUERIA, "taqueria-viaducto": Sucursal.Formato.TAQUERIA,
+            "versalles": Sucursal.Formato.TAQUERIA, "la-esquina-coyoacan": Sucursal.Formato.ESQUINA}
+
+
 class Command(BaseCommand):
     help = "Load the branches and their source-system identifiers (idempotent, never overwrites filled fields)."
 
@@ -43,7 +48,8 @@ class Command(BaseCommand):
         for clave, nombre, subs_id, ticket, odoo_id in SUCURSALES:
             suc, creada = Sucursal.objects.get_or_create(
                 clave=clave,
-                defaults=dict(nombre=nombre, wansoft_subsidiary_id=subs_id, wansoft_ticket_nombre=ticket, odoo_company_id=odoo_id),
+                defaults=dict(nombre=nombre, wansoft_subsidiary_id=subs_id, wansoft_ticket_nombre=ticket, odoo_company_id=odoo_id,
+                          formato=FORMATOS.get(clave, Sucursal.Formato.FONDA)),
             )
             if creada:
                 self.stdout.write(f"Creada: {nombre}")
