@@ -79,6 +79,24 @@ class Metricas:
     # Branches with Wansoft cost: cost of what was sold not yet discounted from
     # inventory (added to the cost while above 0, which makes it an estimate).
     pendiente_wansoft: Decimal | None = None
+    # Owner, 2026-10-20 (from the ticket detail): waiters' productivity -- dining-room
+    # sales, active waiters (an account and sales in the period) and days they worked --
+    # and the sales composition: per hour the ticket closed, and per payment method.
+    venta_salon: Decimal = CERO
+    meseros: int = 0
+    dias_mesero: Decimal = CERO
+    por_hora: dict[int, dict[str, Decimal]] = field(default_factory=dict)  # hour -> venta / tickets / clientes
+    venta_dia_hora: dict[date, dict[int, Decimal]] = field(default_factory=dict)  # day -> hour -> gross sales
+    pagos: dict[str, Decimal] = field(default_factory=dict)  # Wansoft payment method -> amount
+
+    @property
+    def venta_por_mesero(self) -> Decimal | None:
+        return _razon(self.venta_salon, self.meseros)
+
+    @property
+    def venta_por_mesero_dia(self) -> Decimal | None:
+        """Dining-room sales per waiter per day worked (fair between 3 and 6 days)."""
+        return _razon(self.venta_salon, self.dias_mesero)
 
     @property
     def costo_estimado_wansoft(self) -> bool:
@@ -230,6 +248,10 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
     nombres = [s.wansoft_ticket_nombre for s in sucursales]
     detalle = wansoft.detalle_por_sucursal(cur_wansoft, nombres, d, h)
     mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h)
+    con_detalle = [n for n in nombres if n in detalle]
+    meseros = wansoft.ventas_meseros(cur_wansoft, con_detalle, d, h)
+    por_hora = wansoft.venta_por_hora(cur_wansoft, con_detalle, d, h)
+    pagos = wansoft.pagos_por_metodo(cur_wansoft, con_detalle, d, h)
     costos = (costos_totales(cur_wansoft, [s.wansoft_subsidiary_id for s in con_costo
                                            if s.wansoft_subsidiary_id is not None], periodo) or {}) if con_costo else {}
     pendientes = pendientes_rebaja(cur_wansoft, list(costos), periodo) if costos else {}
@@ -287,6 +309,17 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
         if nombre in detalle:
             m.dias_con_detalle, m.canal = detalle[nombre]
             m.mix = mix.get(nombre, {})
+            activos = [x for x in meseros.get(nombre, {}).values() if x["cuentas"] > 0 and x["venta_bruta"] > 0]
+            m.venta_salon = sum((x["venta_bruta"] for x in activos), CERO)
+            m.meseros = len(activos)  # same rule as the waiters' report's plantilla
+            m.dias_mesero = sum((x["dias"] for x in activos), CERO)
+            for dia, horas in por_hora.get(nombre, {}).items():  # (never `h`: the period's end)
+                m.venta_dia_hora[dia] = {hora: v["venta"] for hora, v in horas.items()}
+                for hora, v in horas.items():
+                    suma = m.por_hora.setdefault(hora, {k: CERO for k in v})
+                    for k, x in v.items():
+                        suma[k] += x
+            m.pagos = pagos.get(nombre, {})
 
         if sucursal in con_costo and sucursal.odoo_company_id is not None:
             real = presupuestos.gasto_real_costo_ventas(cur_presupuestos, sucursal.odoo_company_id, d, h)
@@ -335,6 +368,19 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
         total.cortes_descartados += m.cortes_descartados
         total.dias_por_tickets += m.dias_por_tickets
         total.dias_con_detalle += m.dias_con_detalle
+        total.venta_salon += m.venta_salon
+        total.meseros += m.meseros
+        total.dias_mesero += m.dias_mesero
+        for hora, v in m.por_hora.items():
+            suma = total.por_hora.setdefault(hora, {k: CERO for k in v})
+            for k, x in v.items():
+                suma[k] = suma.get(k, CERO) + x
+        for k, v in m.pagos.items():
+            total.pagos[k] = total.pagos.get(k, CERO) + v
+        for dia, horas in m.venta_dia_hora.items():
+            suma = total.venta_dia_hora.setdefault(dia, {})
+            for h, v in horas.items():
+                suma[h] = suma.get(h, CERO) + v
         if m.costo_ventas_real is not None:
             total.costo_ventas_real = (total.costo_ventas_real or CERO) + m.costo_ventas_real
             total.venta_neta_con_costo = (total.venta_neta_con_costo or CERO) + (m.venta_neta_con_costo or CERO)

@@ -131,7 +131,7 @@ FONDO_AVISO, BORDE_AVISO = HexColor("#FDF3E1"), HexColor("#B7791F")
 def _aviso(c, texto: str, y: float) -> float:
     """A highlighted one/two-line notice (amber band) under the title."""
     tam, interlinea = 7.6, 9.4
-    renglones = _renglones(c, texto, F, tam, ANCHO_UTIL - 20)
+    renglones = _renglones(c, texto, FB, tam, ANCHO_UTIL - 20)  # measured bold: the first line is
     alto = 7 + len(renglones) * interlinea
     c.setFillColor(FONDO_AVISO)
     c.roundRect(MARGEN, y - alto, ANCHO_UTIL, alto, 4, fill=1, stroke=0)
@@ -317,6 +317,12 @@ def _tabla_anio(c, r: ReporteComercial, y: float) -> float:
     c.setLineWidth(0.5)
     c.line(MARGEN, y + 2.5, MARGEN + ANCHO_UTIL, y + 2.5)
     return y - 8
+
+
+def alto_graficas() -> float:
+    """Height the two page-1 charts take (they all share one figure size)."""
+    from ..motor.graficas_png import ALTO_PULG, ANCHO_PULG
+    return (ANCHO_UTIL - 12) / 2 * ALTO_PULG / ANCHO_PULG + 6
 
 
 def _graficas(c, r: ReporteComercial, y: float) -> float:
@@ -521,12 +527,20 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
         y = _titulo(c, r, Y_INICIO)
         y = _lectura(c, r, y)
         y = _tabla(c, r, y)
-        y = _graficas(c, r, y)
+        # Charts that no longer fit on page 1 (long tables) open the composition page instead.
+        a_composicion = (getattr(r, "composicion", None) is not None and not r.composicion.vacia
+                         and y - alto_graficas() < Y_MIN + 30)
+        if not a_composicion:
+            y = _graficas(c, r, y)
         pendientes = _notas(c, r, y)
         c.showPage()
         if getattr(r, "tablajeria", None) is not None and not r.tablajeria.vacia:
             from . import pdf_tablajeria  # (it imports this module's helpers)
             pdf_tablajeria.pagina(c, r)
+            c.showPage()
+        if getattr(r, "composicion", None) is not None and not r.composicion.vacia:
+            from . import pdf_composicion
+            pdf_composicion.pagina(c, r, con_graficas=a_composicion)
             c.showPage()
         _pagina_detalle(c, r, pendientes)
         c.showPage()

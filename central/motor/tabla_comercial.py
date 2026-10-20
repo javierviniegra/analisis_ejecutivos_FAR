@@ -59,6 +59,13 @@ INDICADORES = [
     Indicador("clientes", "Clientes", "Ventas", ENTERO, lambda m: m.clientes, True),
     Indicador("cheque_promedio", "Cheque promedio (venta / cliente)", "Ventas", MONEDA, lambda m: m.cheque_promedio, True),
     Indicador("ticket_promedio", "Ticket promedio (venta / ticket)", "Ventas", MONEDA, lambda m: m.ticket_promedio, True),
+    # Owner, 2026-10-20: productivity of the waiters (dining room only).
+    Indicador("meseros_activos", "Meseros activos", "Productividad", ENTERO, lambda m: m.meseros, None,
+              requiere_detalle=True),
+    Indicador("venta_por_mesero", "Venta de salón por mesero", "Productividad", MONEDA,
+              lambda m: m.venta_por_mesero, True, requiere_detalle=True),
+    Indicador("venta_mesero_dia", "Venta por mesero por día trabajado", "Productividad", MONEDA,
+              lambda m: m.venta_por_mesero_dia, True, requiere_detalle=True),
     Indicador("mix_alimentos", "Mix: Alimentos", "Mezcla", PORCENTAJE, _pct_mix("Alimentos"), None, requiere_detalle=True),
     Indicador("mix_bebidas", "Mix: Bebidas", "Mezcla", PORCENTAJE, _pct_mix("Bebidas"), None, requiere_detalle=True),
     Indicador("canal_salon", "Canal: Salón", "Mezcla", PORCENTAJE, _pct_canal("salon"), None, requiere_detalle=True),

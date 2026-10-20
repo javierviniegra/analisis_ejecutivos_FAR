@@ -331,19 +331,6 @@ def _tablajeria(ws, r: ReporteComercial):
               t.filas + ([t.total] if t.total else []), "Producto",
               ("% grupo", lambda f: (f.indice_grupo, f.dif_grupo)), None)
         leyenda(LEYENDA_PRODUCTOS)
-        if t.porcionados:
-            ws.cell(fila, 1, "Porcionados (piezas por kg de base)").font = Font(bold=True, color=VERDE_MARCA)
-            fila += 1
-            _encabezado(ws, fila, ["Producto", "Kg base", "Piezas", "Pzas/kg", "Grupo", "Año ant.", "Var.", ""])
-            for f in t.porcionados:
-                fila += 1
-                ws.cell(fila, 1, f.etiqueta)
-                for col, v, fmt in ((2, f.actual.base, DECIMAL), (3, f.actual.generado, ENTERO), (4, f.indice, DECIMAL),
-                                    (5, f.indice_grupo, DECIMAL), (6, f.indice_anio, DECIMAL)):
-                    _numero(ws, fila, col, v, fmt)
-                _variacion(ws, fila, 7, f.var_anio, ENTERO)
-            fila += 2
-            leyenda(LEYENDA_PORCIONADOS)
         if t.por_dia:
             merma("Por día de la semana", t.por_dia, "Día", None, ("Vs su prom. (pp)", lambda f: f.dif_grupo))
             leyenda(LEYENDA_DIAS)
@@ -351,6 +338,85 @@ def _tablajeria(ws, r: ReporteComercial):
         ws.cell(fila, 1, "• " + n).font = Font(italic=True, color="555555", size=9)
         fila += 1
     for col, ancho in zip("ABCDEFGHIJK", (30, 11, 11, 10, 11, 12, 11, 10, 4, 14, 13)):
+        ws.column_dimensions[col].width = ancho
+
+
+def _composicion(ws, r: ReporteComercial):
+    """Same data as the PDF's composition page."""
+    from ..motor.composicion import HORAS
+    k = r.composicion
+    ws["A1"] = f"Composición de la venta · {r.nombre} · {r.periodo.etiqueta()}"
+    ws["A1"].font = SECCION_F
+    ws.cell(3, 1, "Venta por horario (hora de cierre del ticket)").font = Font(bold=True, color=VERDE_MARCA)
+    _encabezado(ws, 4, ["Horario", "Horas", "Venta bruta", "% venta", "Tickets", "Clientes", "Cheque", "Ticket",
+                        "Var. año ant.", ""])
+    fila = 4
+    for f in k.franjas:
+        fila += 1
+        ws.cell(fila, 1, f.etiqueta)
+        ws.cell(fila, 2, f.horario)
+        for col, v, fmt in ((3, f.venta, MONEDA), (4, f.pct, PORCENTAJE), (5, f.tickets, ENTERO),
+                            (6, f.clientes, ENTERO), (7, f.cheque, MONEDA), (8, f.ticket, MONEDA)):
+            _numero(ws, fila, col, v, fmt)
+        _variacion(ws, fila, 9, f.var_anio, MONEDA)
+    fila += 2
+    if k.dias:
+        ws.cell(fila, 1, "Por día de la semana (promedio por día)").font = Font(bold=True, color=VERDE_MARCA)
+        fila += 1
+        _encabezado(ws, fila, ["Día", "Días", "Mañana", "Tarde", "Noche", "Total", "% tarde", f"Vs {k.vs_anterior}", "",
+                               "Vs año ant.", ""])
+        for f in k.dias:
+            fila += 1
+            ws.cell(fila, 1, f.dia)
+            ws.cell(fila, 2, f.dias)
+            for col, v in zip((3, 4, 5, 6), f.bandas + [f.total]):
+                _numero(ws, fila, col, v, MONEDA)
+            _numero(ws, fila, 7, f.pct_tarde, PORCENTAJE)
+            _variacion(ws, fila, 8, f.var_anterior, MONEDA)
+            _variacion(ws, fila, 10, f.var_anio, MONEDA)
+        fila += 2
+    if k.tardes:
+        ws.cell(fila, 1, "Quién vende mejor en las tardes (13:00 a 18:00), en proporción a su venta").font = Font(
+            bold=True, color=VERDE_MARCA)
+        fila += 1
+        _encabezado(ws, fila, ["Sucursal", "Venta tarde", "% tarde", f"Vs {k.vs_anterior} (pp)", "",
+                               "Vs año ant. (pp)", "", "% mañana", "% noche"])
+        for f in k.tardes:
+            fila += 1
+            ws.cell(fila, 1, f.sucursal)
+            _numero(ws, fila, 2, f.venta_tarde, MONEDA)
+            _numero(ws, fila, 3, f.pct_tarde, PORCENTAJE)
+            _variacion(ws, fila, 4, f.var_anterior, PORCENTAJE)
+            _variacion(ws, fila, 6, f.var_anio, PORCENTAJE)
+            _numero(ws, fila, 8, f.pct_manana, PORCENTAJE)
+            _numero(ws, fila, 9, f.pct_noche, PORCENTAJE)
+        fila += 2
+    for titulo, rebanadas in k.pasteles:
+        ws.cell(fila, 1, titulo).font = Font(bold=True, color=VERDE_MARCA)
+        fila += 1
+        _encabezado(ws, fila, ["Concepto", "Monto", "%"])
+        total = sum((v for _, v, _ in rebanadas), 0) or 1
+        for nombre, v, _ in rebanadas:
+            fila += 1
+            ws.cell(fila, 1, nombre)
+            _numero(ws, fila, 2, v, MONEDA)
+            _numero(ws, fila, 3, v / total, PORCENTAJE)
+        fila += 2
+    for g in k.barras:
+        ws.cell(fila, 1, g.titulo).font = Font(bold=True, color=VERDE_MARCA)
+        fila += 1
+        _encabezado(ws, fila, ["Hora de cierre" if g.etiquetas == [str(h) for h in HORAS] else "Día", "Periodo",
+                               "Año anterior"])
+        for e, a, b in zip(g.etiquetas, g.actual, g.base):
+            fila += 1
+            ws.cell(fila, 1, e)
+            _numero(ws, fila, 2, a, MONEDA)
+            _numero(ws, fila, 3, b, MONEDA)
+        if g.nota:
+            fila += 1
+            ws.cell(fila, 1, g.nota).font = Font(italic=True, color="555555", size=9)
+        fila += 2
+    for col, ancho in zip("ABCDEFGHIJ", (34, 16, 16, 10, 10, 10, 12, 12, 12, 4)):
         ws.column_dimensions[col].width = ancho
 
 
@@ -368,6 +434,8 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
             _datos_grafica(_hoja(wb, r, nombre, varios), g)
         if getattr(r, "tablajeria", None) is not None and not r.tablajeria.vacia:
             _tablajeria(_hoja(wb, r, "Tablajería", varios), r)
+        if getattr(r, "composicion", None) is not None and not r.composicion.vacia:
+            _composicion(_hoja(wb, r, "Composición", varios), r)
         _detalle(_hoja(wb, r, "Detalle", varios), r)
         _notas(_hoja(wb, r, "Notas", varios), r)
     pie_excel(wb)

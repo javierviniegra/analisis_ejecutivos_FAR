@@ -85,3 +85,37 @@ def dibujar(g: Grafica) -> bytes:
     fig.savefig(salida, format="png", facecolor="white")
     plt.close(fig)
     return salida.getvalue()
+
+
+# Categorical slots in fixed order (the validated reference palette), grey for "Otros".
+CATEGORICOS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#6250d6"]
+GRIS_OTROS = "#B8B8B8"
+DONA_PULG = (2.4, 2.35)
+
+
+def dibujar_dona(titulo: str, rebanadas) -> bytes:
+    """A donut of shares: (name, value, colour slot) in a fixed order, "Otros"
+    (slot -1) last in grey; % on each slice of 6% or more and a legend with
+    every name and its %. Fixed figure size, so every donut has one scale."""
+    import math
+    valores = [float(v) for _, v, _ in rebanadas]
+    total = sum(valores) or 1
+    colores = [GRIS_OTROS if slot < 0 else CATEGORICOS[slot % len(CATEGORICOS)] for _, _, slot in rebanadas]
+    fig = plt.figure(figsize=DONA_PULG, dpi=DPI)
+    ax = fig.add_axes((0.1, 0.3, 0.8, 0.6))
+    cunas, _ = ax.pie(valores, colors=colores, startangle=90, counterclock=False,
+                      wedgeprops={"width": 0.38, "edgecolor": "white", "linewidth": 1.4})
+    for cuna, v in zip(cunas, valores):
+        if v / total >= 0.06:
+            ang = math.radians((cuna.theta1 + cuna.theta2) / 2)
+            ax.text(0.81 * math.cos(ang), 0.81 * math.sin(ang), f"{v / total * 100:.0f}%", ha="center", va="center",
+                    fontsize=5.6, color="white", fontweight="bold")
+    ax.set_aspect("equal")
+    fig.text(0.04, 0.95, titulo, fontsize=7.5, color=TEXTO, fontweight="bold", ha="left", va="top")
+    fig.legend(cunas, [f"{n}  {v / total * 100:.1f}%" for (n, _, _), v in zip(rebanadas, valores)],
+               loc="upper center", bbox_to_anchor=(0.5, 0.29), ncol=2 if len(rebanadas) > 3 else 1, fontsize=5.6,
+               frameon=False, handlelength=0.9, handleheight=0.8, labelcolor=TEXTO, columnspacing=1.0)
+    salida = io.BytesIO()
+    fig.savefig(salida, format="png", facecolor="white")
+    plt.close(fig)
+    return salida.getvalue()

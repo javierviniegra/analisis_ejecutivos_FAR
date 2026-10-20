@@ -613,3 +613,55 @@ def piezas_tablajeria(cur, subsidiary_ids: list[int], desde: date, hasta: date) 
         actual["generado"] += Decimal(cantidad or 0)
         previa = clave
     return piezas
+
+
+def venta_por_hora(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[date, dict[int, dict]]]:
+    """Per branch, ticket day and hour the ticket CLOSED (owner, 2026-10-20:
+    the hour it was paid): gross sales, tickets and guests, every channel.
+    {branch: {day: {hour: {"venta", "tickets", "clientes"}}}}"""
+    nombres = [n for n in nombres if n]
+    if not nombres:
+        return {}
+    a, b = _rango_fecha_texto(desde, hasta)
+    cur.execute(
+        f"""
+        SELECT Sucursal, LEFT(Fecha, 10), HOUR(HoraCierre), SUM(CAST(Total AS DECIMAL(14,2))), COUNT(*),
+               SUM(CAST(Personas AS DECIMAL(12,0)))
+        FROM getallordenesbyday_new_venta
+        WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s AND HoraCierre IS NOT NULL
+        GROUP BY Sucursal, LEFT(Fecha, 10), HOUR(HoraCierre)
+        """,
+        (*nombres, a, b),
+    )
+    resultado: dict[str, dict[date, dict[int, dict]]] = {}
+    for sucursal, dia, hora, venta, tickets, clientes in cur.fetchall():
+        if hora is None or not dia:
+            continue
+        resultado.setdefault(sucursal, {}).setdefault(date.fromisoformat(str(dia)[:10]), {})[int(hora)] = {
+            "venta": Decimal(venta or 0), "tickets": Decimal(tickets or 0), "clientes": Decimal(clientes or 0)}
+    return resultado
+
+
+def pagos_por_metodo(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, Decimal]]:
+    """Per branch, the amount paid with each payment method (Wansoft's name,
+    tips excluded). {branch: {method: amount}}"""
+    nombres = [n for n in nombres if n]
+    if not nombres:
+        return {}
+    a, b = _rango_fecha_texto(desde, hasta)
+    cur.execute(
+        f"""
+        SELECT Sucursal, MetodoDePago, SUM(CAST(Total AS DECIMAL(14,2)))
+        FROM getallordenesbyday_new_pago
+        WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s
+        GROUP BY Sucursal, MetodoDePago
+        """,
+        (*nombres, a, b),
+    )
+    resultado: dict[str, dict[str, Decimal]] = {}
+    for sucursal, metodo, monto in cur.fetchall():
+        if monto:
+            por = resultado.setdefault(sucursal, {})
+            clave = (metodo or "").strip() or "(sin método)"
+            por[clave] = por.get(clave, Decimal("0")) + Decimal(monto)
+    return resultado

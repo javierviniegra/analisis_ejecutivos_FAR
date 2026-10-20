@@ -27,6 +27,8 @@ CERO = Decimal("0")
 FACTOR_PORCIONADO = Decimal("1.02")
 DIAS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 KG, PIEZAS = "kg", "pzas"
+# Base products left out of the butchery section (owner, 2026-10-20: "no son necesarios").
+EXCLUIDOS = {"back rib (costillar)"}
 
 
 @dataclass
@@ -124,7 +126,7 @@ class Tablajeria:
 
     @property
     def vacia(self) -> bool:
-        return not self.filas and not self.porcionados
+        return not self.filas
 
 
 def productos_porcionados(*listas: list[dict]) -> set[str]:
@@ -159,7 +161,8 @@ def construir(actual: list[dict], anio: list[dict] | None, nombres: dict[int, st
     """`actual` / `anio`: the pieces of EVERY branch (the comparison is
     against all of them) for the period and the same period last year;
     `nombres`: subsidiary_id -> branch name; `seleccion`: the report's branches."""
-    anio = anio or []
+    anio = [p for p in (anio or []) if p["producto"].lower() not in EXCLUIDOS]
+    actual = [p for p in actual if p["producto"].lower() not in EXCLUIDOS]
     porc = productos_porcionados(actual, anio)
 
     def kg(piezas):
@@ -209,8 +212,8 @@ def notas(t: Tablajeria) -> list[str]:
     if t.incluir_costos:
         n.append("$ merma = costo de la merma = kg de merma x costo por kg de la pieza (el costo de Wansoft es el de la pieza "
                  "completa).")
-    n.append("Productos porcionados (lo que generan se cuenta en piezas: chorizo, salmón…): van aparte en piezas "
-             "por kg y quedan fuera del % de merma y de los totales.")
+    n.append("Fuera de la tablajería: Back Rib (Costillar) y los productos porcionados (lo que generan se cuenta en "
+             "piezas: chorizo, chistorra, salmón…), que no tienen una merma comparable.")
     if not t.consolidado:
         n.append("Grupo = el mismo producto en todas las sucursales con tablajería en el periodo.")
     else:

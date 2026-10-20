@@ -90,3 +90,9 @@ class TablajeriaTests(SimpleTestCase):
         self.assertEqual(acoxpa.esperado, (D(2) * D("0.15") + D(4) * D("0.5")) / D(6))  # 38.3%
         self.assertEqual(viaducto.esperado, D("0.15"))  # only loin
         self.assertEqual(viaducto.dif_esperado, D("0.1") - D("0.15"))  # better than its mix explains
+
+    def test_back_rib_queda_fuera(self):
+        piezas = self._piezas() + [_pieza(1, "Back Rib (Costillar)", 6, 900, 2, 4)]
+        t = tb.construir(piezas, [], self.NOMBRES, [1], consolidado=False)
+        self.assertNotIn("Back Rib (Costillar)", [f.etiqueta for f in t.filas])
+        self.assertEqual(t.total.actual.base, D(6))  # lomo 2 + arrachera 4, no back rib

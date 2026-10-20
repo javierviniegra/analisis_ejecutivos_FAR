@@ -168,10 +168,6 @@ def pagina(c, r) -> None:
         y = _subtitulo(c, "Por producto base (de mayor a menor merma; grupo = el mismo producto en todas las sucursales)", y)
         y = _merma(c, t, t.filas + ([t.total] if t.total else []), y, "Producto", con_grupo=True)
         y = _leyenda(c, LEYENDA_PRODUCTOS, y)
-        if t.porcionados:
-            y = _subtitulo(c, "Porcionados (se cuentan en piezas: piezas por kg de base)", y)
-            y = _porcionados(c, t, y)
-            y = _leyenda(c, LEYENDA_PORCIONADOS, y)
         if t.por_dia:
             y = _subtitulo(c, "Por día de la semana", y)
             y = _merma(c, t, t.por_dia, y, "Día", con_grupo=False, vs="Vs su prom.")

@@ -11,11 +11,11 @@ returns one `ReporteComercial` per branch, or a single consolidated one.
 import logging
 from dataclasses import dataclass, field
 
-from . import metricas, tablajeria
+from . import composicion, metricas, tablajeria
 from .fuentes import conexiones, odoo, wansoft
 from .graficas import Grafica, construir_graficas, ventana_tendencia
 from .lectura import Lectura, construir_lectura
-from .metricas import Comparacion, Metricas
+from .metricas import Comparacion, Metricas, como_comparacion
 from .notas import notas_cobertura, notas_reglas
 from .periodo import Periodo, TipoPeriodo
 from .tabla_comercial import Fila, construir_tabla, filas_por_formato
@@ -51,6 +51,8 @@ class ReporteComercial:
     solo_anio: bool = True
     # Owner, 2026-10-20: butchery shrinkage vs every branch and last year (None: could not be read).
     tablajeria: "tablajeria.Tablajeria | None" = None
+    # Owner, 2026-10-20: sales by time band, payment method, platform, weekday and hour.
+    composicion: "composicion.Composicion | None" = None
 
     @property
     def notas(self) -> list[str]:
@@ -84,7 +86,16 @@ def _uno(nombre, sucursales, periodo, actual, anterior, anio_anterior, diario, i
         cobertura=notas_cobertura(periodo, actual, anterior, anio_anterior, incluir_costos),
         reglas=notas_reglas(periodo, incluir_costos),
         incluir_costos=incluir_costos,
+        composicion=_composicion(actual, anio_anterior),
     )
+
+
+def _composicion(actual, anio_anterior):
+    try:
+        return composicion.construir(actual, como_comparacion(actual, anio_anterior), "Año anterior")
+    except Exception:  # never break the report over its composition page
+        log.exception("Composición de la venta no disponible")
+        return None
 
 
 # Format of each branch (cuentas.Sucursal.formato) as shown in the report, in this order.
@@ -206,6 +217,10 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
             _grupos_formato(sucursales, ma, mp, my, periodo, anterior, anio_ant)))
         r.por_sucursal = [(n, ma[i], my[i] if my else None) for i, n in enumerate(nombres)]  # base: last year
         r.tablajeria = _tablajeria(carne, sucursales, True, incluir_costos)
+        if r.composicion is not None:
+            r.composicion.tardes = composicion.tardes(r.por_sucursal, mp)
+            r.composicion.vs_anterior = {TipoPeriodo.MES: "mes ant.", TipoPeriodo.SEMANA: "sem. ant."}.get(
+                periodo.tipo, "periodo ant.")
         sin_considerar = [s.nombre for s in sucursales if not getattr(s, "considerar_costo", True)]
         if incluir_costos and sin_considerar:
             r.cobertura.append(f"No se considera el costo de {', '.join(sin_considerar)} (así está configurada la "
@@ -235,8 +250,12 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
              incluir_costos and getattr(sucursales[i], "considerar_costo", True))  # Metepec: no cost section
         for i, n in enumerate(nombres)
     ]
-    for r, s in zip(reportes, sucursales):  # one butchery section per branch, from the same reading
+    vs = {TipoPeriodo.MES: "mes ant.", TipoPeriodo.SEMANA: "sem. ant."}.get(periodo.tipo, "periodo ant.")
+    for i, (r, s) in enumerate(zip(reportes, sucursales)):  # one butchery section per branch, from the same reading
         r.tablajeria = _tablajeria(carne, [s], False, r.incluir_costos)
+        if r.composicion is not None:
+            r.composicion.vs_anterior = vs
+            r.composicion.dias = composicion.dias_horario(ma[i], r.anterior.base, r.anio_anterior.base)
     return reportes
 
 
