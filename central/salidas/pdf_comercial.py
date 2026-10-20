@@ -510,7 +510,7 @@ def _pagina_detalle(c, r: ReporteComercial, notas_pendientes: list[str] = ()) ->
 
 
 def generar(reportes: list[ReporteComercial]) -> bytes:
-    """One PDF with two pages per report: the report, and its detail with the rules."""
+    """One PDF per report: the report, its butchery page (when there is butchery), and its detail with the rules."""
     _registrar_fuentes()
     salida = io.BytesIO()
     c = canvas.Canvas(salida, pagesize=letter)
@@ -524,6 +524,10 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
         y = _graficas(c, r, y)
         pendientes = _notas(c, r, y)
         c.showPage()
+        if getattr(r, "tablajeria", None) is not None and not r.tablajeria.vacia:
+            from . import pdf_tablajeria  # (it imports this module's helpers)
+            pdf_tablajeria.pagina(c, r)
+            c.showPage()
         _pagina_detalle(c, r, pendientes)
         c.showPage()
     c.save()

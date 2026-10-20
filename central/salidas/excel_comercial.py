@@ -271,6 +271,89 @@ def _notas(ws, r: ReporteComercial):
     ws.column_dimensions["A"].width = 130
 
 
+def _tablajeria(ws, r: ReporteComercial):
+    """Same tables as the PDF's butchery page."""
+    from ..motor.tablajeria import LEYENDA_DIAS, LEYENDA_PORCIONADOS, LEYENDA_PRODUCTOS, LEYENDA_SUCURSALES, notas
+    t = r.tablajeria
+    ws["A1"] = f"Tablajería · {r.nombre} · {r.periodo.etiqueta()}"
+    ws["A1"].font = SECCION_F
+    fila = 3
+    costos = t.incluir_costos
+    PUNTOS = "+0.0;-0.0;0.0"
+
+    def puntos(col, v):
+        ws.cell(fila, col, float(v * 100) if v is not None else None).number_format = PUNTOS
+
+    def leyenda(texto):
+        nonlocal fila
+        ws.cell(fila - 1, 1, texto).font = Font(italic=True, color="555555", size=9)
+        fila += 1
+
+    def merma(titulo, filas, primera, referencia, vs):
+        """`referencia`: (header, value of the row, its difference) after % merma, or None;
+        `vs`: (header, difference) after the last-year columns, or None."""
+        nonlocal fila
+        ws.cell(fila, 1, titulo).font = Font(bold=True, color=VERDE_MARCA)
+        fila += 1
+        enc = [primera, "Kg base", "Merma kg", "% merma"]
+        if referencia:
+            enc += [referencia[0], f"Vs {referencia[0].lower()} (pp)"]
+        enc += ["% año ant.", "Var. (pp)", ""] + ([vs[0]] if vs else []) + (["$ merma"] if costos else [])
+        _encabezado(ws, fila, enc)
+        for f in filas:
+            fila += 1
+            a, col = f.actual, 5
+            ws.cell(fila, 1, f.etiqueta).font = Font(bold=f.total)
+            _numero(ws, fila, 2, a.base, DECIMAL)
+            _numero(ws, fila, 3, a.merma, DECIMAL)
+            _numero(ws, fila, 4, f.indice, PORCENTAJE)
+            if referencia:
+                valor, dif = referencia[1](f)
+                _numero(ws, fila, 5, valor, PORCENTAJE)
+                puntos(6, dif)
+                col = 7
+            _numero(ws, fila, col, f.indice_anio, PORCENTAJE)
+            _variacion(ws, fila, col + 1, f.var_anio, PORCENTAJE)
+            col += 3
+            if vs:
+                puntos(col, vs[1](f))
+                col += 1
+            if costos:
+                _numero(ws, fila, col, a.costo_merma, MONEDA)
+        fila += 2
+
+    if t.consolidado:
+        merma("Merma por sucursal (de mayor a menor)", t.filas + ([t.total] if t.total else []), "Sucursal",
+              ("% esperado", lambda f: (f.esperado, f.dif_esperado)), ("Vs grupo (pp)", lambda f: f.dif_grupo))
+        leyenda(LEYENDA_SUCURSALES)
+    else:
+        merma("Por producto base (grupo = el mismo producto en todas las sucursales)",
+              t.filas + ([t.total] if t.total else []), "Producto",
+              ("% grupo", lambda f: (f.indice_grupo, f.dif_grupo)), None)
+        leyenda(LEYENDA_PRODUCTOS)
+        if t.porcionados:
+            ws.cell(fila, 1, "Porcionados (piezas por kg de base)").font = Font(bold=True, color=VERDE_MARCA)
+            fila += 1
+            _encabezado(ws, fila, ["Producto", "Kg base", "Piezas", "Pzas/kg", "Grupo", "Año ant.", "Var.", ""])
+            for f in t.porcionados:
+                fila += 1
+                ws.cell(fila, 1, f.etiqueta)
+                for col, v, fmt in ((2, f.actual.base, DECIMAL), (3, f.actual.generado, ENTERO), (4, f.indice, DECIMAL),
+                                    (5, f.indice_grupo, DECIMAL), (6, f.indice_anio, DECIMAL)):
+                    _numero(ws, fila, col, v, fmt)
+                _variacion(ws, fila, 7, f.var_anio, ENTERO)
+            fila += 2
+            leyenda(LEYENDA_PORCIONADOS)
+        if t.por_dia:
+            merma("Por día de la semana", t.por_dia, "Día", None, ("Vs su prom. (pp)", lambda f: f.dif_grupo))
+            leyenda(LEYENDA_DIAS)
+    for n in notas(t):
+        ws.cell(fila, 1, "• " + n).font = Font(italic=True, color="555555", size=9)
+        fila += 1
+    for col, ancho in zip("ABCDEFGHIJK", (30, 11, 11, 10, 11, 12, 11, 10, 4, 14, 13)):
+        ws.column_dimensions[col].width = ancho
+
+
 def generar(reportes: list[ReporteComercial]) -> bytes:
     wb = Workbook()
     wb.remove(wb.active)
@@ -283,6 +366,8 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
             nombres = ["Venta vs año anterior", "Clientes vs año anterior"]
         for g, nombre in zip(r.graficas, nombres):
             _datos_grafica(_hoja(wb, r, nombre, varios), g)
+        if getattr(r, "tablajeria", None) is not None and not r.tablajeria.vacia:
+            _tablajeria(_hoja(wb, r, "Tablajería", varios), r)
         _detalle(_hoja(wb, r, "Detalle", varios), r)
         _notas(_hoja(wb, r, "Notas", varios), r)
     pie_excel(wb)

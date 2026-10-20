@@ -2,6 +2,18 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-20 — Commercial report: butchery shrinkage (tablajería) page
+
+What matters most to the owner in this report: the shrinkage of the butchery, against every branch and last year. Source `gettablajeriareport` (Wansoft, read-only), `central/motor/tablajeria.py`, page 2 of the PDF (`salidas/pdf_tablajeria.py`) and sheet "Tablajería".
+
+- **One piece counted once.** Wansoft writes one row per generated product and repeats the base piece's quantity, cost and shrinkage on each; the Power BI table sums the rows, so a piece counts two or three times (Acoxpa 2026-10-04: 336.39 kg / $130,223 / 70.77 kg merma in Power BI vs 177.7 kg / $70,096 / 48.8 kg by piece; day total 21.0% vs 28.2%). A piece = consecutive rows (by id) with the same branch, day, user, product, quantity, cost and shrinkage; a repeated generated product starts a new piece, so identical pieces are never merged (Sept 2026: 5,060 rows -> 3,037 pieces; base - shrinkage = generated in 98% of the kg pieces).
+- **% merma = shrinkage kg / base kg** (the owner's measure, `DIVIDE(QuantityDecrease, QuantityOfBaseProduct)`). **$ merma = shrinkage kg x cost PER KG** of the piece: the owner's `CostoMermaReal = QuantityDecrease * ProductBaseCost` uses the whole piece's cost and the repeated rows (Acoxpa that day: $130,374 vs $16,845).
+- **Portioned products** (generated counted in pieces: chorizo, chistorra, tuétano, salmón, morcilla; detected as the products whose pieces mostly "generate" more than their weight) have no meaningful shrinkage (Wansoft subtracts pieces from kg: chorizo "93%"): shown apart in pieces per kg (unit pzas), out of every % and total.
+- **Consolidated:** branches ranked by % merma (highest first), each with last year's % and its change in points (up = red), points vs the consolidated's % ("vs grupo"), kg of shrinkage and its cost. **Branch:** per base product (highest % first) vs the same product in EVERY branch (the benchmark is all branches, whatever the selection) and vs last year; portioned products in pieces per kg; per day of the week vs the branch's own %. No breakdown of generated products (owner).
+- **Expected % for the mix of cuts** (owner, 2026-10-20): a branch's % depends on WHICH cuts it butchers (mollejas lose ~50%, rib eye ~8%), so the consolidated adds "Esperado" = sum over its cuts of (its kg of the cut x the group's % on that cut) / its kg, and "Vs esp." = its % minus that (red = loses more than its mix explains). September 2026: La Esquina Coyoacán +13.3 pp, Cancún +2.8; Isabel La Católica -2.0, Nápoles and Tepeyac -1.8. A one-line legend under each table explains its columns.
+- No butchery in Wansoft: Puebla and CentroMyJ (born in Odoo), Metepec, Versalles -- listed in the page's notes. Costs follow "Incluir costos". A reading failure leaves the page out, never breaks the report.
+- September 2026: group 18.1% (last year 18.2%); highest La Esquina Coyoacán 30.5%, lowest Nápoles 15.6%; Acoxpa 18.1% (20.7% last year).
+
 ## 2026-10-20 — Consolidated commercial report: ticket and check per branch format
 
 - **Branch format** (owner, 2026-10-19): `cuentas.Sucursal.formato` = Fonda / Taquería / La Esquina, editable in the admin (migration 0005 sets Taquería Parroquia, Taquería Viaducto and Versalles as taquerías and La Esquina Coyoacán as La Esquina; every other branch is a fonda, also the default for new branches).

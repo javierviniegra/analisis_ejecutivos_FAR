@@ -11,8 +11,8 @@ returns one `ReporteComercial` per branch, or a single consolidated one.
 import logging
 from dataclasses import dataclass, field
 
-from . import metricas
-from .fuentes import conexiones, odoo
+from . import metricas, tablajeria
+from .fuentes import conexiones, odoo, wansoft
 from .graficas import Grafica, construir_graficas, ventana_tendencia
 from .lectura import Lectura, construir_lectura
 from .metricas import Comparacion, Metricas
@@ -49,6 +49,8 @@ class ReporteComercial:
     # Owner, 2026-10-14: the commercial report compares against the same period last
     # year (table, charts, detail); the previous period only in the Lectura.
     solo_anio: bool = True
+    # Owner, 2026-10-20: butchery shrinkage vs every branch and last year (None: could not be read).
+    tablajeria: "tablajeria.Tablajeria | None" = None
 
     @property
     def notas(self) -> list[str]:
@@ -113,6 +115,41 @@ def _con_formatos(filas: list[Fila], por_formato: list[Fila]) -> list[Fila]:
     return filas[:ultima + 1] + por_formato + filas[ultima + 1:]
 
 
+def _todas_las_sucursales(sucursales) -> list:
+    """Every active branch: the butchery benchmark is against all of them,
+    whatever the selection. Falls back to the selection outside Django."""
+    try:
+        from cuentas.models import Sucursal
+        return list(Sucursal.objects.filter(activa=True, wansoft_subsidiary_id__isnull=False))
+    except Exception:
+        return list(sucursales)
+
+
+def _leer_tablajeria(cw, sucursales, periodo, anio_ant):
+    """The butchery pieces of EVERY branch for the period and last year, read
+    once: (actual, anio, names). None (and a log line) if they cannot be read,
+    so the butchery section never breaks the report."""
+    try:
+        todas = list(_todas_las_sucursales(sucursales)) + list(sucursales)
+        nombres = {s.wansoft_subsidiary_id: s.nombre for s in todas if getattr(s, "wansoft_subsidiary_id", None)}
+        ids = sorted(nombres)
+        actual = wansoft.piezas_tablajeria(cw, ids, periodo.desde, periodo.hasta)
+        anio = wansoft.piezas_tablajeria(cw, ids, anio_ant.desde, anio_ant.hasta) if anio_ant else []
+        return actual, anio, nombres
+    except Exception:
+        log.exception("Tablajería no disponible")
+        return None
+
+
+def _tablajeria(leida, sucursales, consolidado: bool, incluir_costos: bool):
+    """The butchery section of one report (a branch, or the consolidated selection)."""
+    if leida is None:
+        return None
+    actual, anio, nombres = leida
+    seleccion = [s.wansoft_subsidiary_id for s in sucursales if getattr(s, "wansoft_subsidiary_id", None)]
+    return tablajeria.construir(actual, anio, nombres, seleccion, consolidado, incluir_costos)
+
+
 def _abrir_odoo():
     """Odoo client for the invoiced sales behind the estimated cost; None when
     Odoo cannot be reached (the report still comes out, with a note)."""
@@ -140,6 +177,7 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
             my = mp
         else:
             my = leer(anio_ant) if anio_ant else None
+        carne = _leer_tablajeria(cw, sucursales, periodo, anio_ant)
         diario = None
         if periodo.tipo == TipoPeriodo.MES:  # the month trend chart needs 24 months of closings
             diario = metricas.recolectar_diario(cw, sucursales, *ventana_tendencia(periodo))
@@ -167,6 +205,7 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
         r.filas = _con_formatos(r.filas, filas_por_formato(
             _grupos_formato(sucursales, ma, mp, my, periodo, anterior, anio_ant)))
         r.por_sucursal = [(n, ma[i], my[i] if my else None) for i, n in enumerate(nombres)]  # base: last year
+        r.tablajeria = _tablajeria(carne, sucursales, True, incluir_costos)
         sin_considerar = [s.nombre for s in sucursales if not getattr(s, "considerar_costo", True)]
         if incluir_costos and sin_considerar:
             r.cobertura.append(f"No se considera el costo de {', '.join(sin_considerar)} (así está configurada la "
@@ -188,7 +227,7 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
         if estimadas:
             r.cobertura.append("Sucursales con costo total estimado: " + ", ".join(estimadas) + ".")
         return [r]
-    return [
+    reportes = [
         _uno(n, [n], periodo, ma[i],
              metricas.comparables([n], [ma[i]], [mp[i]], periodo, anterior),
              metricas.comparables([n], [ma[i]], [my[i]] if my else None, periodo, anio_ant),
@@ -196,6 +235,9 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
              incluir_costos and getattr(sucursales[i], "considerar_costo", True))  # Metepec: no cost section
         for i, n in enumerate(nombres)
     ]
+    for r, s in zip(reportes, sucursales):  # one butchery section per branch, from the same reading
+        r.tablajeria = _tablajeria(carne, [s], False, r.incluir_costos)
+    return reportes
 
 
 def filas_visibles(filas: list[Fila]) -> list[Fila]:

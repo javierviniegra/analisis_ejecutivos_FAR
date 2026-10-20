@@ -576,3 +576,40 @@ def propinas_meseros(cur, nombres: list[str], desde: date, hasta: date) -> dict[
             clave = (mesero or "").strip() or "(sin nombre)"
             por[clave] = por.get(clave, Decimal("0")) + Decimal(propina or 0)
     return resultado
+
+
+def piezas_tablajeria(cur, subsidiary_ids: list[int], desde: date, hasta: date) -> list[dict]:
+    """The pieces butchered per branch (owner, 2026-10-20). Wansoft writes one
+    row per GENERATED product and repeats on each one the base piece's
+    quantity, cost and shrinkage (a piece of loin that gives clean loin,
+    parrillada and trimmings is three rows); summing rows counts the piece
+    two or three times. A piece = consecutive rows (by id) with the same
+    branch, day, user, base product, quantity, cost and shrinkage; a
+    generated product that repeats starts a new piece, so two identical
+    pieces are never merged.
+    [{"sucursal", "fecha", "producto", "base", "costo", "merma", "generado"}]"""
+    ids = [i for i in subsidiary_ids if i]
+    if not ids:
+        return []
+    cur.execute(
+        f"""
+        SELECT id, subsidiary_id, InputDate, UserName, ProductBase, QuantityOfBaseProduct, ProductBaseCost,
+               QuantityDecrease, GeneratedProduct, QuantityOfGeneratedProduct
+        FROM gettablajeriareport
+        WHERE subsidiary_id IN ({_marcadores(ids)}) AND InputDate >= %s AND InputDate <= %s
+        ORDER BY id
+        """,
+        (*ids, desde, hasta),
+    )
+    piezas, actual, previa, generados = [], None, None, set()
+    for _, sid, fecha, usuario, producto, base, costo, merma, generado, cantidad in cur.fetchall():
+        clave = (sid, fecha, usuario, producto, base, costo, merma)
+        if clave != previa or generado in generados:
+            actual = {"sucursal": sid, "fecha": fecha, "producto": (producto or "").strip(), "base": Decimal(base or 0),
+                      "costo": Decimal(costo or 0), "merma": Decimal(merma or 0), "generado": Decimal("0")}
+            piezas.append(actual)
+            generados = set()
+        generados.add(generado)
+        actual["generado"] += Decimal(cantidad or 0)
+        previa = clave
+    return piezas
