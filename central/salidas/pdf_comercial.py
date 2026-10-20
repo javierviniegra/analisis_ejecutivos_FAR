@@ -542,6 +542,10 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
             from . import pdf_composicion
             pdf_composicion.pagina(c, r, con_graficas=a_composicion)
             c.showPage()
+        if getattr(r, "addendum", None) is not None:
+            from . import pdf_inflacion
+            pdf_inflacion.pagina(c, r)
+            c.showPage()
         _pagina_detalle(c, r, pendientes)
         c.showPage()
     c.save()

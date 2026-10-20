@@ -289,3 +289,27 @@ class EnvioManual(models.Model):
 
     def __str__(self):
         return f"{self.reporte} · {self.periodo} · {self.enviado_en:%d/%m/%Y %H:%M}"
+
+
+class Inflacion(models.Model):
+    """Mexico's consumer price index (INPC, INEGI) per month, for the inflation
+    addendum of the monthly commercial report (owner, 2026-10-19). Loaded from
+    Banxico's SIE API (series SP1) when a month is missing; editable by hand
+    in the admin if the API is down."""
+
+    class Fuente(models.TextChoices):
+        BANXICO = "banxico", "Banxico (API)"
+        MANUAL = "manual", "Captura manual"
+
+    mes = models.DateField(unique=True, help_text="Primer día del mes.")
+    inpc = models.DecimalField("INPC", max_digits=10, decimal_places=3, help_text="Índice general, base 2Q jul 2018 = 100.")
+    fuente = models.CharField(max_length=10, choices=Fuente.choices, default=Fuente.BANXICO)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-mes"]
+        verbose_name = "inflación (INPC)"
+        verbose_name_plural = "inflación (INPC)"
+
+    def __str__(self):
+        return f"{self.mes:%Y-%m}: {self.inpc}"

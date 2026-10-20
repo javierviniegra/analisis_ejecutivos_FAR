@@ -2,6 +2,15 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-20 — Commercial report: inflation addendum (periods of a month or more)
+
+- **What** (owner, 2026-10-19): how much the month grew against the same month last year and how much of it was inflation. Sales, ticket and check with their nominal change and their **real** change ((1 + nominal) / (1 + inflation) - 1, the same arrow rule); guests and tickets as volume (no inflation). A short Lectura; in the consolidated, every branch's nominal and real sales change, highest real growth first. Comparable branches, as the rest of the report. Own page before the detail, and sheet "Inflación".
+- **Periods of a month or more only** (owner, 2026-10-20): month, bimester, quarter, semester, year; never a week or a free range. Several months: inflation = average INPC of the months / average INPC of the same months last year - 1 (Q3 2026: 3.28%).
+- **Why the year-on-year inflation for a month** (owner asked): the comparison is the month against the SAME month last year, and the price change between those two dates is the annual inflation (September: 3.45%); the monthly one (September: 0.42%) only measures August -> September and would understate it about ten times. It would apply only to a comparison against the previous month.
+- **Which month.** INEGI publishes a month's INPC around the 9th of the next month, after the monthly report is sent (day 1). The owner chose to keep it IN the monthly report (no separate report, no later send): the addendum covers the months of the period whose inflation IS published -- the whole period when generated later -- (year 2026 generated in October: January - September); a month not yet published analyses the most recent published month (the October report sent on November 1st analyses September vs September last year). An amber notice always says which months and why; inflation is never estimated.
+- **Inflation** = general INPC of the month / INPC of the same month last year - 1 (INEGI via Banxico SIE, series SP1; September 2026: 3.45%, as INEGI's bulletin). Stored in `central.Inflacion` (admin-editable, `fuente` banxico / manual), preloaded January 2023 - September 2026 by migration 0015; missing months are fetched from Banxico when a monthly report is built (`BANXICO_TOKEN` in config/.env; a failure keeps the stored months).
+- September 2026 consolidated: sales +0.4% nominal, -3.0% real; check +5.6% (+2.1% real); guests -4.9%. By branch: Vía Vallejo +19.1% real ... Playa del Carmen -41.6%.
+
 ## 2026-10-20 — Commercial report: waiters' productivity and sales composition page
 
 - **Productivity** (section "Productividad" of the indicators table, vs last year): active waiters (an account and sales in the period, the waiters' report's plantilla rule), dining-room sales per waiter and per waiter per day worked (`wansoft.ventas_meseros`). Sales per table was dropped by the owner (Wansoft has no table count; its table numbers include virtual ones).

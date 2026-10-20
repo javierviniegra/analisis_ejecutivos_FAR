@@ -170,6 +170,9 @@ EMAIL_TIMEOUT = 60
 CORREO_REMITENTE = os.getenv("CORREO_REMITENTE") or "Grupo Hospitalario Rodiva"
 CORREO_CONTACTO_NOMBRE = os.getenv("CORREO_CONTACTO_NOMBRE") or "el equipo de CGI Inventarios"
 CORREO_CONTACTO = os.getenv("CORREO_CONTACTO", "")
+
+# Banxico SIE API (INPC, series SP1) for the inflation addendum; blank = only the stored months.
+BANXICO_TOKEN = os.getenv("BANXICO_TOKEN", "")
 # Every subject starts with this (owner, 2026-10-06).
 CORREO_PREFIJO_ASUNTO = os.getenv("CORREO_PREFIJO_ASUNTO") or "CENTRAL DE REPORTES -RODIVA-"  # e-mail of that team (blank: named without address)
 

@@ -420,6 +420,51 @@ def _composicion(ws, r: ReporteComercial):
         ws.column_dimensions[col].width = ancho
 
 
+def _addendum(ws, r: ReporteComercial):
+    """Same as the PDF's inflation addendum page."""
+    from ..motor.inflacion import _nombre_mes
+    a = r.addendum
+    ws["A1"] = f"Addendum: crecimiento contra inflación · {r.nombre}"
+    ws["A1"].font = SECCION_F
+    ws["A2"] = f"{_nombre_mes(a.mes).capitalize()} contra {_nombre_mes(a.mes_anio)} · Inflación anual: {a.inflacion * 100:.2f}%"
+    ws.merge_cells("A3:G3")
+    ws["A3"] = a.nota
+    ws["A3"].alignment = Alignment(wrap_text=True, vertical="top")
+    ws["A3"].fill = PatternFill("solid", fgColor="FDF3E1")
+    ws.row_dimensions[3].height = 45
+    fila = 5
+    for t in a.lectura:
+        ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=7)
+        ws.cell(fila, 1, "• " + t).alignment = Alignment(wrap_text=True, vertical="top")
+        ws.row_dimensions[fila].height = 30
+        fila += 1
+    fila += 1
+    _encabezado(ws, fila, ["Indicador", _nombre_mes(a.mes).capitalize(), _nombre_mes(a.mes_anio).capitalize(),
+                           "Var. nominal", "", "Var. real", ""])
+    for f in a.filas:
+        fila += 1
+        ws.cell(fila, 1, f.etiqueta)
+        _numero(ws, fila, 2, f.actual, f.formato)
+        _numero(ws, fila, 3, f.base, f.formato)
+        _variacion(ws, fila, 4, f.nominal, f.formato)
+        if f.real is not None:
+            _variacion(ws, fila, 6, f.real, f.formato)
+        else:
+            ws.cell(fila, 6, "volumen").font = Font(italic=True, color="555555")
+    if a.por_sucursal:
+        fila += 2
+        ws.cell(fila, 1, "Por sucursal (de mayor a menor crecimiento real)").font = Font(bold=True, color=VERDE_MARCA)
+        fila += 1
+        _encabezado(ws, fila, ["Sucursal", "Venta: var. nominal", "", "Venta: var. real", ""])
+        for s in a.por_sucursal:
+            fila += 1
+            ws.cell(fila, 1, s.nombre)
+            _variacion(ws, fila, 2, s.nominal, MONEDA)
+            _variacion(ws, fila, 4, s.real, MONEDA)
+    for col, ancho in zip("ABCDEFG", (34, 18, 18, 12, 4, 12, 4)):
+        ws.column_dimensions[col].width = ancho
+
+
 def generar(reportes: list[ReporteComercial]) -> bytes:
     wb = Workbook()
     wb.remove(wb.active)
@@ -436,6 +481,8 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
             _tablajeria(_hoja(wb, r, "Tablajería", varios), r)
         if getattr(r, "composicion", None) is not None and not r.composicion.vacia:
             _composicion(_hoja(wb, r, "Composición", varios), r)
+        if getattr(r, "addendum", None) is not None:
+            _addendum(_hoja(wb, r, "Inflación", varios), r)
         _detalle(_hoja(wb, r, "Detalle", varios), r)
         _notas(_hoja(wb, r, "Notas", varios), r)
     pie_excel(wb)

@@ -11,7 +11,7 @@ returns one `ReporteComercial` per branch, or a single consolidated one.
 import logging
 from dataclasses import dataclass, field
 
-from . import composicion, metricas, tablajeria
+from . import composicion, inflacion, metricas, tablajeria
 from .fuentes import conexiones, odoo, wansoft
 from .graficas import Grafica, construir_graficas, ventana_tendencia
 from .lectura import Lectura, construir_lectura
@@ -53,6 +53,8 @@ class ReporteComercial:
     tablajeria: "tablajeria.Tablajeria | None" = None
     # Owner, 2026-10-20: sales by time band, payment method, platform, weekday and hour.
     composicion: "composicion.Composicion | None" = None
+    # Periods of a month or more (owner, 2026-10-19/20): growth against inflation, of its published months.
+    addendum: "inflacion.Addendum | None" = None
 
     @property
     def notas(self) -> list[str]:
@@ -161,6 +163,24 @@ def _tablajeria(leida, sucursales, consolidado: bool, incluir_costos: bool):
     return tablajeria.construir(actual, anio, nombres, seleccion, consolidado, incluir_costos)
 
 
+def _serie_inflacion():
+    """The stored INPC (fetching missing months from Banxico); None outside Django or on failure."""
+    try:
+        from django.conf import settings
+        return inflacion.serie(getattr(settings, "BANXICO_TOKEN", ""))
+    except Exception:
+        log.exception("INPC no disponible")
+        return None
+
+
+def _addendum(mes, comp, infl, periodo, por_sucursal=None):
+    try:
+        return inflacion.construir(mes, comp, infl, periodo, por_sucursal)
+    except Exception:  # never break the report over its addendum
+        log.exception("Addendum de inflación no disponible")
+        return None
+
+
 def _abrir_odoo():
     """Odoo client for the invoiced sales behind the estimated cost; None when
     Odoo cannot be reached (the report still comes out, with a note)."""
@@ -178,6 +198,8 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
     not shown, no cost rules)."""
     anterior = periodo.anterior()
     anio_ant = periodo.mismo_periodo_anio_anterior()
+    inpc = _serie_inflacion() if periodo.tipo in inflacion.TIPOS else None
+    mes_infl = inflacion.periodo_analizado(periodo, inpc) if inpc else None
     cli = _abrir_odoo() if incluir_costos and any(s.odoo_company_id for s in sucursales) else None
     with conexiones.abrir_wansoft() as cw, conexiones.abrir_presupuestos() as cp:
         def leer(p):
@@ -189,6 +211,16 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
         else:
             my = leer(anio_ant) if anio_ant else None
         carne = _leer_tablajeria(cw, sucursales, periodo, anio_ant)
+        # The addendum's month: the report's own (reuse what was read) or an earlier one (read it and its year).
+        mi = my_i = None
+        if mes_infl is not None and mes_infl == periodo:
+            mi, my_i = ma, my
+        elif mes_infl is not None:
+            try:
+                mi, my_i = leer(mes_infl), leer(mes_infl.mismo_periodo_anio_anterior())
+            except Exception:
+                log.exception("No se pudo leer el mes del addendum de inflación")
+                mes_infl = None
         diario = None
         if periodo.tipo == TipoPeriodo.MES:  # the month trend chart needs 24 months of closings
             diario = metricas.recolectar_diario(cw, sucursales, *ventana_tendencia(periodo))
@@ -217,6 +249,13 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
             _grupos_formato(sucursales, ma, mp, my, periodo, anterior, anio_ant)))
         r.por_sucursal = [(n, ma[i], my[i] if my else None) for i, n in enumerate(nombres)]  # base: last year
         r.tablajeria = _tablajeria(carne, sucursales, True, incluir_costos)
+        if mes_infl is not None:
+            infl = inflacion.del_periodo(inpc, mes_infl)
+            ly_i = mes_infl.mismo_periodo_anio_anterior()
+            cada = [(n, mi[i], metricas.comparables([n], [mi[i]], [my_i[i]], mes_infl, ly_i).base)
+                    for i, n in enumerate(nombres)]
+            r.addendum = _addendum(mes_infl, metricas.comparables(nombres, mi, my_i, mes_infl, ly_i), infl, periodo,
+                                   cada)
         if r.composicion is not None:
             r.composicion.tardes = composicion.tardes(r.por_sucursal, mp)
             r.composicion.vs_anterior = {TipoPeriodo.MES: "mes ant.", TipoPeriodo.SEMANA: "sem. ant."}.get(
@@ -253,6 +292,10 @@ def armar(sucursales: list, periodo: Periodo, consolidado: bool, incluir_costos:
     vs = {TipoPeriodo.MES: "mes ant.", TipoPeriodo.SEMANA: "sem. ant."}.get(periodo.tipo, "periodo ant.")
     for i, (r, s) in enumerate(zip(reportes, sucursales)):  # one butchery section per branch, from the same reading
         r.tablajeria = _tablajeria(carne, [s], False, r.incluir_costos)
+        if mes_infl is not None:
+            ly_i = mes_infl.mismo_periodo_anio_anterior()
+            r.addendum = _addendum(mes_infl, metricas.comparables([nombres[i]], [mi[i]], [my_i[i]], mes_infl, ly_i),
+                                   inflacion.del_periodo(inpc, mes_infl), periodo)
         if r.composicion is not None:
             r.composicion.vs_anterior = vs
             r.composicion.dias = composicion.dias_horario(ma[i], r.anterior.base, r.anio_anterior.base)
