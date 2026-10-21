@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-21 — Commercial report: food and drinks in units and price per unit
+
+- **Why** (owner): to tell whether a drop comes from selling FEWER products or from not selling them at the right price. New section of the indicators table, "Alimentos y bebidas: unidades y precio": for each group its sales, units sold and average price per unit, against last year; and one Lectura line per comparison block ("Alimentos: venta +1.1%, unidades -8.0%, precio por unidad +9.9%; ...").
+- **Units sold** = quantity of the order lines of the group WITH a price; courtesies are left out (they carry quantity but no amount and would lower the price per unit). Read in the same statement as the food/drinks mix (no extra query). Price per unit = the group's gross sales / its units (with IVA).
+- September 2026 consolidated: food units -8.0%, price per unit +9.9%; drinks units -2.3%, price +0.8%. Acoxpa: food units -4.1%, price +2.6%.
+- The table now continues on a new page ("Indicadores (continuación)", header repeated) when a section would run into the bottom-right watermark (`Y_TABLA`), never splitting a section; "Notas" is never drawn without at least its first note.
+
 ## 2026-10-20 — Commercial report: inflation addendum (periods of a month or more)
 
 - **What** (owner, 2026-10-19): how much the month grew against the same month last year and how much of it was inflation. Sales, ticket and check with their nominal change and their **real** change ((1 + nominal) / (1 + inflation) - 1, the same arrow rule); guests and tickets as volume (no inflation). A short Lectura; in the consolidated, every branch's nominal and real sales change, highest real growth first. Comparable branches, as the rest of the report. Own page before the detail, and sheet "Inflación".

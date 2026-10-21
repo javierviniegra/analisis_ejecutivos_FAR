@@ -91,3 +91,25 @@ class ProductividadTests(SimpleTestCase):
         t = consolidar([a, b], SEM)
         self.assertEqual((t.meseros, t.venta_salon, t.dias_mesero), (5, D(150000), D(25)))
         self.assertEqual(t.venta_por_mesero_dia, D(6000))
+
+
+class UnidadesTests(SimpleTestCase):
+    """Owner, 2026-10-21: food / drinks split into units sold and price per unit."""
+
+    def test_precio_por_unidad_y_lectura(self):
+        from .motor.lectura import _productos
+        from .motor.tabla_comercial import construir_tabla
+        actual = Metricas(periodo=SEM, mix={"Alimentos": D(1100), "Bebidas": D(500)},
+                          unidades={"Alimentos": D(100), "Bebidas": D(50)}, dias_con_cierre=7, dias_con_detalle=7)
+        base = Metricas(periodo=LY, mix={"Alimentos": D(1000), "Bebidas": D(500)},
+                        unidades={"Alimentos": D(100), "Bebidas": D(40)}, dias_con_cierre=7, dias_con_detalle=7)
+        self.assertEqual(actual.precio_unidad("Alimentos"), D(11))
+        filas = construir_tabla(actual, None, Comparacion(actual, base))
+        por = {f.indicador.clave: f for f in filas}
+        self.assertEqual(por["alimentos_unidades"].var_anio.direccion, "igual")  # same units...
+        self.assertEqual(por["alimentos_precio"].var_anio.direccion, "sube")  # ...sold 10% dearer
+        self.assertEqual(por["bebidas_unidades"].var_anio.direccion, "sube")  # +25% units
+        self.assertEqual(por["bebidas_precio"].var_anio.direccion, "baja")  # at a lower price: -20%
+        texto = _productos(filas, "var_anio").texto
+        self.assertIn("Alimentos: venta ▲ +10.0%", texto)
+        self.assertIn("Bebidas: venta = 0.0%, unidades ▲ +25.0%, precio por unidad ▼ -20.0%", texto)

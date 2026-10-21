@@ -91,13 +91,15 @@ class ConsultasEnLoteTests(SimpleTestCase):
         self.assertNotIn(9, r)
 
     def test_mix_una_consulta_por_mes_y_suma(self):
-        cur = _Cursor([("PUEBLA", "Alimentos", Decimal("10")), ("PUEBLA", "Otro", Decimal("1"))])
+        cur = _Cursor([("PUEBLA", "Alimentos", Decimal("10"), Decimal("4")), ("PUEBLA", "Otro", Decimal("1"), Decimal("1"))])
         llamadas = []
         ejecutar = cur.execute
         cur.execute = lambda sql, params=(): (llamadas.append(params[-2:]), ejecutar(sql, params))
-        r = w.mix_alimentos_bebidas(cur, ["PUEBLA"], date(2026, 7, 15), date(2026, 9, 10))
+        unidades = {}
+        r = w.mix_alimentos_bebidas(cur, ["PUEBLA"], date(2026, 7, 15), date(2026, 9, 10), unidades=unidades)
         self.assertEqual(llamadas, [("2026-07-15", "2026-08-01"), ("2026-08-01", "2026-09-01"), ("2026-09-01", "2026-09-11")])
         self.assertEqual(r, {"PUEBLA": {"Alimentos": Decimal("30")}})  # 3 months added, "Otro" ignored
+        self.assertEqual(unidades, {"PUEBLA": {"Alimentos": Decimal("12")}})  # units sold, same months
 
 
 class VariosCortesTests(SimpleTestCase):

@@ -235,9 +235,13 @@ def _tramos_mensuales(desde: date, hasta: date) -> list[tuple[date, date]]:
     return tramos
 
 
-def mix_alimentos_bebidas(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict[str, Decimal]]:
+def mix_alimentos_bebidas(cur, nombres: list[str], desde: date, hasta: date,
+                          unidades: dict | None = None) -> dict[str, dict[str, Decimal]]:
     """Gross sales of Alimentos and Bebidas from the order lines, per branch
-    (ticket-table name). Branches with no detail are absent.
+    (ticket-table name). Branches with no detail are absent. `unidades`, when
+    given, is filled with the units SOLD per branch and group (owner,
+    2026-10-21): lines with a price, courtesies left out (they carry quantity
+    but no amount, and would lower the price per unit).
 
     Run one statement per calendar month and add them up: the join to the
     12 M-row order-line table costs 4-19 s per month for all branches in
@@ -251,7 +255,9 @@ def mix_alimentos_bebidas(cur, nombres: list[str], desde: date, hasta: date) -> 
         a, b = _rango_fecha_texto(inicio, fin)
         cur.execute(
             f"""
-            SELECT v.Sucursal, d.TipoGrupo, SUM(CAST(d.Total AS DECIMAL(14,2)))
+            SELECT v.Sucursal, d.TipoGrupo, SUM(CAST(d.Total AS DECIMAL(14,2))),
+                   SUM(CASE WHEN d.Cortesia <> '1' AND CAST(d.Total AS DECIMAL(14,2)) > 0
+                            THEN CAST(d.Cantidad AS DECIMAL(12,3)) ELSE 0 END)
             FROM getallordenesbyday_new_venta v
             JOIN getallordenesbyday_new_detalleventa d
               ON d.Movimiento_Id = v.Movimento AND d.Sucursal = v.Sucursal
@@ -260,10 +266,13 @@ def mix_alimentos_bebidas(cur, nombres: list[str], desde: date, hasta: date) -> 
             """,
             (*nombres, a, b),
         )
-        for sucursal, grupo, total in cur.fetchall():
+        for sucursal, grupo, total, cantidad in cur.fetchall():
             if grupo in ("Alimentos", "Bebidas"):
                 por_grupo = resultado.setdefault(sucursal, {})
                 por_grupo[grupo] = por_grupo.get(grupo, Decimal("0")) + Decimal(total or 0)
+                if unidades is not None:
+                    u = unidades.setdefault(sucursal, {})
+                    u[grupo] = u.get(grupo, Decimal("0")) + Decimal(cantidad or 0)
     return resultado
 
 

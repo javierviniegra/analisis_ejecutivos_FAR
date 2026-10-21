@@ -171,9 +171,25 @@ def _mezcla(filas, campo: str) -> Observacion | None:
     return Observacion("Cambio en la mezcla: " + "; ".join(cambios) + ".", NEUTRO)
 
 
+def _productos(filas, campo: str) -> Observacion | None:
+    """Owner, 2026-10-21: whether food / drink sales moved by units sold or by price per unit."""
+    por = {f.indicador.clave: f for f in filas}
+    partes = []
+    for grupo, clave in (("Alimentos", "alimentos"), ("Bebidas", "bebidas")):
+        venta, unidades, precio = (por.get(f"{clave}_{x}") for x in ("venta", "unidades", "precio"))
+        if not (venta and unidades and precio) or any(getattr(f, campo).porcentaje is None
+                                                         for f in (venta, unidades, precio)):
+            continue
+        partes.append(f"{grupo}: venta {_var(venta, campo)}, unidades {_var(unidades, campo)}, "
+                      f"precio por unidad {_var(precio, campo)}")
+    if not partes:
+        return None
+    return Observacion("; ".join(partes) + ".", NEUTRO)
+
+
 def _comparativas(filas, comp: Comparacion, campo: str) -> list[Observacion]:
-    return [o for o in (_venta(filas, comp, campo), _causa(filas, campo), _controles(filas, campo),
-                        _mezcla(filas, campo)) if o is not None]
+    return [o for o in (_venta(filas, comp, campo), _causa(filas, campo), _productos(filas, campo),
+                        _controles(filas, campo), _mezcla(filas, campo)) if o is not None]
 
 
 def subtitulo_anio(periodo: Periodo) -> str:

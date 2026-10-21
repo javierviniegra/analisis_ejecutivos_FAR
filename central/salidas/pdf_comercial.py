@@ -52,6 +52,7 @@ MARGEN = 48
 ANCHO_UTIL = ANCHO - 2 * MARGEN
 ANCHO_NOTAS = ANCHO_UTIL - 70  # keep clear of the watermark in the bottom-right corner
 Y_MIN = 34
+Y_TABLA = 150  # the indicators table stays above the bottom-right watermark
 Y_INICIO = ALTO - 134  # content starts below the logo badge
 
 F, FB, FI = "DejaVuSans", "DejaVuSans-Bold", "DejaVuSans-Oblique"
@@ -284,10 +285,21 @@ def _tabla_anio(c, r: ReporteComercial, y: float) -> float:
     last year only; the previous period is read in the Lectura."""
     x = _columnas([236, 100, 100, 80])  # indicator, period, last year, var (= ANCHO_UTIL)
     alto = 10.4
-    y = _encabezado_tabla(c, x, y, ["Indicador", "Periodo", "Año anterior", "Var."], alto + 0.5)
+    titulos = ["Indicador", "Periodo", "Año anterior", "Var."]
+    y = _encabezado_tabla(c, x, y, titulos, alto + 0.5)
     seccion, par = None, False
-    for f in filas_visibles(r.filas):
+    filas = filas_visibles(r.filas)
+    for f in filas:
         if f.indicador.seccion != seccion:
+            # A section never starts where it would run into the bottom-right watermark:
+            # the table continues on a new page, header repeated.
+            n = sum(1 for g in filas if g.indicador.seccion == f.indicador.seccion)
+            if y - (n + 1) * alto < Y_TABLA:
+                y = _nueva_pagina(c)
+                c.setFillColor(VERDE_MARCA)
+                c.setFont(FB, 9)
+                c.drawString(MARGEN, y, "Indicadores (continuación)")
+                y = _encabezado_tabla(c, x, y - 6, titulos, alto + 0.5)
             seccion = f.indicador.seccion
             c.setFillColor(VERDE_MARCA)
             c.setFont(FB, 7.2)
@@ -361,6 +373,8 @@ def _notas(c, r, y: float, notas: list[str] | None = None, titulo: str = "Notas"
     if not notas:
         return []
     tam, interlinea = 5.9, 6.8
+    if y - 9 - len(_renglones(c, notas[0], FI, tam, ANCHO_NOTAS - 8)) * interlinea < Y_MIN:
+        return list(notas)  # not even the title and one note: all of them continue on the next page
     c.setFillColor(VERDE_MARCA)
     c.setFont(FB, 7)
     c.drawString(MARGEN, y, titulo)

@@ -52,6 +52,8 @@ def _pct_mix(grupo):
     return lambda m: m.pct_mix(grupo)
 
 
+SECCION_PRODUCTOS = "Alimentos y bebidas: unidades y precio"
+
 INDICADORES = [
     Indicador("venta_bruta", "Venta bruta (con IVA)", "Ventas", MONEDA, lambda m: m.venta_bruta, True),
     Indicador("venta_neta", "Venta neta (sin IVA)", "Ventas", MONEDA, lambda m: m.venta_neta, True),
@@ -71,6 +73,20 @@ INDICADORES = [
     Indicador("canal_salon", "Canal: Salón", "Mezcla", PORCENTAJE, _pct_canal("salon"), None, requiere_detalle=True),
     Indicador("canal_llevar", "Canal: Para llevar", "Mezcla", PORCENTAJE, _pct_canal("llevar"), None, requiere_detalle=True),
     Indicador("canal_plataformas", "Canal: Plataformas", "Mezcla", PORCENTAJE, _pct_canal("plataformas"), None, requiere_detalle=True),
+    # Owner, 2026-10-21: food and drinks split into units sold and price per unit, to tell
+    # a drop from selling fewer products from selling them below the right price.
+    Indicador("alimentos_venta", "Alimentos: venta", SECCION_PRODUCTOS, MONEDA, lambda m: m.venta_grupo("Alimentos"),
+              True, requiere_detalle=True),
+    Indicador("alimentos_unidades", "Alimentos: unidades vendidas", SECCION_PRODUCTOS, ENTERO,
+              lambda m: m.unidades_grupo("Alimentos"), True, requiere_detalle=True),
+    Indicador("alimentos_precio", "Alimentos: precio promedio por unidad", SECCION_PRODUCTOS, MONEDA,
+              lambda m: m.precio_unidad("Alimentos"), True, requiere_detalle=True),
+    Indicador("bebidas_venta", "Bebidas: venta", SECCION_PRODUCTOS, MONEDA, lambda m: m.venta_grupo("Bebidas"),
+              True, requiere_detalle=True),
+    Indicador("bebidas_unidades", "Bebidas: unidades vendidas", SECCION_PRODUCTOS, ENTERO,
+              lambda m: m.unidades_grupo("Bebidas"), True, requiere_detalle=True),
+    Indicador("bebidas_precio", "Bebidas: precio promedio por unidad", SECCION_PRODUCTOS, MONEDA,
+              lambda m: m.precio_unidad("Bebidas"), True, requiere_detalle=True),
     Indicador("cancelaciones", "Cancelaciones", "Control (a precio de venta)", MONEDA, lambda m: m.cancelaciones, False),
     Indicador("cortesias", "Cortesías", "Control (a precio de venta)", MONEDA, lambda m: m.cortesias, False),
     Indicador("descuentos", "Descuentos", "Control (a precio de venta)", MONEDA, lambda m: m.descuentos, False),

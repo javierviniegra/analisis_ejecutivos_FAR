@@ -42,6 +42,7 @@ class Metricas:
     descuentos: Decimal = CERO
     canal: dict[str, Decimal] = field(default_factory=dict)  # salon / llevar / plataformas / otros
     mix: dict[str, Decimal] = field(default_factory=dict)  # Alimentos / Bebidas
+    unidades: dict[str, Decimal] = field(default_factory=dict)  # units sold of Alimentos / Bebidas (owner, 2026-10-21)
     venta_por_dia: dict[date, Decimal] = field(default_factory=dict)  # gross sales (con IVA) per operating day, for the charts
     tickets_por_dia: dict[date, Decimal] = field(default_factory=dict)  # for the detail page
     clientes_por_dia: dict[date, Decimal] = field(default_factory=dict)
@@ -120,6 +121,16 @@ class Metricas:
 
     def pct_canal(self, canal: str) -> Decimal | None:
         return _razon(self.canal.get(canal, CERO), sum(self.canal.values(), CERO)) if self.canal else None
+
+    def venta_grupo(self, grupo: str) -> Decimal | None:
+        return self.mix.get(grupo) if self.mix else None
+
+    def unidades_grupo(self, grupo: str) -> Decimal | None:
+        return self.unidades.get(grupo) if self.unidades else None
+
+    def precio_unidad(self, grupo: str) -> Decimal | None:
+        """Average price of a unit sold of the group (with IVA)."""
+        return _razon(self.venta_grupo(grupo), self.unidades_grupo(grupo))
 
     def pct_mix(self, grupo: str) -> Decimal | None:
         return _razon(self.mix.get(grupo, CERO), sum(self.mix.values(), CERO)) if self.mix else None
@@ -247,7 +258,8 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
         tickets_de=_tickets_de(sucursales), descartados=descartados, por_tickets=por_tickets)
     nombres = [s.wansoft_ticket_nombre for s in sucursales]
     detalle = wansoft.detalle_por_sucursal(cur_wansoft, nombres, d, h)
-    mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h)
+    unidades = {}
+    mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h, unidades=unidades)
     con_detalle = [n for n in nombres if n in detalle]
     meseros = wansoft.ventas_meseros(cur_wansoft, con_detalle, d, h)
     por_hora = wansoft.venta_por_hora(cur_wansoft, con_detalle, d, h)
@@ -309,6 +321,7 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
         if nombre in detalle:
             m.dias_con_detalle, m.canal = detalle[nombre]
             m.mix = mix.get(nombre, {})
+            m.unidades = unidades.get(nombre, {})
             activos = [x for x in meseros.get(nombre, {}).values() if x["cuentas"] > 0 and x["venta_bruta"] > 0]
             m.venta_salon = sum((x["venta_bruta"] for x in activos), CERO)
             m.meseros = len(activos)  # same rule as the waiters' report's plantilla
@@ -360,6 +373,8 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
             total.canal[k] = total.canal.get(k, CERO) + v
         for k, v in m.mix.items():
             total.mix[k] = total.mix.get(k, CERO) + v
+        for k, v in m.unidades.items():
+            total.unidades[k] = total.unidades.get(k, CERO) + v
         for campo in ("venta_por_dia", "tickets_por_dia", "clientes_por_dia"):
             suma = getattr(total, campo)
             for dia, v in getattr(m, campo).items():
