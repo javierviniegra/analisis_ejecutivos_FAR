@@ -8,9 +8,14 @@ paints each row; reading the values is done elsewhere.
 """
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 from decimal import Decimal
 
 from . import semaforos as s
+from .comparativos import cobertura_fiable
+from .periodo import Periodo, TipoPeriodo
+
+CERO = Decimal("0")
 
 FINANCIERO, CGI, COMERCIAL = "Financiero", "CGI", "Comercial"
 CATEGORIAS = (FINANCIERO, CGI, COMERCIAL)
@@ -100,15 +105,176 @@ KPIS = (
 
 POR_CLAVE = {k.clave: k for k in KPIS}
 
+# Owner, 2026-10-29: the report covers the current month up to the Sunday,
+# sent every Monday; when that is fewer than 7 days (first Monday of a month)
+# it covers the whole previous month instead.
+DIAS_MINIMOS_MES = 7
 
-def meta_historica(anio_anterior, mes_anterior) -> Decimal | None:
-    """Target of sales, check, ticket and guests: the same days last year +5%;
-    a branch without last year (new, or zero) uses the same days of the
-    previous month +5%; neither -> no target."""
-    for base in (anio_anterior, mes_anterior):
-        if base is not None and Decimal(base) != 0:
-            return Decimal(base) * CRECIMIENTO_META
-    return None
+
+@dataclass(frozen=True)
+class PeriodosScorecard:
+    actual: Periodo
+    mes_anterior: Periodo  # the same days of the previous month (owner, 2026-10-29)
+    anio_anterior: Periodo  # the same dates last year
+    mes_cerrado: bool  # the whole previous month is reported (first Monday of a month)
+
+
+def _mes(fecha: date) -> Periodo:
+    return Periodo.de_fecha(TipoPeriodo.MES, fecha)
+
+
+def periodos(hasta: date) -> PeriodosScorecard:
+    """Periods of the report whose last day is `hasta` (the Sunday before the send)."""
+    ultimo_del_mes = (hasta.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    mes_cerrado = hasta.day < DIAS_MINIMOS_MES
+    if mes_cerrado or hasta == ultimo_del_mes:
+        actual = _mes(hasta.replace(day=1) - timedelta(days=1) if mes_cerrado else hasta)
+        return PeriodosScorecard(actual, actual.anterior(), actual.mismo_periodo_anio_anterior(), mes_cerrado)
+    actual = Periodo.rango(hasta.replace(day=1), hasta)
+    previo = _mes(actual.desde - timedelta(days=1))
+    # 1-30 March against 1-28 February: a shorter previous month is taken whole.
+    fin_previo = previo.desde.replace(day=hasta.day) if hasta.day <= previo.hasta.day else previo.hasta
+    mes_anterior = Periodo.rango(previo.desde, fin_previo)
+    return PeriodosScorecard(actual, mes_anterior, actual.mismo_periodo_anio_anterior(), False)
+
+
+ANIO_ANTERIOR, MES_ANTERIOR = "anio_anterior", "mes_anterior"
+KPIS_VENTAS = ("ventas", "cheque", "ticket", "clientes", "mix_bebidas")
+# v1 (owner, 2026-10-29): sources the app does not read yet; shown grey as "sin fuente".
+KPIS_SIN_FUENTE = ("valor_inventario", "auditoria_cgi", "zenput_a_tiempo", "diferencia_inventario",
+                   "rendimiento_carne", "incumplimiento_procesos", "delivery_errores", "google",
+                   "mystery_shopper", "estandares_marca", "nps")
+
+
+def _pct(v: Decimal) -> str:
+    return f"{(v * 100).normalize():f}%"  # 0.05 -> "5%", 0.015 -> "1.5%"
+
+
+def regla_texto(kpi: Kpi) -> str:
+    """The KPI's target and light in words, built from its own constants."""
+    if kpi.regla == REGLA_PCT_META:
+        return (f"Meta: mismos días del año anterior +{_pct(CRECIMIENTO_META - 1)} (sin año anterior fiable: "
+                f"mismos días del mes anterior +{_pct(CRECIMIENTO_META - 1)}). Verde >= {_pct(s.PCT_META_VERDE)} "
+                f"de la meta, naranja >= {_pct(s.PCT_META_NARANJA)}, rojo debajo.")
+    if kpi.regla == REGLA_UMBRAL:
+        if kpi.mayor_mejor:
+            return f"Verde >= {_pct(kpi.verde)}, naranja >= {_pct(kpi.naranja)}, rojo debajo."
+        return f"Verde <= {_pct(kpi.verde)}, naranja menor a {_pct(kpi.naranja)}, rojo {_pct(kpi.naranja)} o más."
+    if kpi.regla == REGLA_CERO:
+        return "Meta 0: verde en 0, rojo arriba de 0."
+    if kpi.regla == REGLA_SIGNO:
+        return "Verde arriba de 0, naranja en 0, rojo debajo de 0."
+    meta = {META_MES_ANTERIOR: "mismos días del mes anterior", META_FUENTE: "la de su fuente"}.get(
+        kpi.tipo_meta, _pct(kpi.meta) if kpi.meta is not None else "")
+    lado = "abajo" if kpi.mayor_mejor else "arriba"
+    return (f"Meta: {meta}. Verde si la cumple, naranja hasta {_pct(s.TOLERANCIA_GENERAL)} {lado} de la meta, "
+            f"rojo más allá.")
+
+
+def _razon(a: Decimal, b: Decimal) -> Decimal | None:
+    return a / b if b else None
+
+
+@dataclass
+class Ventas:
+    """Sales of one branch (or several, summed) in one period, from the tickets."""
+    dias: int = 0  # days with tickets, summed over branches
+    dias_esperados: int = 0
+    venta: Decimal = CERO
+    tickets: Decimal = CERO
+    personas: Decimal = CERO
+    personas_restaurante: Decimal = CERO
+    alimentos: Decimal = CERO
+    bebidas: Decimal = CERO
+
+    @property
+    def fiable(self) -> bool:
+        """Project rule: data on at least 90% of the expected days."""
+        return cobertura_fiable(self.dias, self.dias_esperados) and self.venta > 0
+
+    def valor(self, clave: str) -> Decimal | None:
+        if not self.dias:
+            return None
+        if clave == "ventas":
+            return self.venta
+        if clave == "cheque":  # Power BI: Total / Personas, every channel
+            return _razon(self.venta, self.personas)
+        if clave == "ticket":  # Power BI: average Total per ticket
+            return _razon(self.venta, self.tickets)
+        if clave == "clientes":  # restaurant orders only (owner, 2026-10-29)
+            return self.personas_restaurante
+        if clave == "mix_bebidas":  # drinks / drinks + food (no other group exists; same as Power BI's subtotal share)
+            return _razon(self.bebidas, self.alimentos + self.bebidas)
+        raise KeyError(clave)
+
+
+def sumar(lista: list[Ventas]) -> Ventas:
+    total = Ventas()
+    for v in lista:
+        for campo in Ventas.__dataclass_fields__:
+            setattr(total, campo, getattr(total, campo) + getattr(v, campo))
+    return total
+
+
+def elegir_base(anio_anterior: Ventas | None, mes_anterior: Ventas | None) -> tuple[Ventas | None, str | None]:
+    """Base of the historic targets (sales, check, ticket, guests): the same
+    days last year; without a reliable last year (new branch, or data on less
+    than 90% of its days) the same days of the previous month, as Power BI
+    falls back when last year is blank; neither -> no target."""
+    if anio_anterior is not None and anio_anterior.fiable:
+        return anio_anterior, ANIO_ANTERIOR
+    if mes_anterior is not None and mes_anterior.fiable:
+        return mes_anterior, MES_ANTERIOR
+    return None, None
+
+
+def meta_desde_base(base: Decimal | None) -> Decimal | None:
+    """Historic target: the base +5% (`_Base Meta ... Año Anterior +5%`)."""
+    return None if not base else base * CRECIMIENTO_META
+
+
+@dataclass(frozen=True)
+class Fila:
+    kpi: Kpi
+    actual: Decimal | None  # every branch of the selection
+    mes_anterior: Decimal | None  # same days of the previous month, every branch
+    meta: Decimal | None
+    estado: str | None
+    actual_comparado: Decimal | None  # what the light compares: branches with a target only
+
+
+@dataclass(frozen=True)
+class BloqueVentas:
+    filas: list[Fila]
+    meta_mes_anterior: list[str]  # branches whose target comes from the previous month
+    sin_meta: list[str]  # branches without a reliable base: out of the historic targets
+
+
+def filas_ventas(nombres: list[str], actuales: list[Ventas], mes_anterior: list[Ventas],
+                 anio_anterior: list[Ventas]) -> BloqueVentas:
+    """The five sales rows for one branch or a consolidated selection (lists
+    aligned by branch). Historic targets follow the comparable-branches rule:
+    each branch brings its own base (last year, else previous month); a
+    branch without one is left out of both the target and the actual it is
+    compared with, so a new branch never inflates the result."""
+    bases = [elegir_base(a, m) for a, m in zip(anio_anterior, mes_anterior)]
+    con_base = [i for i, (b, _) in enumerate(bases) if b is not None]
+    total, total_previo = sumar(actuales), sumar(mes_anterior)
+    comparado = sumar([actuales[i] for i in con_base])
+    base = sumar([bases[i][0] for i in con_base]) if con_base else None
+    filas = []
+    for clave in KPIS_VENTAS:
+        kpi = POR_CLAVE[clave]
+        if kpi.tipo_meta == META_HISTORICA:
+            meta = meta_desde_base(base.valor(clave)) if base else None
+            valor_comparado = comparado.valor(clave) if con_base else None
+        else:
+            meta, valor_comparado = kpi.meta, total.valor(clave)
+        filas.append(Fila(kpi, total.valor(clave), total_previo.valor(clave), meta,
+                          estado(kpi, valor_comparado, meta), valor_comparado))
+    return BloqueVentas(filas,
+                        [nombres[i] for i in con_base if bases[i][1] == MES_ANTERIOR],
+                        [nombres[i] for i in range(len(nombres)) if i not in con_base])
 
 
 def estado(kpi: Kpi, actual, meta) -> str | None:

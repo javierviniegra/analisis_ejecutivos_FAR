@@ -225,6 +225,28 @@ def detalle_por_sucursal(cur, nombres: list[str], desde: date, hasta: date) -> d
     return {s: (len(dias[s]), canales[s]) for s in dias}
 
 
+def ventas_tickets(cur, nombres: list[str], desde: date, hasta: date) -> dict[str, dict]:
+    """Per branch (ticket-table name), from the tickets, as the Power BI
+    scorecard reads them: days with tickets, gross sales (`Total`), tickets,
+    guests of every channel and guests of restaurant orders only (the
+    scorecard's "Clientes", owner 2026-10-29: no delivery or take-away, where
+    every order counts one person). One scan for all branches."""
+    nombres = [n for n in nombres if n]
+    if not nombres:
+        return {}
+    a, b = _rango_fecha_texto(desde, hasta)
+    cur.execute(
+        f"SELECT Sucursal, COUNT(DISTINCT LEFT(Fecha, 10)), SUM(CAST(Total AS DECIMAL(14,2))), COUNT(*), "
+        f"SUM(Personas), SUM(CASE WHEN TipoOrden = 'Restaurant' THEN Personas ELSE 0 END) "
+        f"FROM getallordenesbyday_new_venta "
+        f"WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s GROUP BY Sucursal",
+        (*nombres, a, b),
+    )
+    return {s: {"dias": int(d), "venta": Decimal(str(t or 0)), "tickets": Decimal(c),
+                "personas": Decimal(str(p or 0)), "personas_restaurante": Decimal(str(r or 0))}
+            for s, d, t, c, p, r in cur.fetchall()}
+
+
 def _tramos_mensuales(desde: date, hasta: date) -> list[tuple[date, date]]:
     """[desde, hasta] cut at calendar-month boundaries."""
     tramos, inicio = [], desde
