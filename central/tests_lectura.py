@@ -10,6 +10,8 @@ from .motor.periodo import Periodo, TipoPeriodo
 from .motor.tabla_comercial import construir_tabla
 
 SEM = Periodo.semana(2026, 39)
+# Drinks at 30% of the mix: on the scorecard target, so no "En rojo" sentence in the Lectura.
+MIX_EN_META = {"Alimentos": D("700"), "Bebidas": D("300")}
 
 
 def _m(periodo=SEM, **kw):
@@ -42,7 +44,7 @@ class LecturaTests(SimpleTestCase):
     immediately previous period (each naming its period), then the period itself."""
 
     def test_dos_bloques_con_su_periodo(self):
-        lec = construir_lectura(SEM, _m(), _m(), _m())
+        lec = construir_lectura(SEM, _m(mix=MIX_EN_META), _m(mix=MIX_EN_META), _m(mix=MIX_EN_META))
         self.assertEqual([b.subtitulo for b in lec.bloques],
                          ["Contra el año anterior · Semana 39 · 22 sep – 28 sep 2025",
                           "Contra el periodo inmediato anterior · Semana 38 · 14 sep – 20 sep 2026"])
@@ -107,7 +109,8 @@ class LecturaTests(SimpleTestCase):
 
     def test_anio_un_solo_bloque_de_comparacion(self):
         anio, previo = Periodo.anio_completo(2026), Periodo.anio_completo(2025)
-        lec = construir_lectura(anio, _m(anio), _m(previo), _m(previo))
+        lec = construir_lectura(anio, _m(anio, mix=MIX_EN_META), _m(previo, mix=MIX_EN_META),
+                                _m(previo, mix=MIX_EN_META))
         self.assertEqual([b.subtitulo for b in lec.bloques], ["Contra el año anterior · Año 2025"])
 
 

@@ -148,4 +148,7 @@ class AyudaTests(TestCase):
         self.assertContains(r, "menos del 90% de sus días")  # comparativos.UMBRAL_COBERTURA_FIABLE
         self.assertContains(r, "al menos el 99.5%")  # metricas.UMBRAL_FACTURADO_COMPLETO
         self.assertContains(r, "antes de las 14:00")  # wansoft.HORA_CORTE_DIA
+        self.assertContains(r, "<strong>de 37% a menos de 39% de la venta neta</strong>")  # scorecard cost KPI limits
+        self.assertContains(r, "del año anterior +5%")  # scorecard.CRECIMIENTO_META
+        self.assertContains(r, "desde 30%, <span class=\"tag\">naranja</span> desde 26%")  # mix_bebidas KPI
         self.assertNotContains(r, "Director y Administrador general)</a>")

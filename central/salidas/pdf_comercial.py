@@ -30,6 +30,7 @@ from ..motor import detalle, formato
 from ..motor.comparativos import BAJA, IGUAL, NARANJA, ROJO, SUBE, VERDE
 from ..motor.graficas_png import dibujar
 from ..motor.lectura import AVISO, NEGATIVO, POSITIVO
+from ..motor.notas import COLORES_LEYENDA, TITULO_LEYENDA, leyenda_semaforos
 from ..motor.periodo import _MESES_ES
 from ..motor.reporte_comercial import TITULO, ReporteComercial, filas_visibles, nombre_base
 from ..motor.tabla_comercial import ENTERO, MONEDA, PORCENTAJE
@@ -331,6 +332,49 @@ def _tabla_anio(c, r: ReporteComercial, y: float) -> float:
     return y - 8
 
 
+FONDO_LEYENDA, BORDE_LEYENDA = HexColor("#FFF4CC"), HexColor("#D9822B")
+
+
+def _leyenda(c, r: ReporteComercial, y: float) -> float:
+    """Owner, 2026-10-29: a highlighted box under the table saying what each
+    traffic-light dot means (only when the table shows any)."""
+    if not any(f.semaforo for f in filas_visibles(r.filas)):
+        return y
+    tam, interlinea, sangria = 7.0, 8.6, 10
+    lineas = [_renglones(c, t, F, tam, ANCHO_UTIL - 24 - sangria) for t in leyenda_semaforos(getattr(r, "incluir_costos", True))]
+    alto = 27 + sum(len(rs) * interlinea + 1.5 for rs in lineas)
+    if y - alto < Y_TABLA:  # keep clear of the bottom-right watermark
+        y = _nueva_pagina(c)
+    c.setFillColor(FONDO_LEYENDA)
+    c.setStrokeColor(BORDE_LEYENDA)
+    c.setLineWidth(1.2)
+    c.roundRect(MARGEN, y - alto, ANCHO_UTIL, alto, 5, fill=1, stroke=1)
+    c.setFillColor(BORDE_LEYENDA)
+    c.rect(MARGEN, y - alto, 4, alto, fill=1, stroke=0)
+    c.setFillColor(VERDE_MARCA)
+    c.setFont(FB, 8.4)
+    c.drawString(MARGEN + 12, y - 12, TITULO_LEYENDA)
+    x = MARGEN + 12 + c.stringWidth(TITULO_LEYENDA, FB, 8.4) + 16
+    for color, texto in COLORES_LEYENDA:  # the three colours, as in the table
+        c.setFillColor(COLOR_SEMAFORO[color])
+        c.circle(x + 3, y - 9.3, 3.2, fill=1, stroke=0)
+        c.setFillColor(TEXTO)
+        c.setFont(FB, 7.6)
+        c.drawString(x + 10, y - 12, texto)
+        x += 10 + c.stringWidth(texto, FB, 7.6) + 16
+    yy = y - 25
+    c.setFont(F, tam)
+    for renglones in lineas:
+        c.setFillColor(BORDE_LEYENDA)
+        c.circle(MARGEN + 15, yy + 2.5, 1.6, fill=1, stroke=0)
+        c.setFillColor(TEXTO)
+        for renglon in renglones:
+            c.drawString(MARGEN + 12 + sangria, yy, renglon)
+            yy -= interlinea
+        yy -= 1.5
+    return y - alto - 8
+
+
 def alto_graficas() -> float:
     """Height the two page-1 charts take (they all share one figure size)."""
     from ..motor.graficas_png import ALTO_PULG, ANCHO_PULG
@@ -541,6 +585,7 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
         y = _titulo(c, r, Y_INICIO)
         y = _lectura(c, r, y)
         y = _tabla(c, r, y)
+        y = _leyenda(c, r, y)
         # Charts that no longer fit on page 1 (long tables) open the composition page instead.
         a_composicion = (getattr(r, "composicion", None) is not None and not r.composicion.vacia
                          and y - alto_graficas() < Y_MIN + 30)

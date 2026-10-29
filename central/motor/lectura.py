@@ -25,11 +25,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from . import formato
-from .comparativos import (BAJA, NARANJA, NO_FIABLE, ROJO, SUBE, UMBRAL_COSTO_BAJO, VERDE, costo_bajo, kpi_costo,
-                           semaforo_costo)
+from .comparativos import BAJA, NARANJA, NO_FIABLE, ROJO, SUBE, VERDE, kpi_costo, semaforo_costo
 from .metricas import Comparacion, Metricas, como_comparacion
 from .periodo import Periodo, TipoPeriodo
-from .tabla_comercial import Fila, construir_tabla
+from .scorecard import CRECIMIENTO_META, POR_CLAVE
+from .tabla_comercial import META_ANIO, META_ANTERIOR, Fila, construir_tabla
 
 UMBRAL_PESO_CONTROL = Decimal("0.005")  # 0.5% of net sales
 UMBRAL_PUNTOS_MEZCLA = Decimal("0.02")  # 2 percentage points
@@ -215,22 +215,18 @@ def _costo_ventas(actual: Metricas) -> Observacion | None:
 
 
 def _costo_meta(actual: Metricas) -> Observacion | None:
-    """Both costs vs the scorecard's cost target (per week and month): total
-    cost (Wansoft/Odoo) and invoiced cost (Presupuestos AP). A cost below
-    UMBRAL_COSTO_BAJO is green but warned about (purchases may be missing)."""
+    """Both costs vs the cost band (comparativos.semaforo_costo, per week and
+    month): total cost (Wansoft/Odoo) and invoiced cost (Presupuestos AP)."""
     kpi = kpi_costo()
-    donde = {VERDE: "dentro de la meta", NARANJA: "arriba de la meta",
-             ROJO: f"en {kpi.naranja * 100:.0f}% o más"}
-    partes, colores, bajo = [], [], False
+    donde = {VERDE: "dentro de la meta", NARANJA: "abajo de la meta (puede haber compras sin capturar)",
+             ROJO: "arriba de la meta"}
+    partes, colores = [], []
     for nombre, pct in (("total", actual.pct_costo_total), ("facturado", actual.pct_costo_ventas)):
         color = semaforo_costo(pct)
         if color is None:
             continue
         colores.append(color)
         texto = f"{nombre} {pct * 100:.1f}%, {donde[color]}"
-        if costo_bajo(pct):
-            bajo = True
-            texto += f" pero abajo de {UMBRAL_COSTO_BAJO * 100:.0f}%: puede haber compras sin capturar"
         if nombre == "total" and actual.costo_total_estimado:
             texto += " (estimado, ver notas)"
         if nombre == "facturado" and actual.costo_preliminar:
@@ -238,9 +234,33 @@ def _costo_meta(actual: Metricas) -> Observacion | None:
         partes.append(texto)
     if not partes:
         return None
-    tono = NEGATIVO if any(c != VERDE for c in colores) else AVISO if bajo else POSITIVO
-    return Observacion(f"Costo sobre la venta neta (meta {kpi.verde * 100:.0f}% o menos): " + "; ".join(partes) + ".",
-                       tono)
+    rango = f"{kpi.verde * 100:.0f}% a menos de {kpi.naranja * 100:.0f}%"
+    return Observacion(f"Costo sobre la venta neta (meta {rango}): " + "; ".join(partes) + ".",
+                       POSITIVO if all(c == VERDE for c in colores) else NEGATIVO)
+
+
+# How the Lectura names each scorecard KPI of the indicators table.
+NOMBRE_KPI = {"ventas": "venta", "clientes": "clientes", "cheque": "cheque promedio", "ticket": "ticket promedio",
+              "mix_bebidas": "mix de bebidas"}
+
+
+def _kpis_en_rojo(filas: list[Fila]) -> Observacion | None:
+    """One sentence with the scorecard KPIs in red (owner, 2026-10-29)."""
+    base = {META_ANIO: "año anterior", META_ANTERIOR: "periodo anterior"}
+    crecimiento = f"+{(CRECIMIENTO_META - 1) * 100:.0f}%"
+    partes = []
+    for f in filas:
+        if f.semaforo != ROJO or not f.indicador.kpi:
+            continue
+        nombre = NOMBRE_KPI[f.indicador.kpi]
+        if f.logro is not None:
+            partes.append(f"{nombre} {f.logro * 100:.1f}% de la meta ({base[f.meta_contra]} {crecimiento})")
+        else:
+            verde = POR_CLAVE[f.indicador.kpi].verde
+            partes.append(f"{nombre} {f.actual * 100:.1f}% (meta {verde * 100:.0f}%)")
+    if not partes:
+        return None
+    return Observacion("En rojo contra la meta: " + "; ".join(partes) + ".", NEGATIVO)
 
 
 def construir_lectura(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,
@@ -253,6 +273,7 @@ def construir_lectura(periodo: Periodo, actual: Metricas, anterior: Comparacion 
     bloques = [Bloque(subtitulo_anio(periodo), _comparativas(filas, anio, "var_anio"))]
     if periodo.tipo != TipoPeriodo.ANIO:  # for a year the previous period IS the same period last year
         bloques.append(Bloque(subtitulo_anterior(periodo), _comparativas(filas, ant, "var_anterior")))
-    bloques.append(Bloque("Del periodo", [o for o in (_costo_meta(actual), _costo_ventas(actual)) if o is not None]))
+    bloques.append(Bloque("Del periodo", [o for o in (_kpis_en_rojo(filas), _costo_meta(actual), _costo_ventas(actual))
+                                          if o is not None]))
     bloques = [b for b in bloques if b.observaciones]
     return Lectura(titulo(periodo), [o for b in bloques for o in b.observaciones], bloques)

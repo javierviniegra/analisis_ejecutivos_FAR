@@ -337,6 +337,14 @@
         <tr><td>s/c</td><td><strong>Sin comparativo:</strong> no hay datos del periodo de comparación.</td></tr>
         <tr><td>s/cf</td><td><strong>Sin comparativo fiable:</strong> alguno de los dos periodos tiene datos en menos del {{ cobertura }}% de sus días; se muestra el valor pero no se compara.</td></tr>
       </table>
+      <h3>Semáforos (los del scorecard)</h3>
+      <p>Algunos renglones llevan un punto de color antes del valor en el PDF (la celda pintada en el Excel), con las mismas reglas del scorecard de semáforos (Power BI):</p>
+      <ul>
+        <li><strong>Venta bruta, clientes, cheque promedio y ticket promedio:</strong> la meta es el mismo periodo del año anterior +{{ crecimiento_meta }}% (sin año anterior, el periodo inmediato anterior +{{ crecimiento_meta }}%), solo con sucursales comparables. <span class="tag">verde</span> desde el {{ pct_meta_verde }}% de la meta, <span class="tag">naranja</span> desde el {{ pct_meta_naranja }}%, <span class="tag">rojo</span> abajo. Sin comparativo fiable no hay meta ni color.</li>
+        <li><strong>Mix de bebidas:</strong> <span class="tag">verde</span> desde {{ mix_verde }}%, <span class="tag">naranja</span> desde {{ mix_naranja }}%, <span class="tag">rojo</span> abajo.</li>
+        <li><strong>Costo:</strong> ver la sección 7.</li>
+      </ul>
+      <p>Debajo de la tabla, un recuadro resaltado resume qué significa cada bolita. La Lectura junta en una frase los indicadores que quedaron en rojo.</p>
     </section>
 
     <!-- 5b -->
@@ -387,7 +395,7 @@
         <tr><td>Costo facturado (Presupuestos AP)</td><td>Facturas de proveedor registradas en Presupuestos AP.</td><td>El flujo: lo que se facturó en el periodo.</td></tr>
       </table>
       <h3>Meta de costo (semáforo)</h3>
-      <p>La meta es la del scorecard de semáforos (Power BI): el costo debe ser <strong>{{ meta_costo }}% o menos de la venta neta</strong>. <span class="tag">verde</span> hasta {{ meta_costo }}%, <span class="tag">naranja</span> arriba de {{ meta_costo }}% y abajo de {{ costo_rojo }}%, <span class="tag">rojo</span> de {{ costo_rojo }}% en adelante (se compró de más). Un costo abajo de {{ costo_bajo }}% sigue en verde, pero la Lectura y las notas avisan que puede haber compras sin capturar.</p>
+      <p>El costo debe estar <strong>de {{ meta_costo }}% a menos de {{ costo_rojo }}% de la venta neta</strong> (los límites del KPI de costo del scorecard de semáforos): <span class="tag">verde</span> dentro de ese rango, <span class="tag">naranja</span> abajo de {{ meta_costo }}% (se compró o se registró de menos), <span class="tag">rojo</span> de {{ costo_rojo }}% en adelante (se compró de más).</p>
       <h3>Costo estimado</h3>
       <p>El costo de los últimos días puede estar incompleto. Cuando pasa, el costo se marca <strong>"estimado"</strong> y una nota dice cómo se calculó; cuando ya está completo, se da sin ninguna mención.</p>
       <ul>
@@ -445,7 +453,7 @@
       </div>
       <div class="ejemplo">
         <h3>Ejemplo 6. Semáforo</h3>
-        <p>Costo $360,000 sobre venta neta $1,000,000 = 36% → <strong>verde</strong>. Con $385,000 = 38.5% → naranja. Con $410,000 = 41% → <span class="rojo">rojo</span>. Con $280,000 = 28% → verde, con el aviso de que puede haber compras sin capturar.</p>
+        <p>Costo $380,000 sobre venta neta $1,000,000 = 38% → <strong>verde</strong>. Con $410,000 = 41% → <span class="rojo">rojo</span>. Con $350,000 = 35% → naranja.</p>
       </div>
     </section>
 

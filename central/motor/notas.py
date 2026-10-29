@@ -10,8 +10,8 @@ Two kinds, both printed at the foot of every report (owner, 2026-09-24):
 
 from decimal import Decimal
 
-from . import lectura
-from .comparativos import (UMBRAL_COBERTURA_FIABLE, UMBRAL_COSTO_BAJO, UMBRAL_IGUAL, cobertura_fiable, costo_bajo,
+from . import lectura, scorecard, semaforos
+from .comparativos import (NARANJA, ROJO, UMBRAL_COBERTURA_FIABLE, UMBRAL_IGUAL, VERDE, cobertura_fiable,
                            kpi_costo)
 from .fuentes import presupuestos
 from .fuentes.wansoft import HORA_CORTE_DIA
@@ -84,7 +84,6 @@ def notas_cobertura(periodo: Periodo, actual: Metricas, anterior: Comparacion | 
         return notas
     notas += _notas_costo_preliminar(periodo, actual, comparaciones)
     notas += _notas_costo_estimado(actual, comparaciones)
-    notas += _notas_costo_bajo(actual)
     if periodo.tipo == TipoPeriodo.RANGO:
         notas.append("Costo total: no disponible en un rango libre (solo semana, mes o bloques de meses).")
     return notas
@@ -115,16 +114,6 @@ def _notas_costo_estimado(actual: Metricas, comparaciones) -> list[str]:
     return notas
 
 
-def _notas_costo_bajo(actual: Metricas) -> list[str]:
-    """A cost below UMBRAL_COSTO_BAJO is green, but purchases may be missing."""
-    bajos = [f"{nombre} {pct * 100:.1f}%" for nombre, pct in (("total", actual.pct_costo_total),
-                                                             ("facturado", actual.pct_costo_ventas)) if costo_bajo(pct)]
-    if not bajos:
-        return []
-    return [f"Costo {' y '.join(bajos)} de la venta neta, abajo de {_pct(UMBRAL_COSTO_BAJO)}: verde, pero puede "
-            "haber compras sin capturar."]
-
-
 def _notas_costo_preliminar(periodo: Periodo, actual: Metricas, comparaciones) -> list[str]:
     if actual.costo_preliminar:
         definitivo = presupuestos.fecha_definitiva(periodo.hasta)
@@ -136,6 +125,45 @@ def _notas_costo_preliminar(periodo: Periodo, actual: Metricas, comparaciones) -
     if previos:
         return [f"Costo de Ventas real de {_lista(previos)} aún preliminar: su comparativo es s/cf."]
     return []
+
+
+# Owner, 2026-10-29: a highlighted legend under the indicators table saying what
+# each dot means; built from the same constants as the lights.
+TITULO_LEYENDA = "Qué significan las bolitas"
+COLORES_LEYENDA = ((VERDE, "en meta"), (NARANJA, "alerta"), (ROJO, "fuera de meta"))
+
+
+def leyenda_semaforos(incluir_costos: bool = True) -> list[str]:
+    """One line per kind of light of the indicators table."""
+    mix, costo = scorecard.POR_CLAVE["mix_bebidas"], kpi_costo()
+    crece = _pct(scorecard.CRECIMIENTO_META - 1)
+    lineas = [
+        f"Venta bruta, clientes, cheque y ticket promedio: meta = mismo periodo del año anterior +{crece} (sin año "
+        f"anterior, el periodo anterior +{crece}). Verde desde el {_pct(semaforos.PCT_META_VERDE)} de la meta, "
+        f"naranja desde el {_pct(semaforos.PCT_META_NARANJA)}, rojo abajo del {_pct(semaforos.PCT_META_NARANJA)}.",
+        f"Mix de bebidas: verde desde {_pct(mix.verde)}, naranja desde {_pct(mix.naranja)}, rojo abajo de "
+        f"{_pct(mix.naranja)}.",
+    ]
+    if incluir_costos:
+        lineas.append(f"Costo / venta neta: verde de {_pct(costo.verde)} a menos de {_pct(costo.naranja)}, naranja "
+                      f"abajo de {_pct(costo.verde)} (se compró o se registró de menos), rojo {_pct(costo.naranja)} "
+                      "o más.")
+    lineas.append("Sin bolita: no hay meta (sin datos o sin comparativo fiable).")
+    return lineas
+
+
+def _reglas_semaforos() -> list[str]:
+    """The scorecard lights of the indicators table, from the scorecard's constants (owner, 2026-10-29)."""
+    mix = scorecard.POR_CLAVE["mix_bebidas"]
+    return [
+        f"Semáforos de venta bruta, clientes, cheque y ticket promedio (scorecard): meta = mismo periodo del año "
+        f"anterior +{_num(scorecard.CRECIMIENTO_META - 1)}%; sin año anterior, el periodo inmediato anterior "
+        f"+{_num(scorecard.CRECIMIENTO_META - 1)}%; solo sucursales comparables, y sin comparativo fiable no hay "
+        f"meta ni color. Verde desde el {_pct(semaforos.PCT_META_VERDE)} de la meta, naranja desde el "
+        f"{_pct(semaforos.PCT_META_NARANJA)}, rojo abajo.",
+        f"Semáforo del mix de bebidas (venta de bebidas / venta de alimentos y bebidas): verde desde "
+        f"{_pct(mix.verde)}, naranja desde {_pct(mix.naranja)}, rojo abajo.",
+    ]
 
 
 def notas_reglas(periodo: Periodo | None = None, incluir_costos: bool = True) -> list[str]:
@@ -158,13 +186,13 @@ def notas_reglas(periodo: Periodo | None = None, incluir_costos: bool = True) ->
     costos = [
         f"Costo de Ventas real: preliminar (s/cf) hasta {presupuestos.DIAS_CIERRE_MES} días después del cierre del "
         "mes del periodo, porque las facturas se siguen capturando en Odoo.",
-        f"Meta de costo: {_pct(kpi_costo().verde)} o menos de la venta neta (verde); arriba de "
-        f"{_pct(kpi_costo().verde)} y abajo de {_pct(kpi_costo().naranja)} naranja; {_pct(kpi_costo().naranja)} o más "
-        f"rojo. Abajo de {_pct(UMBRAL_COSTO_BAJO)} sigue en verde, pero puede haber compras sin capturar. "
-        "Costo total = reporte de costos "
+        f"Meta de costo: de {_pct(kpi_costo().verde)} a menos de {_pct(kpi_costo().naranja)} de la venta neta "
+        f"(verde); abajo de {_pct(kpi_costo().verde)} naranja (se compró o se registró de menos); "
+        f"{_pct(kpi_costo().naranja)} o más rojo (se compró de más). Costo total = reporte de costos "
         "de Wansoft u Odoo (costo total menos consumo; el consumo se registra de forma irregular); costo facturado = "
         "facturas de Presupuestos AP (el flujo); la medición por mercancía recibida está pendiente.",
     ]
+    reglas += _reglas_semaforos()
     if incluir_costos:
         reglas += costos
     if periodo is None or periodo.tipo == TipoPeriodo.SEMANA:

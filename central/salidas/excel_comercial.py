@@ -16,6 +16,7 @@ from openpyxl.utils import get_column_letter
 
 from ..motor.comparativos import BAJA, IGUAL, NARANJA, ROJO, SUBE, VERDE
 from ..motor import detalle
+from ..motor.notas import COLORES_LEYENDA, TITULO_LEYENDA, leyenda_semaforos
 from ..motor.periodo import TipoPeriodo
 from ..motor.reporte_comercial import TITULO, ReporteComercial, filas_visibles, nombre_base
 from ..motor.tabla_comercial import DECIMAL, ENTERO, MONEDA, PORCENTAJE
@@ -104,7 +105,7 @@ def _resumen(ws, r: ReporteComercial):
 
     fila += 2
     if solo_anio:
-        _tabla_anio(ws, r, fila)
+        _leyenda(ws, r, _tabla_anio(ws, r, fila) + 2, 5)
         return
     for col, texto in enumerate(["Indicador", "Periodo", "Anterior", "Var.", "", "Año anterior", "Var.", ""], start=1):
         c = ws.cell(fila, col, texto)
@@ -135,9 +136,34 @@ def _resumen(ws, r: ReporteComercial):
         par = not par
     for col, ancho in zip("ABCDEFGH", (38, 18, 18, 10, 4, 18, 10, 4)):
         ws.column_dimensions[col].width = ancho
+    _leyenda(ws, r, fila + 2, 8)
 
 
-def _tabla_anio(ws, r: ReporteComercial, fila: int):
+FONDO_LEYENDA, BORDE_LEYENDA = "FFF4CC", "D9822B"
+LETRA_SEMAFORO = {VERDE: "1E7B4F", NARANJA: "D9822B", ROJO: "B3261E"}
+
+
+def _leyenda(ws, r: ReporteComercial, fila: int, columnas: int):
+    """Owner, 2026-10-29: highlighted legend of the traffic lights under the
+    table, as in the PDF (only when the table shows any)."""
+    if not any(f.semaforo for f in filas_visibles(r.filas)):
+        return
+    fondo = PatternFill("solid", fgColor=FONDO_LEYENDA)
+    ws.cell(fila, 1, TITULO_LEYENDA).font = Font(bold=True, color=VERDE_MARCA)
+    for i, (color, texto) in enumerate(COLORES_LEYENDA, start=2):
+        ws.cell(fila, i, f"● {texto}").font = Font(bold=True, color=LETRA_SEMAFORO[color])
+    for col in range(1, columnas + 1):
+        ws.cell(fila, col).fill = fondo
+    for texto in leyenda_semaforos(getattr(r, "incluir_costos", True)):
+        fila += 1
+        ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=columnas)
+        celda = ws.cell(fila, 1, "• " + texto)
+        celda.fill = fondo
+        celda.alignment = Alignment(wrap_text=True, vertical="top")
+        ws.row_dimensions[fila].height = 15 * (1 + len(texto) // 110)
+
+
+def _tabla_anio(ws, r: ReporteComercial, fila: int) -> int:
     """The commercial table against last year only (owner, 2026-10-14)."""
     for col, texto in enumerate(["Indicador", "Periodo", "Año anterior", "Var.", ""], start=1):
         c = ws.cell(fila, col, texto)
@@ -167,6 +193,7 @@ def _tabla_anio(ws, r: ReporteComercial, fila: int):
         par = not par
     for col, ancho in zip("ABCDE", (38, 18, 18, 10, 4)):
         ws.column_dimensions[col].width = ancho
+    return fila
 
 
 def _datos_grafica(ws, g):
