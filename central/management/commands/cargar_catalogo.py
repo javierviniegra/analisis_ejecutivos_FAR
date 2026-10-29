@@ -118,6 +118,17 @@ CATALOGO = [
         notas="Faltan: estructura de la tabla, metricas y reglas de los semaforos (umbrales y colores) del Power BI.",
         perfiles_iniciales=["Gerente"],
     ),
+    dict(
+        clave="semaforos-scorecard-semanal",
+        nombre="Semáforos scorecard",
+        descripcion="Scorecard de KPIs con semaforos (Financiero, CGI, Comercial, Talento Humano), replica del "
+        "Power BI SemaforosKPIs (pagina \"Resultados KPI's\").",
+        categoria=C.MARCA, periodicidad=P.SEMANAL, plantilla=F.SEMAFOROS, fuente=S.MIXTA,
+        alcance=A.AMBOS, admite_pdf=True, admite_excel=True, estado=E.PENDIENTE,
+        notas="Definicion leida del .pbix (25 KPIs, metas y reglas en DAX). Por definir: periodo (el Power BI es "
+        "mensual), fuentes fuera de Wansoft (Zenput, Excel de SharePoint: auditoria CGI, inventarios, carne, "
+        "Mystery Shopper, NPS, Delivery) y la meta de costo (37% en Power BI vs 38.0-39.9% de la app).",
+    ),
 ]
 
 

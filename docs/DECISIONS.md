@@ -2,6 +2,15 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-29 — "Semáforos scorecard": definition read from the Power BI file, KPI catalog and shared traffic-light rules
+
+- **New report** `semaforos-scorecard-semanal` (category Marca, weekly, PDF + Excel, per branch and consolidated), replicating the Power BI scorecard SemaforosKPIs, page "Resultados KPI's" (rows Category > KPI; columns Actual, Mes anterior, Meta, Estado; filtered by month and branch).
+- **How the definition was obtained:** read-only from the file `SemaforosKPIs-TI_01.pbix` with the `pbixray` library (DAX measures, Power Query, report layout), installed outside this repo; nothing in the model was changed. Other options weighed: Power BI Desktop's local Analysis Services instance (needs the file open; kept for checking computed values against ours) and the REST API / XMLA endpoint (service licence and an app registration: not worth it).
+- **Period (owner, 2026-10-29):** the current month up to the Sunday, sent every week, as Power BI does (it shows the month of the selected date).
+- **Built (block 1):** `central/motor/semaforos.py`, the traffic-light rules shared by scorecard-style reports (fixed thresholds, share of the target 100% / 90%, zero is green, sign, and the general rule: target met green, up to 5% worse orange, red beyond), using the colours of `comparativos`; and `central/motor/scorecard.py`, the 24 KPIs as data (Power BI table `Scorecard KPI`, its order, type and direction), each target kind (`KPI Meta`: fixed, same days last year +5% falling back to the previous month +5%, previous month, from its source) and the rule that paints each row (`KPI Estado`). Tests in `central/tests_scorecard.py`.
+- **Deliberate differences from Power BI:** a missing value has no light. Power BI coalesces missing KPIs to 0 and so paints, for example, "incumplimiento de procesos" or "delivery" green without data; here the data layer passes "no data" and 0 only when it is a real zero. "Talento Humano" is left out: its only row is a placeholder with no measure. NPS uses the sign rule its light applies (the measure's target says 1, the rules text "meta técnica 0").
+- **Pending owner decisions:** cost target (Power BI 37%, green <= 37%, red >= 39%, coded as in Power BI for now, vs this app's 38.0-39.9%); comparing against the whole previous month (Power BI) or the same days of it; what the first Monday of a month sends; which KPIs v1 carries (sources outside Wansoft/Odoo: Zenput, SharePoint Excel files for CGI audit, inventory value and variance, meat yield, Mystery Shopper, NPS, delivery; Google has no source in Power BI either).
+
 ## 2026-10-21 — Commercial report: food and drinks in units and price per unit
 
 - **Why** (owner): to tell whether a drop comes from selling FEWER products or from not selling them at the right price. New section of the indicators table, "Alimentos y bebidas: unidades y precio": for each group its sales, units sold and average price per unit, against last year; and one Lectura line per comparison block ("Alimentos: venta +1.1%, unidades -8.0%, precio por unidad +9.9%; ...").
