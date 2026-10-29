@@ -75,7 +75,7 @@ Branding: Fonda Argentina template (logo badge, rounded frame, watermark; PDF gr
 **Web:** catalog → report page → "Generar reporte" (`/reportes/<clave>/generar/`): branches (only the user's, validated server-side), period kind + date or free range (≤366 days), per-branch/consolidated per the report's `alcance`, format PDF/Excel/both (as the report admits); several branches per branch always ask (no default) one file vs one file per branch; several files → .zip. The screen shows which databases it reads ("Datos de: Wansoft `...` · Presupuestos AP `...`"). Generators registered in `central/generadores.py`.
 
 **Commercial report (`central/motor/reporte_comercial.py` assembles everything once):**
-- Page 1: title; **Lectura** (rule-based sentences: gross sales vs previous and vs last year; driver traffic vs check; controls up & ≥0.5% of net; mix/channel moves >2 pp; **both costs vs the 38.0–39.9% target** in one sentence; Costo de Ventas over prorated budget); indicators table (Ventas, Mezcla, Control, **Costo**) with arrow columns; two charts; notes about the period's data.
+- Page 1: title; **Lectura** (rule-based sentences: gross sales vs previous and vs last year; driver traffic vs check; controls up & ≥0.5% of net; mix/channel moves >2 pp; **both costs vs the 37% target** in one sentence; Costo de Ventas over prorated budget); indicators table (Ventas, Mezcla, Control, **Costo**) with arrow columns; two charts; notes about the period's data.
 - Page 2 **Detalle**: per branch for consolidated (sales, var, guests, check, **costo total % and costo facturado %** with traffic lights, total row) or per day/7-day block/month for a branch (no previous-period pairing in a month); then **"Reglas y umbrales del reporte"** in two columns.
 - Excel: Resumen, one sheet per chart (native Excel chart), Detalle, Notas.
 - `probar_reporte <branches|todas> --tipo ... [--consolidado] [--graficas DIR] [--pdf DIR] [--excel DIR]` prints and writes outputs.
@@ -94,7 +94,7 @@ Phases: 1 users/roles ✔ dev; 2 catalog ✔ dev; 3 engine/outputs ✔ for comme
 - **Arrows ±1% (±1 pp for shares);** **s/c** no data; **s/cf** when either period has data on <90% of expected days. **Comparable branches:** a branch without ≥90% data in the comparison period leaves both sides of that comparison (notes name it).
 - **Month charts measure calendar months:** per-day chart alone + 12-month trend vs last year (new branches included, noted; source gaps — Nov–Dec 2024 Odoo pilot — leave both years of that month; month in progress compared month-to-date).
 - **Gross sales** in charts and the Lectura headline; table shows gross and net; cost percentages over **net** sales.
-- **Cost target (owner): 38.0–39.9% of net sales per week and month** — green; <38% orange (bought too little / not captured); ≥40% red (bought too much). Two costs shown and named: **Costo total (Wansoft/Odoo)** = `CostoTotal − COALESCE(CostoDeConsumo,0)` (data guide; week = `costeomensual_semanapyq` row captured the Monday after; month = last `costeomensual` row; bimester–year = sum of months; free range = not available; 0 = no data) and **Costo facturado (Presupuestos AP)** = invoiced (the cash flow). Consumption is booked unevenly. The receipt-based measure ("how much each branch receives per week") is **pending**: the unified purchase tables have no receipt date — to request in the Wansoft project.
+- **Cost target (owner, 2026-10-29: the Semáforos scorecard's, `scorecard.POR_CLAVE["costo_venta"]`): ≤37% of net sales green, <39% orange, ≥39% red**, per week and month; below 30% stays green with a text warning (purchases may be missing). Replaced the 38.0–39.9% of 2026-09-30. Two costs shown and named: **Costo total (Wansoft/Odoo)** = `CostoTotal − COALESCE(CostoDeConsumo,0)` (data guide; week = `costeomensual_semanapyq` row captured the Monday after; month = last `costeomensual` row; bimester–year = sum of months; free range = not available; 0 = no data) and **Costo facturado (Presupuestos AP)** = invoiced (the cash flow). Consumption is booked unevenly. The receipt-based measure ("how much each branch receives per week") is **pending**: the unified purchase tables have no receipt date — to request in the Wansoft project.
 - **Costo de Ventas real (Presupuestos AP) is preliminary until 10 days after the close of the period's month** (invoices keep being captured): comparisons s/cf, note with the final date. A budget is shown even with no invoices yet; % ejercido only where both exist.
 - **Sales targets:** found only for 2025 (SharePoint BI_Fonda scorecards, 4 levels) → no targets for now; pending task when 2026 targets exist.
 - Multi-branch behaviour per report (`alcance`).
@@ -204,7 +204,7 @@ y luego docs/DECISIONS.md. Reglas clave:
 - El shell regresa a una ruta muerta (Desktop): usa cd a la ruta real o rutas absolutas.
 
 Estado: reporte comercial terminado (PDF de 2 páginas con Detalle, Excel, pantalla web,
-reglas de comparables y s/cf, dos costos con semáforo 38-39.9%, costo preliminar);
+reglas de comparables y s/cf, dos costos con semáforo 37% (scorecard), costo preliminar);
 reportes de CEDIS terminados (Excel desde Odoo del lado del proveedor, todas las sucursales,
 quién hizo cada cambio); catálogo por categorías con filtro y perfiles Gerente, CEDIS,
 Contabilidad y Nominista; reporte de nómina (Buk) dado de alta, pendiente la API.

@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-29 — Commercial report: cost target 37%, the Semáforos scorecard's
+
+- **What (owner, 2026-10-29):** the commercial reports use the scorecard's traffic lights; the cost freeze of the report is lifted for this change only. Both "Costo total / venta neta" and "Costo facturado / venta neta" (indicators table, Lectura, notes, per-branch detail page, help) now follow the Power BI cost rule: **green <= 37% of net sales, orange above 37% and below 39%, red from 39%**. Replaces the 38.0%-39.9% of 2026-09-30 and settles the pending cost-target decision of the scorecard entry below.
+- **One source of truth:** `comparativos.semaforo_costo` calls `scorecard.estado(scorecard.POR_CLAVE["costo_venta"], ...)`; `META_COSTO_MIN` / `META_COSTO_TOPE` are gone and every text (Lectura, notes, help) reads the limits from that KPI. `scorecard` is imported inside the functions because it imports `comparativos` through `semaforos`.
+- **Change of meaning:** a low cost is green now (before, below 38% was orange because purchases might be missing). That warning is kept as text only, colour unchanged, when a cost is **below 30%** of net sales (`comparativos.UMBRAL_COSTO_BAJO`, owner confirmed 2026-10-29): the Lectura adds "pero abajo de 30%: puede haber compras sin capturar" (amber tone when every cost is green) and the notes add a line with the low cost(s).
+- **Effect, September 2026, Acoxpa:** total 35.6% and invoiced 34.8%, orange before, green now.
+
 ## 2026-10-29 — "Semáforos scorecard": definition read from the Power BI file, KPI catalog and shared traffic-light rules
 
 - **New report** `semaforos-scorecard-semanal` (category Marca, weekly, PDF + Excel, per branch and consolidated), replicating the Power BI scorecard SemaforosKPIs, page "Resultados KPI's" (rows Category > KPI; columns Actual, Mes anterior, Meta, Estado; filtered by month and branch).

@@ -92,7 +92,7 @@ class SalidasCostoEstimadoTests(SimpleTestCase):
         m = self._metricas()
         filas = {f.indicador.clave: f for f in construir_tabla(m, None, None)}
         self.assertEqual(filas["costo_total"].etiqueta, "Costo total (Wansoft/Odoo), estimado")
-        self.assertEqual(filas["costo_total_pct"].semaforo, "naranja")  # 34.4%: still traffic-lighted
+        self.assertEqual(filas["costo_total_pct"].semaforo, "verde")  # 34.4%: still traffic-lighted
         self.assertFalse(filas["costo_ventas_real"].estimado)
         notas = notas_cobertura(m.periodo, m, None, None)
         self.assertTrue(any("Odoo ha facturado el 50%" in n for n in notas))

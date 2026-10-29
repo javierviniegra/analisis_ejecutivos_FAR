@@ -92,14 +92,14 @@ INDICADORES = [
     Indicador("descuentos", "Descuentos", "Control (a precio de venta)", MONEDA, lambda m: m.descuentos, False),
     # Two costs, told apart by name (owner, 2026-09-30): the total cost of the
     # Wansoft/Odoo cost report (what the executive reports use), and the cost
-    # invoiced in Presupuestos AP (the cash flow). Both against the 38.0-39.9% target.
+    # invoiced in Presupuestos AP (the cash flow). Both against the scorecard's cost target (comparativos.semaforo_costo).
     Indicador("costo_total", "Costo total (Wansoft/Odoo)", "Costo", MONEDA,
               lambda m: m.costo_total, False, usa_cierres=False),
     Indicador("costo_total_pct", "Costo total / venta neta", "Costo", PORCENTAJE,
               lambda m: m.pct_costo_total, None, usa_cierres=False, semaforo=semaforo_costo),
     Indicador("costo_ventas_real", "Costo facturado (Presupuestos AP)", "Costo", MONEDA,
               lambda m: m.costo_ventas_real, False, usa_cierres=False, usa_gasto_real=True),
-    # Invoiced cost (the cash flow) over net sales; the business target is 38.0%-39.9%.
+    # Invoiced cost (the cash flow) over net sales, against the same cost target.
     Indicador("costo_ventas_pct", "Costo facturado / venta neta", "Costo", PORCENTAJE,
               lambda m: m.pct_costo_ventas, None, usa_cierres=False, usa_gasto_real=True, semaforo=semaforo_costo),
     Indicador("costo_ventas_ppto", "Costo de Ventas presupuestado", "Costo", MONEDA,

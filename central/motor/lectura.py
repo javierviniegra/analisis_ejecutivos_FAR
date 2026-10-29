@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from . import formato
-from .comparativos import (BAJA, META_COSTO_MIN, META_COSTO_TOPE, NARANJA, NO_FIABLE, ROJO, SUBE, VERDE,
+from .comparativos import (BAJA, NARANJA, NO_FIABLE, ROJO, SUBE, UMBRAL_COSTO_BAJO, VERDE, costo_bajo, kpi_costo,
                            semaforo_costo)
 from .metricas import Comparacion, Metricas, como_comparacion
 from .periodo import Periodo, TipoPeriodo
@@ -215,16 +215,22 @@ def _costo_ventas(actual: Metricas) -> Observacion | None:
 
 
 def _costo_meta(actual: Metricas) -> Observacion | None:
-    """Both costs vs the 38.0%-39.9% target (business rule, per week and month):
-    total cost (Wansoft/Odoo) and invoiced cost (Presupuestos AP)."""
-    donde = {VERDE: "dentro de la meta", NARANJA: "abajo de la meta", ROJO: "arriba de la meta"}
-    partes, colores = [], []
+    """Both costs vs the scorecard's cost target (per week and month): total
+    cost (Wansoft/Odoo) and invoiced cost (Presupuestos AP). A cost below
+    UMBRAL_COSTO_BAJO is green but warned about (purchases may be missing)."""
+    kpi = kpi_costo()
+    donde = {VERDE: "dentro de la meta", NARANJA: "arriba de la meta",
+             ROJO: f"en {kpi.naranja * 100:.0f}% o más"}
+    partes, colores, bajo = [], [], False
     for nombre, pct in (("total", actual.pct_costo_total), ("facturado", actual.pct_costo_ventas)):
         color = semaforo_costo(pct)
         if color is None:
             continue
         colores.append(color)
         texto = f"{nombre} {pct * 100:.1f}%, {donde[color]}"
+        if costo_bajo(pct):
+            bajo = True
+            texto += f" pero abajo de {UMBRAL_COSTO_BAJO * 100:.0f}%: puede haber compras sin capturar"
         if nombre == "total" and actual.costo_total_estimado:
             texto += " (estimado, ver notas)"
         if nombre == "facturado" and actual.costo_preliminar:
@@ -232,9 +238,9 @@ def _costo_meta(actual: Metricas) -> Observacion | None:
         partes.append(texto)
     if not partes:
         return None
-    rango = f"{META_COSTO_MIN * 100:.1f}-{(META_COSTO_TOPE * 100) - Decimal('0.1'):.1f}%"
-    return Observacion(f"Costo sobre la venta neta (meta {rango}): " + "; ".join(partes) + ".",
-                       POSITIVO if all(c == VERDE for c in colores) else NEGATIVO)
+    tono = NEGATIVO if any(c != VERDE for c in colores) else AVISO if bajo else POSITIVO
+    return Observacion(f"Costo sobre la venta neta (meta {kpi.verde * 100:.0f}% o menos): " + "; ".join(partes) + ".",
+                       tono)
 
 
 def construir_lectura(periodo: Periodo, actual: Metricas, anterior: Comparacion | Metricas | None,

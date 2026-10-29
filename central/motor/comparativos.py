@@ -17,20 +17,29 @@ UMBRAL_COBERTURA_FIABLE = Decimal("0.90")
 SUBE, BAJA, IGUAL, SIN_DATO, NO_FIABLE = "sube", "baja", "igual", "sin_dato", "no_fiable"
 VERDE, ROJO, GRIS, NARANJA = "verde", "rojo", "gris", "naranja"
 
-# Business rule (owner, 2026-09-30): Costo de Ventas must be 38.0%-39.9% of
-# net sales, per week and per month. Below 38% orange (bought too little or
-# did not capture purchases); 40% or more red (bought too much).
-META_COSTO_MIN = Decimal("0.38")
-META_COSTO_TOPE = Decimal("0.40")
+# Cost target (owner, 2026-10-29, replacing the 38.0%-39.9% of 2026-09-30):
+# the Power BI scorecard's, defined once in scorecard.POR_CLAVE["costo_venta"]:
+# green up to 37% of net sales, orange below 39%, red from 39%. A low cost is
+# green now; below UMBRAL_COSTO_BAJO the Lectura and the notes warn that
+# purchases may be missing, without changing the colour.
+UMBRAL_COSTO_BAJO = Decimal("0.30")
+
+
+def kpi_costo():
+    """The scorecard's cost KPI (imported here: scorecard -> semaforos -> comparativos)."""
+    from .scorecard import POR_CLAVE
+    return POR_CLAVE["costo_venta"]
 
 
 def semaforo_costo(pct: Decimal | None) -> str | None:
-    """Traffic light of Costo de Ventas as a share of net sales."""
-    if pct is None:
-        return None
-    if pct < META_COSTO_MIN:
-        return NARANJA
-    return VERDE if pct < META_COSTO_TOPE else ROJO
+    """Traffic light of a cost as a share of net sales."""
+    from .scorecard import estado
+    return estado(kpi_costo(), pct, None)
+
+
+def costo_bajo(pct: Decimal | None) -> bool:
+    """Whether a cost share is low enough to suspect purchases not captured."""
+    return pct is not None and pct < UMBRAL_COSTO_BAJO
 SIMBOLOS = {SUBE: "▲", BAJA: "▼", IGUAL: "=", SIN_DATO: "s/c", NO_FIABLE: "s/cf"}
 NO_COMPARABLE = (SIN_DATO, NO_FIABLE)
 

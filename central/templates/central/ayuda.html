@@ -387,7 +387,7 @@
         <tr><td>Costo facturado (Presupuestos AP)</td><td>Facturas de proveedor registradas en Presupuestos AP.</td><td>El flujo: lo que se facturó en el periodo.</td></tr>
       </table>
       <h3>Meta de costo (semáforo)</h3>
-      <p>El costo debe estar entre <strong>{{ meta_min }}% y 39.9% de la venta neta</strong>: <span class="tag">verde</span> dentro de la meta, <span class="tag">naranja</span> abajo de {{ meta_min }}% (se compró o se registró de menos), <span class="tag">rojo</span> de {{ meta_tope }}% en adelante (se compró de más).</p>
+      <p>La meta es la del scorecard de semáforos (Power BI): el costo debe ser <strong>{{ meta_costo }}% o menos de la venta neta</strong>. <span class="tag">verde</span> hasta {{ meta_costo }}%, <span class="tag">naranja</span> arriba de {{ meta_costo }}% y abajo de {{ costo_rojo }}%, <span class="tag">rojo</span> de {{ costo_rojo }}% en adelante (se compró de más). Un costo abajo de {{ costo_bajo }}% sigue en verde, pero la Lectura y las notas avisan que puede haber compras sin capturar.</p>
       <h3>Costo estimado</h3>
       <p>El costo de los últimos días puede estar incompleto. Cuando pasa, el costo se marca <strong>"estimado"</strong> y una nota dice cómo se calculó; cuando ya está completo, se da sin ninguna mención.</p>
       <ul>
@@ -445,7 +445,7 @@
       </div>
       <div class="ejemplo">
         <h3>Ejemplo 6. Semáforo</h3>
-        <p>Costo $385,000 sobre venta neta $1,000,000 = 38.5% → <strong>verde</strong>. Con $410,000 = 41% → <span class="rojo">rojo</span>. Con $350,000 = 35% → naranja.</p>
+        <p>Costo $360,000 sobre venta neta $1,000,000 = 36% → <strong>verde</strong>. Con $385,000 = 38.5% → naranja. Con $410,000 = 41% → <span class="rojo">rojo</span>. Con $280,000 = 28% → verde, con el aviso de que puede haber compras sin capturar.</p>
       </div>
     </section>
 

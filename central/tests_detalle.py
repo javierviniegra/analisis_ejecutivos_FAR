@@ -36,7 +36,7 @@ class DetalleTests(SimpleTestCase):
         filas, total = detalle.por_sucursal(r)
         self.assertEqual([f.nombre for f in filas], ["Nueva", "Vieja"])  # largest sales first
         self.assertEqual(filas[0].var_anterior.direccion, c.SIN_DATO)  # new branch: 2 of 7 days before, no comparison
-        self.assertEqual(filas[1].semaforo, c.VERDE)  # invoiced 2730 / 7000 = 39%
+        self.assertEqual(filas[1].semaforo, c.ROJO)  # invoiced 2730 / 7000 = 39%
         self.assertEqual((filas[1].pct_costo_total, filas[1].semaforo_total), (D("0.4"), c.ROJO))  # total 2800 / 7000
         self.assertIsNone(filas[0].semaforo_total)  # no cost data: no light
         self.assertEqual(total.venta_bruta, D("28000"))

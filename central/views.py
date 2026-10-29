@@ -280,8 +280,9 @@ def ayuda(request):
     return render(request, "central/ayuda.html", {
         "umbral_igual": _pct(comparativos.UMBRAL_IGUAL),
         "cobertura": _pct(comparativos.UMBRAL_COBERTURA_FIABLE),
-        "meta_min": _pct(comparativos.META_COSTO_MIN),
-        "meta_tope": _pct(comparativos.META_COSTO_TOPE),
+        "meta_costo": _pct(comparativos.kpi_costo().verde),
+        "costo_rojo": _pct(comparativos.kpi_costo().naranja),
+        "costo_bajo": _pct(comparativos.UMBRAL_COSTO_BAJO),
         "peso_control": _pct(lectura.UMBRAL_PESO_CONTROL),
         "puntos_mezcla": _pct(lectura.UMBRAL_PUNTOS_MEZCLA),
         "facturado_completo": _pct(UMBRAL_FACTURADO_COMPLETO),
