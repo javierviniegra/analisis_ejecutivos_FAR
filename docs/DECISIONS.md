@@ -2,6 +2,12 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-10-29 — Commercial report: tip share in the Productividad section
+
+- **What (owner, 2026-10-29, lifting the freeze for this row):** new row "Propina (% de la venta de salón)" in the Productividad section, against the previous period and last year, in percentage points; no traffic light. Definition as in the waiters' report: the tips recorded in the payments of the dining-room tickets (`wansoft.propinas_meseros`) of the active waiters over those same waiters' dining-room sales (`Metricas.propina_salon` / `venta_salon`); the consolidated adds tips and sales, so it is weighted by sales. A rules note and the help say so.
+- **Cost:** one more query per period read (the payments join): 4-18 s for all branches per period, measured 2026-10-30; the commercial reads three periods. Acoxpa September 2026: 8.9% (August 8.7%, September 2025 8.8%).
+- **Layout fix found on the way:** when the table and the legend fill page 1 and the report has no composition page, the charts open a page of their own instead of running into the footer; the legend narrows to the notes' width (clear of the watermark) before moving to a new page.
+
 ## 2026-10-29 — Commercial report: cost band 37%-39% and a legend of the traffic lights
 
 - **Cost band (owner, after seeing the first version, same day):** the cost lights of the commercial report (table, Lectura, notes, detail page, help) are a band, not Power BI's "37% or less": **green from 37% to below 39% of net sales, orange below 37% (bought or captured too little), red from 39%**. New rule `semaforos.banda`, fed by the limits of the scorecard's cost KPI (`scorecard.POR_CLAVE["costo_venta"]`: 37% and 39%), so the figures still live in one place; `scorecard.py` is unchanged and the Semáforos scorecard report keeps Power BI's rule, so the two reports can paint the same cost differently. The text-only warning below 30% (entry below) is dropped: a low cost is orange again. Effect, September 2026: Acoxpa total 35.6% and invoiced 34.8%, consolidated total 35.7%: orange (green with the first version).

@@ -27,7 +27,8 @@ class PdfTests(SimpleTestCase):
     def test_genera_dos_paginas_por_reporte(self):
         pdf = pdf_comercial.generar([self._reporte(), self._reporte("Acoxpa")])
         self.assertTrue(pdf.startswith(b"%PDF"))
-        self.assertEqual(pdf.count(b"/Type /Page\n") + pdf.count(b"/Type /Page\r"), 4)  # report + detail each
+        # report, charts (table and legend fill page 1 and there is no composition page) and detail, each
+        self.assertEqual(pdf.count(b"/Type /Page\n") + pdf.count(b"/Type /Page\r"), 6)
 
     def test_oculta_secciones_sin_datos(self):
         visibles = filas_visibles(self._reporte().filas)

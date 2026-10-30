@@ -341,14 +341,27 @@ def _leyenda(c, r: ReporteComercial, y: float) -> float:
     if not any(f.semaforo for f in filas_visibles(r.filas)):
         return y
     tam, interlinea, sangria = 7.0, 8.6, 10
-    lineas = [_renglones(c, t, F, tam, ANCHO_UTIL - 24 - sangria) for t in leyenda_semaforos(getattr(r, "incluir_costos", True))]
-    alto = 27 + sum(len(rs) * interlinea + 1.5 for rs in lineas)
-    if y - alto < Y_TABLA:  # keep clear of the bottom-right watermark
-        y = _nueva_pagina(c)
+    textos = leyenda_semaforos(getattr(r, "incluir_costos", True))
+
+    def medir(ancho):
+        lineas = [_renglones(c, t, F, tam, ancho - 24 - sangria) for t in textos]
+        return lineas, 27 + sum(len(rs) * interlinea + 1.5 for rs in lineas)
+
+    # Full width above the bottom-right watermark; below it, as narrow as the notes
+    # (so it stays on the table's page); a new page only when even that does not fit.
+    ancho = ANCHO_UTIL
+    lineas, alto = medir(ancho)
+    if y - alto < Y_TABLA:
+        ancho = ANCHO_NOTAS
+        lineas, alto = medir(ancho)
+        if y - alto < Y_MIN + 14:
+            y = _nueva_pagina(c)
+            ancho = ANCHO_UTIL
+            lineas, alto = medir(ancho)
     c.setFillColor(FONDO_LEYENDA)
     c.setStrokeColor(BORDE_LEYENDA)
     c.setLineWidth(1.2)
-    c.roundRect(MARGEN, y - alto, ANCHO_UTIL, alto, 5, fill=1, stroke=1)
+    c.roundRect(MARGEN, y - alto, ancho, alto, 5, fill=1, stroke=1)
     c.setFillColor(BORDE_LEYENDA)
     c.rect(MARGEN, y - alto, 4, alto, fill=1, stroke=0)
     c.setFillColor(VERDE_MARCA)
@@ -590,6 +603,8 @@ def generar(reportes: list[ReporteComercial]) -> bytes:
         a_composicion = (getattr(r, "composicion", None) is not None and not r.composicion.vacia
                          and y - alto_graficas() < Y_MIN + 30)
         if not a_composicion:
+            if y - alto_graficas() < Y_MIN + 30:  # no composition page to take them: a page of their own
+                y = _nueva_pagina(c)
             y = _graficas(c, r, y)
         pendientes = _notas(c, r, y)
         c.showPage()
