@@ -62,6 +62,10 @@ GRANT SELECT ON `wansoft`.`dim_company_analytical`                       TO 'cen
 GRANT SELECT ON `wansoft`.`dim_product`                                  TO 'central_reportes'@'%';
 GRANT SELECT ON `wansoft`.`dim_vendor`                                   TO 'central_reportes'@'%';
 GRANT SELECT ON `wansoft`.`dim_time`                                     TO 'central_reportes'@'%';
+-- supplier invoices of Wansoft and Odoo together (Semáforos scorecard: cost of sales and expenses)
+GRANT SELECT ON `wansoft`.`analytics_expense_invoices`                   TO 'central_reportes'@'%';
+-- Wansoft inventory entries (scorecard: bread and tortillas bought on invoice, Wansoft-purchase days)
+GRANT SELECT ON `wansoft`.`getinputinventory_entrada`                    TO 'central_reportes'@'%';
 
 -- ---------------- presupuestos_ap: Costo de Ventas budget vs real ----------------
 GRANT SELECT ON `presupuestos_ap`.`presupuestos_sucursal`   TO 'central_reportes'@'%';

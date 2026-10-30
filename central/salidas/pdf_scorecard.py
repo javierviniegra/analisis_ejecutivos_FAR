@@ -25,7 +25,7 @@ TITULO = "Semáforos scorecard"
 GRIS = HexColor("#9A9A9A")
 FORMATOS = {sc.DINERO: MONEDA, sc.PORCENTAJE: PORCENTAJE, sc.NUMERO: ENTERO}
 PALABRA = {"verde": "Verde", "naranja": "Naranja", "rojo": "Rojo"}
-ALTO_FILA = 13.2
+ALTO_FILA = 12.4
 
 
 def _rango(p) -> str:
@@ -69,8 +69,7 @@ def _estado(c, x: float, base: float, fila: sc.Fila):
     if clave in sc.KPIS_SIN_FUENTE or fila.estado is None:
         c.setFillColor(GRIS)
         c.setFont(FI, 7.2)
-        texto = ("sin fuente" if clave in sc.KPIS_SIN_FUENTE
-                 else "pendiente" if clave not in sc.KPIS_VENTAS else "sin dato")
+        texto = "sin fuente" if clave in sc.KPIS_SIN_FUENTE else "sin dato"
         c.drawString(x + 14, base, texto)
         return
     c.setFillColor(COLOR_SEMAFORO[fila.estado])
@@ -96,7 +95,7 @@ def _tabla(c, r: ReporteScorecard, y: float) -> float:
         y -= ALTO_FILA
         for fila in [f for f in r.filas if f.kpi.categoria == categoria]:
             base = y - 6.5
-            leida = fila.kpi.clave in sc.KPIS_VENTAS
+            leida = fila.kpi.clave in sc.KPIS_LEIDOS
             fmt = FORMATOS[fila.kpi.tipo]
             c.setFillColor(TEXTO if leida else GRIS)
             c.setFont(F, 7.6)
@@ -116,31 +115,93 @@ def _tabla(c, r: ReporteScorecard, y: float) -> float:
     return y - 6
 
 
-def _notas(c, r: ReporteScorecard, y: float) -> None:
+def _notas(c, r: ReporteScorecard, y: float) -> float:
     notas = [
         "Ventas y cheque con IVA, de las cuentas de Wansoft. Cheque = venta / personas de todos los canales; "
         "ticket = venta / cuentas; clientes = personas de las órdenes de restaurante (sin delivery ni para llevar); "
         "mix = venta de bebidas / venta de alimentos y bebidas.",
-        "Sin fuente: KPIs cuya fuente (Zenput, Excel de SharePoint, Google) aún no lee la Central de Reportes. "
-        "Pendiente: costo y gastos, en construcción.",
+        "Costo de venta y gastos: facturas de proveedor de Wansoft y Odoo, por fecha de factura, sin IVA. Costo de "
+        "venta = facturas de Costo Operativo / venta neta (sin IVA) de las mismas sucursales. Pan y tortillas: "
+        "entradas de inventario por factura de Wansoft, más las compras en Odoo de las sucursales que compran en "
+        "Odoo. Las facturas de los últimos días pueden no estar capturadas todavía.",
+        "Sin fuente: KPIs cuya fuente (Zenput, Excel de SharePoint, Google) aún no lee la Central de Reportes.",
     ]
     if r.nombre == "Consolidado":
         notas.append("Consolidado: el semáforo de ventas, cheque, ticket y clientes compara solo las sucursales con "
-                     "meta (año anterior o, si son nuevas, mes anterior).")
+                     "meta (año anterior o, si son nuevas, mes anterior); el de los gastos, las que operaron el mes "
+                     "anterior.")
+    if r.sin_costo:
+        notas.append("Sin facturas de costo en el periodo (fuera del costo de venta): " + ", ".join(r.sin_costo) + ".")
+    if r.pan_parcial:
+        notas.append("Pan y tortillas parciales: " + ", ".join(r.pan_parcial) + " compran en Odoo productos que el "
+                     "catálogo aún no clasifica como Pan o Tortillas (por ejemplo Bolillo, Tortilla de Harina).")
+    if r.pan_dobles:
+        dias = sorted({f"{dia:%d/%m}" for _, _, dia in r.pan_dobles})
+        notas.append("Revisar: pan o tortillas capturados en Wansoft y en Odoo el mismo día (pueden contarse dos "
+                     "veces): " + ", ".join(sorted({n for n, _, _ in r.pan_dobles})) + " (" + ", ".join(dias) + ").")
+    return _lista(c, "Notas", notas, y, 6.8, 8.4)
+
+
+Y_FIN = 40  # below this a list continues on a new page
+
+
+def _lista(c, titulo: str, puntos: list[str], y: float, tam: float = 7, interlinea: float = 9) -> float:
+    """A titled bullet list that continues on a new page when it reaches the bottom."""
+    if y < Y_FIN + 30:
+        c.showPage()
+        _pagina(c)
+        y = Y_INICIO
     c.setFillColor(VERDE_MARCA)
     c.setFont(FB, 8.5)
-    c.drawString(MARGEN, y, "Notas")
+    c.drawString(MARGEN, y, titulo)
     y -= 11
-    c.setFillColor(TEXTO_SUAVE)
-    for nota in notas:
-        for renglon in _renglones(c, "• " + nota, F, 7, ANCHO_UTIL - 70):
-            c.setFont(F, 7)
+    for punto in puntos:
+        for renglon in _renglones(c, "• " + punto, F, tam, ANCHO_UTIL - 70):
+            if y < Y_FIN:
+                c.showPage()
+                _pagina(c)
+                y = Y_INICIO
+            c.setFillColor(TEXTO_SUAVE)
+            c.setFont(F, tam)
             c.drawString(MARGEN, y, renglon)
-            y -= 9
-        y -= 2
+            y -= interlinea
+        y -= 1.5
+    return y - 4
 
 
-def _reglas(c, r: ReporteScorecard) -> None:
+def _pesos(v) -> str:
+    return f"${v:,.0f}"
+
+
+def _por_sistema(comp: sc.Componente) -> str:
+    nombres = {sc.ODOO: "Odoo", sc.WANSOFT: "Wansoft"}
+    partes = sorted(comp.por_sistema.items(), key=lambda x: -x[1])
+    if len(partes) == 1:
+        return f"({nombres.get(partes[0][0], partes[0][0])})"
+    return "(" + " · ".join(f"{nombres.get(s, s)} {_pesos(m)}" for s, m in partes) + ")"
+
+
+def _desglose(c, r: ReporteScorecard, y: float) -> float:
+    """Owner, 2026-10-30: under the table, where every cost and expense comes
+    from -- the accounts it adds up (and which system) and its largest suppliers."""
+    puntos = []
+    for d in r.desglose:
+        total = sum((x.total for x in d.cuentas), sc.CERO)
+        if d.kpi.clave == "costo_venta":
+            titulo = f"Costo de venta: facturas de Costo Operativo {_pesos(total)}, por subcuenta: "
+        else:
+            titulo = f"{d.kpi.nombre} {_pesos(total)}: "
+        texto = titulo + "; ".join(f"{x.etiqueta} {_pesos(x.total)} {_por_sistema(x)}" for x in d.cuentas) + "."
+        if d.proveedores:
+            texto += " Proveedores: " + "; ".join(f"{p.etiqueta.title()} {_pesos(p.total)}" for p in d.proveedores)
+            if d.n_otros:
+                texto += f"; otros {d.n_otros} {_pesos(d.otros_proveedores)}"
+            texto += "."
+        puntos.append(texto)
+    return _lista(c, "De dónde sale cada costo y gasto (periodo actual)", puntos, y, 6.5, 7.9) if puntos else y
+
+
+def _reglas(c, r: ReporteScorecard) -> float:
     y = Y_INICIO
     c.setFillColor(VERDE_MARCA)
     c.setFont(FB, 13)
@@ -161,9 +222,10 @@ def _reglas(c, r: ReporteScorecard) -> None:
             c.setFillColor(TEXTO_SUAVE)
             for renglon in renglones:
                 c.drawString(MARGEN + 200, y, renglon)
-                y -= 8.6
-            y -= 2.5
-        y -= 5
+                y -= 8.2
+            y -= 2
+        y -= 4
+    return y
 
 
 def generar(reportes: list[ReporteScorecard]) -> bytes:
@@ -176,10 +238,10 @@ def generar(reportes: list[ReporteScorecard]) -> bytes:
         _pagina(c)
         y = _titulo(c, r, Y_INICIO)
         y = _tabla(c, r, y)
-        _notas(c, r, y)
+        _desglose(c, r, y)  # under the table (owner, 2026-10-30)
         c.showPage()
         _pagina(c)
-        _reglas(c, r)
+        _notas(c, r, _reglas(c, r))
         c.showPage()
     c.save()
     return salida.getvalue()

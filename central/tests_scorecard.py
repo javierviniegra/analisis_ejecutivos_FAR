@@ -193,3 +193,75 @@ class PdfScorecardTests(SimpleTestCase):
         self.assertIn("1.5%", sc.regla_texto(k["diferencia_inventario"]))
         self.assertIn("+5%", sc.regla_texto(k["ventas"]))
         self.assertIn("mismos días del mes anterior", sc.regla_texto(k["hielo"]))
+
+
+class CostoGastosScorecardTests(SimpleTestCase):
+    def test_subcuentas_como_power_bi(self):
+        V, W, O = "Gastos de venta", sc.WANSOFT, sc.ODOO
+        lineas = {("Gastos Directos", "Artículos de Limpieza", W, False, "BENNETTS"): D("10"),
+                  (V, "Articulos de Limpieza", O, False, "BENNETTS"): D("5"),
+                  (V, "Gastos de Salón (salsas de sobre, etc)", O, False, "EL BODEGON DE FITO"): D("7"),
+                  (V, "Eq para Salón", W, False, "X"): D("1"), (V, "Eq para Salon", O, False, "X"): D("2"),
+                  (V, "Carbón", W, False, "LA UNICA"): D("20"), (V, "Carbón vegetal", W, False, "Y"): D("99"),
+                  (V, "Hielo", W, False, "Z"): D("3"), (V, "Material de Empaque", W, False, "R"): D("4"),
+                  ("Costo operativo", "Costo de alimentos", O, True, "EL BODEGON DE FITO"): D("300"),
+                  ("Gastos Administrativos", "Papelería", W, False, "P"): D("50")}
+        g = sc.gastos_de(lineas, {(sc.PAN, W): D("8"), (sc.PAN, O): D("1"), (sc.TORTILLAS, W): D("9")})
+        self.assertEqual(g.costo_operativo, D("300"))
+        self.assertEqual(g.montos["limpieza"], D("15"))  # both accounts' subcuentas
+        self.assertEqual(g.montos["gastos_salon"], D("10"))  # "contiene SALON" takes Eq para Salón too
+        self.assertEqual(g.montos["carbon"], D("20"))  # carbón must be the whole subcuenta
+        self.assertEqual((g.montos["hielo"], g.montos["empaque"]), (D("3"), D("4")))
+        self.assertEqual((g.montos["pan"], g.montos["tortillas"]), (D("9"), D("9")))
+        # the detail behind each row: accounts (accent variants together) per system, and suppliers
+        salon = {c.etiqueta: c.por_sistema for c in g.detalle["gastos_salon"].values()}
+        self.assertEqual(salon["Gastos de venta / Eq para Salón"], {W: D("1"), O: D("2")})
+        self.assertEqual(len(g.detalle["limpieza"]), 2)
+        self.assertEqual(g.proveedores["limpieza"][sc.normalizar("BENNETTS")].total, D("15"))
+        self.assertEqual(g.detalle["pan"][sc.normalizar("Compras")].por_sistema, {O: D("1")})
+
+    def test_desglose_de_cada_gasto(self):
+        lineas = {("Gastos de venta", "Gastos de Salón", sc.ODOO, False, f"P{i}"): D(str(10 * i)) for i in range(1, 6)}
+        g = sc.sumar_gastos([sc.gastos_de(lineas, {}), sc.gastos_de(lineas, {})])  # two branches
+        d = {x.kpi.clave: x for x in sc.desglose(g.detalle, g.proveedores)}
+        self.assertEqual(list(d), ["gastos_salon"])  # rows without amount are left out
+        self.assertEqual([p.etiqueta for p in d["gastos_salon"].proveedores], ["P5", "P4", "P3"])
+        self.assertEqual((d["gastos_salon"].n_otros, d["gastos_salon"].otros_proveedores), (2, D("60")))
+        self.assertEqual(d["gastos_salon"].cuentas[0].total, D("300"))
+
+    def test_pan_wansoft_todos_los_dias_mas_odoo_desde_su_inicio(self):
+        entradas = {(sc.PAN, date(2026, 9, 2)): D("100"), (sc.TORTILLAS, date(2026, 9, 3)): D("40")}
+        odoo = {(sc.PAN, date(2026, 8, 30)): D("7"),  # before buying in Odoo: pilot noise
+                (sc.PAN, date(2026, 9, 2)): D("10"), (sc.TORTILLAS, date(2026, 9, 5)): D("5")}
+        montos, dobles = sc.pan_tortillas(entradas, odoo, date(2026, 9, 1))
+        self.assertEqual(montos, {(sc.PAN, sc.WANSOFT): D("100"), (sc.TORTILLAS, sc.WANSOFT): D("40"),
+                                  (sc.PAN, sc.ODOO): D("10"), (sc.TORTILLAS, sc.ODOO): D("5")})
+        self.assertEqual(dobles, [(sc.PAN, date(2026, 9, 2))])
+        # a branch that does not buy in Odoo: Wansoft only
+        self.assertEqual(sc.pan_tortillas(entradas, odoo, None)[0],
+                         {(sc.PAN, sc.WANSOFT): D("100"), (sc.TORTILLAS, sc.WANSOFT): D("40")})
+
+    def test_costo_sobre_la_venta_neta_de_las_mismas_sucursales(self):
+        ventas = [_v(1160), _v(580)]
+        ventas[0].venta_neta, ventas[1].venta_neta = D("1000"), D("500")
+        # the second branch has no invoice: no data, its sales stay out
+        self.assertEqual(sc.pct_costo(ventas, [sc.Gastos(D("380")), sc.Gastos(D("0"))]), D("0.38"))
+        self.assertIsNone(sc.pct_costo(ventas, [sc.Gastos(D("0")), sc.Gastos(D("0"))]))
+
+    def test_filas_de_costo_y_gastos(self):
+        def gastos(costo, hielo):
+            return sc.gastos_de({("Costo operativo", "Costo de alimentos", sc.WANSOFT, True, "A"): D(costo),
+                                 ("Gastos de venta", "Hielo", sc.WANSOFT, False, "B"): D(hielo)}, {})
+        act, prev = [_v(1000), _v(500)], [_v(900), _v(0, dias=0)]
+        for v, neta in zip(act + prev, ("1000", "500", "900", "0")):
+            v.venta_neta = D(neta)
+        b = sc.filas_gastos(["A", "B"], act, prev, [gastos("380", "104"), gastos("0", "50")],
+                            [gastos("300", "100"), gastos("0", "0")])
+        f = {r.kpi.clave: r for r in b.filas}
+        self.assertEqual([r.kpi.orden for r in b.filas], sorted(r.kpi.orden for r in b.filas))
+        self.assertEqual(f["costo_venta"].actual, D("0.38"))
+        self.assertEqual(f["costo_venta"].estado, NARANJA)  # > 37% and < 39%
+        # B did not operate last month: out of the expense target and of the actual compared
+        self.assertEqual((f["hielo"].actual, f["hielo"].actual_comparado, f["hielo"].meta), (D("154"), D("104"), D("100")))
+        self.assertEqual(f["hielo"].estado, NARANJA)  # 4% above the previous month
+        self.assertEqual((b.sin_costo, b.sin_meta), (["B"], ["B"]))

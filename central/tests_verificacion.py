@@ -34,5 +34,8 @@ class VerificacionTests(SimpleTestCase):
                          {"getglobalcashclosing", "getallordenesbyday_new_venta", "getallordenesbyday_new_detalleventa",
                           "costeomensual", "costeomensual_semanapyq", "dim_company_analytical", "gettotalcostbydate",
                           "odoo_company_migration_policy", "costs_odoo_switch",
-                          "getallordenesbyday_new_pago"})
+                          "getallordenesbyday_new_pago",
+                          # scorecard cost and expenses
+                          "analytics_expense_invoices", "getinputinventory_entrada", "analytics_purchase_order_lines",
+                          "dim_product"})
         self.assertIn("presupuestos_gastoreal", presupuestos.COLUMNAS_REQUERIDAS)

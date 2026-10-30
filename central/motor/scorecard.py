@@ -7,7 +7,8 @@ SemaforosKPIs-TI_01.pbix (2026-10-29): the KPI list is its table
 paints each row; reading the values is done elsewhere.
 """
 
-from dataclasses import dataclass
+import unicodedata
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -186,6 +187,7 @@ class Ventas:
     personas_restaurante: Decimal = CERO
     alimentos: Decimal = CERO
     bebidas: Decimal = CERO
+    venta_neta: Decimal = CERO  # without IVA: the cost of sales' denominator (Power BI: Ventas[Subtotal])
 
     @property
     def fiable(self) -> bool:
@@ -275,6 +277,193 @@ def filas_ventas(nombres: list[str], actuales: list[Ventas], mes_anterior: list[
     return BloqueVentas(filas,
                         [nombres[i] for i in con_base if bases[i][1] == MES_ANTERIOR],
                         [nombres[i] for i in range(len(nombres)) if i not in con_base])
+
+
+# -- cost of sales and expenses (block 3) -----------------------------------
+KPIS_GASTO = ("limpieza", "gastos_salon", "hielo", "empaque", "tortillas", "carbon", "pan")
+KPIS_COSTO_GASTOS = ("costo_venta",) + KPIS_GASTO
+KPIS_LEIDOS = KPIS_VENTAS + KPIS_COSTO_GASTOS
+# Power BI `_Base Limpieza` ... `_Base Carbon`: the subcuentas (upper case, no
+# accents) that make each expense line. "Contiene" also takes e.g. "Eq para
+# Salón" into Gastos salón and both "Artículos de Limpieza" accounts, as Power BI.
+SUBCUENTAS = {"limpieza": ("contiene", "LIMPIEZA"), "gastos_salon": ("contiene", "SALON"),
+              "hielo": ("contiene", "HIELO"), "empaque": ("contiene", "EMPAQUE"), "carbon": ("igual", "CARBON")}
+
+
+def normalizar(texto: str) -> str:
+    sin_acentos = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode()
+    return sin_acentos.strip().upper()
+
+
+WANSOFT, ODOO = "wansoft", "odoo"
+
+
+@dataclass
+class Componente:
+    """One account (or source) summed into a row, with its amount per system."""
+    etiqueta: str  # e.g. "Gastos de venta / Gastos de Salón (salsas de sobre, etc)"
+    por_sistema: dict[str, Decimal] = field(default_factory=dict)
+
+    @property
+    def total(self) -> Decimal:
+        return sum(self.por_sistema.values(), CERO)
+
+
+@dataclass
+class Gastos:
+    """Invoiced cost and expenses of one branch (or several, summed) in one period."""
+    costo_operativo: Decimal = CERO
+    montos: dict[str, Decimal] = field(default_factory=dict)  # expense KPI clave -> amount
+    # Where each row's amount comes from (owner, 2026-10-30: shown under the
+    # table): KPI clave -> {account key (no accents) -> Componente}, and the
+    # same per supplier for the invoice-based expense rows.
+    detalle: dict[str, dict[str, Componente]] = field(default_factory=dict)
+    proveedores: dict[str, dict[str, Componente]] = field(default_factory=dict)
+
+
+def _agregar(detalle: dict, clave: str, etiqueta: str, sistema: str, monto: Decimal) -> None:
+    c = detalle.setdefault(clave, {}).setdefault(normalizar(etiqueta), Componente(etiqueta))
+    c.por_sistema[sistema] = c.por_sistema.get(sistema, CERO) + monto
+
+
+def gastos_de(lineas: dict[tuple, Decimal], pan_tortillas_por_fuente: dict[tuple, Decimal]) -> Gastos:
+    """`lineas`: {(cuenta, subcuenta, system, is Costo Operativo, supplier): subtotal}
+    of the supplier invoices; `pan_tortillas_por_fuente`: {(department, system): amount}."""
+    g = Gastos(montos={clave: CERO for clave in KPIS_GASTO})
+    for (cuenta, subcuenta, sistema, operativo, proveedor), monto in lineas.items():
+        etiqueta = f"{cuenta or 'Sin cuenta'} / {subcuenta or 'Sin subcuenta'}"
+        if operativo:
+            g.costo_operativo += monto
+            _agregar(g.detalle, "costo_venta", subcuenta or "Sin subcuenta", sistema, monto)
+        nombre = normalizar(subcuenta)
+        for clave, (modo, texto) in SUBCUENTAS.items():
+            if (texto in nombre) if modo == "contiene" else (nombre == texto):
+                g.montos[clave] += monto
+                _agregar(g.detalle, clave, etiqueta, sistema, monto)
+                _agregar(g.proveedores, clave, proveedor or "Sin proveedor", sistema, monto)
+    for (depto, sistema), monto in pan_tortillas_por_fuente.items():
+        clave = "pan" if depto == PAN else "tortillas"
+        g.montos[clave] += monto
+        _agregar(g.detalle, clave, "Entradas por factura" if sistema == WANSOFT else "Compras", sistema, monto)
+    return g
+
+
+PAN, TORTILLAS = "PAN", "TORTILLAS"
+# Owner, 2026-10-29: in Odoo these branches buy bread and tortillas that the
+# product catalogue (dim_product, Wansoft project) has not mapped to a
+# department yet (Bolillo, Tortilla de Harina...: ~$18.5k in September 2026),
+# so their bread and tortillas are partial until it does. By short key.
+PAN_TORTILLAS_PARCIAL = ("CentroMyJ", "Puebla")
+
+
+def pan_tortillas(entradas: dict, compras_odoo: dict, inicio_odoo: date | None) -> tuple[dict[tuple, Decimal], list]:
+    """Bread and tortillas of one branch (owner, 2026-10-29): Wansoft's invoiced
+    entries EVERY day -- the branches buying in Odoo still capture bread in
+    Wansoft and buy none in Odoo -- plus its Odoo purchases from the day it
+    buys in Odoo (earlier Odoo activity is pilot noise). Both maps are
+    {(department, day): amount}; returns {(department, system): amount} and
+    the (department, day) found in both sources, which might be counted twice
+    and are reported."""
+    montos: dict[tuple, Decimal] = {}
+    for (depto, _dia), monto in entradas.items():
+        montos[(depto, WANSOFT)] = montos.get((depto, WANSOFT), CERO) + monto
+    dobles = []
+    if inicio_odoo is not None:
+        for (depto, dia), monto in compras_odoo.items():
+            if dia >= inicio_odoo:
+                montos[(depto, ODOO)] = montos.get((depto, ODOO), CERO) + monto
+                if entradas.get((depto, dia)):
+                    dobles.append((depto, dia))
+    return montos, sorted(dobles, key=lambda x: (x[1], x[0]))
+
+
+def sumar_gastos(lista: list[Gastos]) -> Gastos:
+    total = Gastos(montos={clave: CERO for clave in KPIS_GASTO})
+    for g in lista:
+        total.costo_operativo += g.costo_operativo
+        for clave, monto in g.montos.items():
+            total.montos[clave] = total.montos.get(clave, CERO) + monto
+        for destino, origen in ((total.detalle, g.detalle), (total.proveedores, g.proveedores)):
+            for clave, componentes in origen.items():
+                for c in componentes.values():
+                    for sistema, monto in c.por_sistema.items():
+                        _agregar(destino, clave, c.etiqueta, sistema, monto)
+    return total
+
+
+def pct_costo(ventas: list[Ventas], gastos: list[Gastos]) -> Decimal | None:
+    """Invoiced Costo Operativo over the net sales of the SAME branches: a
+    branch with no invoice in the period is no data (never 0%) and its sales
+    stay out of the denominator."""
+    con_costo = [i for i, g in enumerate(gastos) if g.costo_operativo > 0]
+    venta = sum((ventas[i].venta_neta for i in con_costo), CERO)
+    return _razon(sum((gastos[i].costo_operativo for i in con_costo), CERO), venta)
+
+
+@dataclass(frozen=True)
+class BloqueGastos:
+    filas: list[Fila]
+    sin_costo: list[str]  # branches without invoiced cost in the period
+    sin_meta: list[str]  # branches without a reliable previous month: out of the expense targets
+    detalle: dict[str, dict[str, Componente]] = field(default_factory=dict)  # current period, every branch
+    proveedores: dict[str, dict[str, Componente]] = field(default_factory=dict)
+
+
+def filas_gastos(nombres: list[str], ventas: list[Ventas], ventas_previo: list[Ventas],
+                 gastos: list[Gastos], gastos_previo: list[Gastos]) -> BloqueGastos:
+    """Cost of sales and the seven expense rows (lists aligned by branch).
+    Expense targets are the same days of the previous month; a branch that did
+    not operate that period reliably (its sales, the project's 90% rule) is
+    left out of the target and of the actual compared with it."""
+    k = POR_CLAVE["costo_venta"]
+    actual_costo = pct_costo(ventas, gastos)
+    filas = [Fila(k, actual_costo, pct_costo(ventas_previo, gastos_previo), k.meta, estado(k, actual_costo, k.meta),
+                  actual_costo)]
+    con_base = [i for i, v in enumerate(ventas_previo) if v.fiable]
+    total, total_previo = sumar_gastos(gastos), sumar_gastos(gastos_previo)
+    comparado = sumar_gastos([gastos[i] for i in con_base])
+    base = sumar_gastos([gastos_previo[i] for i in con_base])
+    for clave in KPIS_GASTO:
+        kpi = POR_CLAVE[clave]
+        meta = base.montos[clave] if con_base else None
+        valor_comparado = comparado.montos[clave] if con_base else None
+        filas.append(Fila(kpi, total.montos[clave], total_previo.montos[clave], meta,
+                          estado(kpi, valor_comparado, meta), valor_comparado))
+    filas.sort(key=lambda f: f.kpi.orden)
+    return BloqueGastos(filas, [nombres[i] for i, g in enumerate(gastos) if g.costo_operativo <= 0],
+                        [nombres[i] for i in range(len(nombres)) if i not in con_base], total.detalle,
+                        total.proveedores)
+
+
+PROVEEDORES_EN_DESGLOSE = 3
+
+
+@dataclass(frozen=True)
+class Desglose:
+    kpi: Kpi
+    cuentas: list[Componente]  # largest first
+    proveedores: list[Componente]  # the largest PROVEEDORES_EN_DESGLOSE
+    otros_proveedores: Decimal  # the rest of the suppliers together
+    n_otros: int
+
+
+def desglose(detalle: dict[str, dict[str, Componente]],
+             proveedores: dict[str, dict[str, Componente]]) -> list[Desglose]:
+    """Where every cost and expense row comes from (owner, 2026-10-30, under
+    the table): its accounts (or sources) with their amount per system, and
+    its largest suppliers, in the catalogue's order; rows without amount out."""
+    resultado = []
+    for kpi in KPIS:
+        if kpi.clave not in KPIS_COSTO_GASTOS:
+            continue
+        cuentas = sorted(detalle.get(kpi.clave, {}).values(), key=lambda c: -c.total)
+        if not any(c.total for c in cuentas):
+            continue
+        por_proveedor = sorted(proveedores.get(kpi.clave, {}).values(), key=lambda c: -c.total)
+        resto = por_proveedor[PROVEEDORES_EN_DESGLOSE:]
+        resultado.append(Desglose(kpi, cuentas, por_proveedor[:PROVEEDORES_EN_DESGLOSE],
+                                  sum((c.total for c in resto), CERO), len(resto)))
+    return resultado
 
 
 def estado(kpi: Kpi, actual, meta) -> str | None:

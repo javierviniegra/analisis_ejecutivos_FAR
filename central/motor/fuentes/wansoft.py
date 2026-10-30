@@ -56,6 +56,13 @@ COLUMNAS_REQUERIDAS = {
     "gettotalcostbydate": ["subsidiary_id", "created_date", "CostoTotalVenta"],
     "odoo_company_migration_policy": ["odoo_company_id", "operational_start_date", "is_active"],
     "costs_odoo_switch": ["company_source_key", "switch_date"],
+    "analytics_expense_invoices": ["company_source_key", "cuenta", "subcuenta", "source_system", "is_costo_operativo",
+                                   "vendor_name", "subtotal", "invoice_date", "include_in_business_views"],
+    "getinputinventory_entrada": ["subsidiary_name", "TipoEntrada", "CodigoDepartamento", "CostoUnitario", "Cantidad",
+                                  "FechaEntrada"],
+    "analytics_purchase_order_lines": ["company_source_key", "source_system", "include_in_business_views",
+                                       "product_analytical_key", "order_date", "price_subtotal"],
+    "dim_product": ["product_analytical_key", "wansoft_department"],
 }
 
 
@@ -236,15 +243,94 @@ def ventas_tickets(cur, nombres: list[str], desde: date, hasta: date) -> dict[st
         return {}
     a, b = _rango_fecha_texto(desde, hasta)
     cur.execute(
-        f"SELECT Sucursal, COUNT(DISTINCT LEFT(Fecha, 10)), SUM(CAST(Total AS DECIMAL(14,2))), COUNT(*), "
+        f"SELECT Sucursal, COUNT(DISTINCT LEFT(Fecha, 10)), SUM(CAST(Total AS DECIMAL(14,2))), "
+        f"SUM(CAST(Subtotal AS DECIMAL(14,2))), COUNT(*), "
         f"SUM(Personas), SUM(CASE WHEN TipoOrden = 'Restaurant' THEN Personas ELSE 0 END) "
         f"FROM getallordenesbyday_new_venta "
         f"WHERE Sucursal IN ({_marcadores(nombres)}) AND Fecha >= %s AND Fecha < %s GROUP BY Sucursal",
         (*nombres, a, b),
     )
-    return {s: {"dias": int(d), "venta": Decimal(str(t or 0)), "tickets": Decimal(c),
-                "personas": Decimal(str(p or 0)), "personas_restaurante": Decimal(str(r or 0))}
-            for s, d, t, c, p, r in cur.fetchall()}
+    return {s: {"dias": int(d), "venta": Decimal(str(t or 0)), "venta_neta": Decimal(str(n or 0)),
+                "tickets": Decimal(c), "personas": Decimal(str(p or 0)), "personas_restaurante": Decimal(str(r or 0))}
+            for s, d, t, n, c, p, r in cur.fetchall()}
+
+
+def facturas_gasto(cur, claves: list[str], desde: date, hasta: date) -> dict[str, dict]:
+    """Supplier invoices of Wansoft and Odoo together (`analytics_expense_invoices`,
+    the Wansoft project's unified table; business view only), by invoice date,
+    per branch short key (`company_source_key` = our `wansoft_ticket_nombre`):
+    {"costo_operativo": subtotal of the Costo Operativo bucket,
+     "subcuentas": {subcuenta as written: subtotal}} -- every account, since
+    the scorecard's expense lines are chosen by subcuenta (owner, 2026-10-29:
+    this table instead of Wansoft's getexpenses_factura, which misses Odoo).
+    Returns {clave: {(cuenta, subcuenta, system, is Costo Operativo, vendor): subtotal}}
+    so the report can say which accounts and suppliers make each row."""
+    claves = [c for c in claves if c]
+    if not claves:
+        return {}
+    cur.execute(
+        f"SELECT company_source_key, cuenta, subcuenta, source_system, is_costo_operativo, vendor_name, SUM(subtotal) "
+        f"FROM analytics_expense_invoices "
+        f"WHERE include_in_business_views = 1 AND company_source_key IN ({_marcadores(claves)}) "
+        f"AND invoice_date >= %s AND invoice_date < %s GROUP BY 1, 2, 3, 4, 5, 6",
+        (*claves, desde, hasta + timedelta(days=1)),
+    )
+    resultado: dict[str, dict] = {}
+    for clave, cuenta, subcuenta, sistema, operativo, proveedor, subtotal in cur.fetchall():
+        llave = (cuenta, subcuenta, sistema, bool(operativo), proveedor)
+        lineas = resultado.setdefault(clave, {})
+        lineas[llave] = lineas.get(llave, Decimal("0")) + Decimal(str(subtotal or 0))
+    return resultado
+
+
+def entradas_factura_por_dia(cur, subsidiary_ids: list[int], desde: date, hasta: date) -> dict[int, dict]:
+    """Bread and tortillas bought on invoice, from Wansoft's inventory entries
+    (`getinputinventory_entrada`, TipoEntrada "Factura", department Pan /
+    Tortillas, cost = unit cost x quantity), as the Power BI scorecard reads
+    them, per branch and entry day: {subsidiary_id: {(department, day): cost}}.
+    The table's `subsidiary_name` holds the subsidiary id as text."""
+    if not subsidiary_ids:
+        return {}
+    cur.execute(
+        f"SELECT subsidiary_name, UPPER(TRIM(CodigoDepartamento)), LEFT(FechaEntrada, 10), "
+        f"SUM(CAST(CostoUnitario AS DECIMAL(14,4)) * CAST(Cantidad AS DECIMAL(14,4))) "
+        f"FROM getinputinventory_entrada "
+        f"WHERE UPPER(TRIM(TipoEntrada)) = 'FACTURA' AND UPPER(TRIM(CodigoDepartamento)) IN ('PAN', 'TORTILLAS') "
+        f"AND subsidiary_name IN ({_marcadores(subsidiary_ids)}) AND FechaEntrada >= %s AND FechaEntrada < %s "
+        f"GROUP BY 1, 2, 3",
+        (*[str(i) for i in subsidiary_ids], desde.isoformat(), (hasta + timedelta(days=1)).isoformat()),
+    )
+    resultado: dict[int, dict] = {}
+    for sid, depto, dia, costo in cur.fetchall():
+        resultado.setdefault(int(sid), {})[(depto, date.fromisoformat(dia))] = Decimal(str(costo or 0))
+    return resultado
+
+
+def compras_odoo_pan_tortillas_por_dia(cur, claves: list[str], desde: date, hasta: date) -> dict[str, dict]:
+    """Bread and tortillas bought in Odoo (unified purchase lines, Odoo source,
+    business view, subtotal), per branch short key and order day:
+    {clave: {(department, day): subtotal}}. The department is the product
+    catalogue's (`dim_product.wansoft_department`, owner 2026-10-29), which
+    maps more products than the line's own copy (e.g. "Pan para Hamburguesa");
+    products the catalogue has not mapped yet (Bolillo, Tortilla de Harina)
+    stay out."""
+    claves = [c for c in claves if c]
+    if not claves:
+        return {}
+    cur.execute(
+        f"SELECT l.company_source_key, UPPER(TRIM(p.wansoft_department)), DATE(l.order_date), SUM(l.price_subtotal) "
+        f"FROM analytics_purchase_order_lines l "
+        f"JOIN dim_product p ON p.product_analytical_key = l.product_analytical_key "
+        f"WHERE l.source_system = 'odoo' AND l.include_in_business_views = 1 "
+        f"AND UPPER(TRIM(p.wansoft_department)) IN ('PAN', 'TORTILLAS') "
+        f"AND l.company_source_key IN ({_marcadores(claves)}) "
+        f"AND l.order_date >= %s AND l.order_date < %s GROUP BY 1, 2, 3",
+        (*claves, desde, hasta + timedelta(days=1)),
+    )
+    resultado: dict[str, dict] = {}
+    for clave, depto, dia, subtotal in cur.fetchall():
+        resultado.setdefault(clave, {})[(depto, dia)] = Decimal(str(subtotal or 0))
+    return resultado
 
 
 def _tramos_mensuales(desde: date, hasta: date) -> list[tuple[date, date]]:
