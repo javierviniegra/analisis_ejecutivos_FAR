@@ -272,7 +272,7 @@ def ayuda(request):
     it mentions comes from the constants the engine uses, so the help can
     never drift from the calculation."""
     from .forms import MAX_DIAS_RANGO
-    from .motor import comparativos, lectura
+    from .motor import comparativos, lectura, scorecard, semaforos
     from .motor.fuentes import presupuestos as fuente_presupuestos
     from .motor.fuentes import wansoft as fuente_wansoft
     from .motor.metricas import UMBRAL_FACTURADO_COMPLETO
@@ -280,8 +280,13 @@ def ayuda(request):
     return render(request, "central/ayuda.html", {
         "umbral_igual": _pct(comparativos.UMBRAL_IGUAL),
         "cobertura": _pct(comparativos.UMBRAL_COBERTURA_FIABLE),
-        "meta_min": _pct(comparativos.META_COSTO_MIN),
-        "meta_tope": _pct(comparativos.META_COSTO_TOPE),
+        "meta_costo": _pct(comparativos.kpi_costo().verde),
+        "costo_rojo": _pct(comparativos.kpi_costo().naranja),
+        "crecimiento_meta": _pct(scorecard.CRECIMIENTO_META - 1),
+        "pct_meta_verde": _pct(semaforos.PCT_META_VERDE),
+        "pct_meta_naranja": _pct(semaforos.PCT_META_NARANJA),
+        "mix_verde": _pct(scorecard.POR_CLAVE["mix_bebidas"].verde),
+        "mix_naranja": _pct(scorecard.POR_CLAVE["mix_bebidas"].naranja),
         "peso_control": _pct(lectura.UMBRAL_PESO_CONTROL),
         "puntos_mezcla": _pct(lectura.UMBRAL_PUNTOS_MEZCLA),
         "facturado_completo": _pct(UMBRAL_FACTURADO_COMPLETO),

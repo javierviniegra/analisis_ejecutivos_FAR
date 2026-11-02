@@ -86,6 +86,7 @@ class Metricas:
     venta_salon: Decimal = CERO
     meseros: int = 0
     dias_mesero: Decimal = CERO
+    propina_salon: Decimal = CERO  # owner, 2026-10-29: tips of those same waiters (payments of dining-room tickets)
     por_hora: dict[int, dict[str, Decimal]] = field(default_factory=dict)  # hour -> venta / tickets / clientes
     venta_dia_hora: dict[date, dict[int, Decimal]] = field(default_factory=dict)  # day -> hour -> gross sales
     pagos: dict[str, Decimal] = field(default_factory=dict)  # Wansoft payment method -> amount
@@ -98,6 +99,11 @@ class Metricas:
     def venta_por_mesero_dia(self) -> Decimal | None:
         """Dining-room sales per waiter per day worked (fair between 3 and 6 days)."""
         return _razon(self.venta_salon, self.dias_mesero)
+
+    @property
+    def pct_propina(self) -> Decimal | None:
+        """Tips as a share of dining-room sales (the waiters' report's "Propina %")."""
+        return _razon(self.propina_salon, self.venta_salon)
 
     @property
     def costo_estimado_wansoft(self) -> bool:
@@ -262,6 +268,7 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
     mix = wansoft.mix_alimentos_bebidas(cur_wansoft, [n for n in nombres if n in detalle], d, h, unidades=unidades)
     con_detalle = [n for n in nombres if n in detalle]
     meseros = wansoft.ventas_meseros(cur_wansoft, con_detalle, d, h)
+    propinas = wansoft.propinas_meseros(cur_wansoft, con_detalle, d, h)
     por_hora = wansoft.venta_por_hora(cur_wansoft, con_detalle, d, h)
     pagos = wansoft.pagos_por_metodo(cur_wansoft, con_detalle, d, h)
     costos = (costos_totales(cur_wansoft, [s.wansoft_subsidiary_id for s in con_costo
@@ -322,10 +329,11 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             m.dias_con_detalle, m.canal = detalle[nombre]
             m.mix = mix.get(nombre, {})
             m.unidades = unidades.get(nombre, {})
-            activos = [x for x in meseros.get(nombre, {}).values() if x["cuentas"] > 0 and x["venta_bruta"] > 0]
-            m.venta_salon = sum((x["venta_bruta"] for x in activos), CERO)
+            activos = {k: x for k, x in meseros.get(nombre, {}).items() if x["cuentas"] > 0 and x["venta_bruta"] > 0}
+            m.venta_salon = sum((x["venta_bruta"] for x in activos.values()), CERO)
             m.meseros = len(activos)  # same rule as the waiters' report's plantilla
-            m.dias_mesero = sum((x["dias"] for x in activos), CERO)
+            m.dias_mesero = sum((x["dias"] for x in activos.values()), CERO)
+            m.propina_salon = sum((propinas.get(nombre, {}).get(k, CERO) for k in activos), CERO)
             for dia, horas in por_hora.get(nombre, {}).items():  # (never `h`: the period's end)
                 m.venta_dia_hora[dia] = {hora: v["venta"] for hora, v in horas.items()}
                 for hora, v in horas.items():
@@ -386,6 +394,7 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
         total.venta_salon += m.venta_salon
         total.meseros += m.meseros
         total.dias_mesero += m.dias_mesero
+        total.propina_salon += m.propina_salon
         for hora, v in m.por_hora.items():
             suma = total.por_hora.setdefault(hora, {k: CERO for k in v})
             for k, x in v.items():

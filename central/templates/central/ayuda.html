@@ -319,7 +319,7 @@
       <ul>
         <li><strong>Addendum de inflación (periodos de un mes o más):</strong> cuánto se creció contra el mismo mes del año anterior y cuánto de eso fue inflación: venta, ticket y cheque con su variación nominal y real (descontando la inflación anual del INPC de INEGI); clientes y tickets como volumen. En el consolidado, también cada sucursal. Mes, bimestre, trimestre, semestre o año (nunca semanas). La inflación es la anual porque se compara contra el mismo periodo del año anterior; de varios meses, con el promedio del INPC. Como INEGI publica la inflación de un mes alrededor del día 9 del mes siguiente, el addendum cubre los meses ya publicados (el reporte de octubre que sale el 1 de noviembre analiza septiembre) y siempre lo dice. La inflación se trae sola de Banxico; si falla, se puede capturar en Admin &gt; Inflación (INPC).</li>
         <li><strong>Alimentos y bebidas: unidades y precio:</strong> la venta, las unidades vendidas y el precio promedio por unidad de cada grupo contra el año anterior, para saber si una caída es por vender menos productos o por venderlos a menor precio. Las unidades son las de los productos con precio (sin cortesías). La Lectura lo resume en una línea. Si la tabla ya no cabe en la primera hoja, continúa en la siguiente.</li>
-        <li><strong>Productividad:</strong> meseros activos (con al menos una cuenta y venta), venta de salón por mesero y por mesero por día trabajado, contra el año anterior.</li>
+        <li><strong>Productividad:</strong> meseros activos (con al menos una cuenta y venta), venta de salón por mesero y por mesero por día trabajado, y la propina como % de la venta de salón (la registrada en los pagos de las cuentas de salón, como en el reporte de meseros; se compara en puntos), contra el año anterior.</li>
         <li><strong>Composición de la venta (página 3):</strong> venta por horario según la hora de cierre del ticket (mañana: antes de 13:00; tarde: 13:00 a 18:00; noche: desde 18:00), con su % de la venta, tickets, clientes, cheque y ticket contra el año anterior; donas por horario, forma de pago y plataforma; barras por día de la semana y por hora de cierre contra el año anterior. Si las gráficas de la página 1 ya no caben, pasan al inicio de esta página. En el reporte de <em>sucursal</em>, además, la venta de un día promedio de cada día de la semana (lunes a domingo) en mañana, tarde y noche, contra el mismo día del periodo anterior y del año anterior. En el <em>consolidado</em>, quién vende mejor en las tardes: las sucursales ordenadas por la proporción de su venta que cierran de 13:00 a 18:00, contra su propio % del mes (o semana) anterior y del año anterior.</li>
         <li><strong>Tablajería (página 2):</strong> cuánto se merma al tablajear. El <em>consolidado</em> ordena las sucursales de mayor a menor % de merma, con su % del año anterior (si subió o bajó), los puntos arriba o abajo del grupo, los kilos de merma y su costo. El de <em>sucursal</em> trae cada producto base contra el mismo producto en todas las sucursales y contra el año anterior, y la merma por día de la semana. Back Rib (Costillar) y los porcionados (chorizo, salmón…) no se incluyen. Cada pieza se cuenta una sola vez (Wansoft la repite en cada producto que genera) y el costo de la merma es por kilo de la pieza; por eso no cuadra con el Power BI de Tablajería.</li>
         <li><strong>Aviso de sucursales comparables (solo consolidado):</strong> arriba, una franja ámbar recuerda que todo lo que se compara contra el año anterior es solo con sucursales comparables y dice cuáles quedan fuera.</li>
@@ -337,6 +337,14 @@
         <tr><td>s/c</td><td><strong>Sin comparativo:</strong> no hay datos del periodo de comparación.</td></tr>
         <tr><td>s/cf</td><td><strong>Sin comparativo fiable:</strong> alguno de los dos periodos tiene datos en menos del {{ cobertura }}% de sus días; se muestra el valor pero no se compara.</td></tr>
       </table>
+      <h3>Semáforos (los del scorecard)</h3>
+      <p>Algunos renglones llevan un punto de color antes del valor en el PDF (la celda pintada en el Excel), con las mismas reglas del scorecard de semáforos (Power BI):</p>
+      <ul>
+        <li><strong>Venta bruta, clientes, cheque promedio y ticket promedio:</strong> la meta es el mismo periodo del año anterior +{{ crecimiento_meta }}% (sin año anterior, el periodo inmediato anterior +{{ crecimiento_meta }}%), solo con sucursales comparables. <span class="tag">verde</span> desde el {{ pct_meta_verde }}% de la meta, <span class="tag">naranja</span> desde el {{ pct_meta_naranja }}%, <span class="tag">rojo</span> abajo. Sin comparativo fiable no hay meta ni color.</li>
+        <li><strong>Mix de bebidas:</strong> <span class="tag">verde</span> desde {{ mix_verde }}%, <span class="tag">naranja</span> desde {{ mix_naranja }}%, <span class="tag">rojo</span> abajo.</li>
+        <li><strong>Costo:</strong> ver la sección 7.</li>
+      </ul>
+      <p>Debajo de la tabla, un recuadro resaltado resume qué significa cada bolita. La Lectura junta en una frase los indicadores que quedaron en rojo.</p>
     </section>
 
     <!-- 5b -->
@@ -387,7 +395,7 @@
         <tr><td>Costo facturado (Presupuestos AP)</td><td>Facturas de proveedor registradas en Presupuestos AP.</td><td>El flujo: lo que se facturó en el periodo.</td></tr>
       </table>
       <h3>Meta de costo (semáforo)</h3>
-      <p>El costo debe estar entre <strong>{{ meta_min }}% y 39.9% de la venta neta</strong>: <span class="tag">verde</span> dentro de la meta, <span class="tag">naranja</span> abajo de {{ meta_min }}% (se compró o se registró de menos), <span class="tag">rojo</span> de {{ meta_tope }}% en adelante (se compró de más).</p>
+      <p>El costo debe estar <strong>de {{ meta_costo }}% a menos de {{ costo_rojo }}% de la venta neta</strong> (los límites del KPI de costo del scorecard de semáforos): <span class="tag">verde</span> dentro de ese rango, <span class="tag">naranja</span> abajo de {{ meta_costo }}% (se compró o se registró de menos), <span class="tag">rojo</span> de {{ costo_rojo }}% en adelante (se compró de más).</p>
       <h3>Costo estimado</h3>
       <p>El costo de los últimos días puede estar incompleto. Cuando pasa, el costo se marca <strong>"estimado"</strong> y una nota dice cómo se calculó; cuando ya está completo, se da sin ninguna mención.</p>
       <ul>
@@ -445,7 +453,7 @@
       </div>
       <div class="ejemplo">
         <h3>Ejemplo 6. Semáforo</h3>
-        <p>Costo $385,000 sobre venta neta $1,000,000 = 38.5% → <strong>verde</strong>. Con $410,000 = 41% → <span class="rojo">rojo</span>. Con $350,000 = 35% → naranja.</p>
+        <p>Costo $380,000 sobre venta neta $1,000,000 = 38% → <strong>verde</strong>. Con $410,000 = 41% → <span class="rojo">rojo</span>. Con $350,000 = 35% → naranja.</p>
       </div>
     </section>
 

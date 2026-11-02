@@ -28,11 +28,16 @@ class MetaCostoTests(SimpleTestCase):
         return m
 
     def test_semaforo(self):
-        self.assertEqual(c.semaforo_costo(D("0.3799")), c.NARANJA)
-        self.assertEqual(c.semaforo_costo(D("0.38")), c.VERDE)
-        self.assertEqual(c.semaforo_costo(D("0.3999")), c.VERDE)
-        self.assertEqual(c.semaforo_costo(D("0.40")), c.ROJO)
+        self.assertEqual(c.semaforo_costo(D("0.20")), c.NARANJA)  # bought or captured too little
+        self.assertEqual(c.semaforo_costo(D("0.3699")), c.NARANJA)
+        self.assertEqual(c.semaforo_costo(D("0.37")), c.VERDE)
+        self.assertEqual(c.semaforo_costo(D("0.3899")), c.VERDE)
+        self.assertEqual(c.semaforo_costo(D("0.39")), c.ROJO)
         self.assertIsNone(c.semaforo_costo(None))
+
+    def test_una_sola_fuente(self):
+        from .motor.scorecard import POR_CLAVE
+        self.assertIs(c.kpi_costo(), POR_CLAVE["costo_venta"])
 
     def test_renglon_de_la_tabla(self):
         fila = {f.indicador.clave: f for f in construir_tabla(_m(costo="3850"), None, None)}["costo_ventas_pct"]
@@ -53,23 +58,28 @@ class MetaCostoTests(SimpleTestCase):
         def frase(m):
             return next((o for o in construir_lectura(SEM, m, None, None).observaciones
                          if o.texto.startswith("Costo sobre la venta neta")), None)
-        naranja = frase(_m(costo="3500"))
-        self.assertEqual(naranja.texto, "Costo sobre la venta neta (meta 38.0-39.9%): facturado 35.0%, abajo de la meta.")
-        self.assertEqual(naranja.tono, NEGATIVO)
-        self.assertEqual(frase(_m(costo="3900")).tono, POSITIVO)
+        verde = frase(_m(costo="3800"))
+        self.assertEqual(verde.texto, "Costo sobre la venta neta (meta 37% a menos de 39%): facturado 38.0%, "
+                                      "dentro de la meta.")
+        self.assertEqual(verde.tono, POSITIVO)
+        bajo = frase(_m(costo="3500"))
+        self.assertIn("facturado 35.0%, abajo de la meta (puede haber compras sin capturar)", bajo.texto)
+        self.assertEqual(bajo.tono, NEGATIVO)
+        self.assertEqual(frase(_m(costo="3900")).tono, NEGATIVO)
         prelim = frase(_m(costo="4500", preliminar=True))
         self.assertIn("facturado 45.0%, arriba de la meta (preliminar, pueden faltar facturas)", prelim.texto)
-        ambos = _m(costo="3900")
+        ambos = _m(costo="3800")
         ambos.costo_total, ambos.venta_neta_con_costo_total = D("3520"), D("10000")
         f = frase(ambos)
-        self.assertIn("total 35.2%, abajo de la meta; facturado 39.0%, dentro de la meta", f.texto)
+        self.assertIn("total 35.2%, abajo de la meta (puede haber compras sin capturar); facturado 38.0%, dentro "
+                      "de la meta", f.texto)
         self.assertEqual(f.tono, NEGATIVO)  # not every cost is on target
         self.assertIsNone(frase(_m()))  # no cost data: no sentence
 
     def test_regla_documentada(self):
         texto = " ".join(notas_reglas())
-        self.assertIn("Meta de costo: 38% a 39.9% de la venta neta (verde)", texto)
-        self.assertIn("40% o más rojo", texto)
+        self.assertIn("Meta de costo: de 37% a menos de 39% de la venta neta (verde); abajo de 37% naranja (se compró "
+                      "o se registró de menos); 39% o más rojo (se compró de más).", texto)
 
 
 class CostoTotalTests(SimpleTestCase):

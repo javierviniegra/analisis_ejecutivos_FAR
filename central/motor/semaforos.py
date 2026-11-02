@@ -38,6 +38,16 @@ def umbral(valor, verde, naranja, *, mayor_mejor: bool) -> str | None:
     return VERDE if v <= verde else NARANJA if v < naranja else ROJO
 
 
+def banda(valor, desde, hasta) -> str | None:
+    """Target band: green from `desde` up to below `hasta`, orange below `desde`,
+    red from `hasta` on (the commercial report's cost, owner 2026-10-29: green
+    37% to below 39%; below 37% bought or captured too little)."""
+    v = _dec(valor)
+    if v is None:
+        return None
+    return NARANJA if v < desde else VERDE if v < hasta else ROJO
+
+
 def porcentaje_meta(actual, meta) -> str | None:
     """Actual as a share of its target: green >= 100%, orange >= 90%, red below."""
     a, m = _dec(actual), _dec(meta)

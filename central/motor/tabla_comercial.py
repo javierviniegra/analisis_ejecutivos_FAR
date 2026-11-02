@@ -25,6 +25,7 @@ from typing import Callable
 
 from .comparativos import GRIS, IGUAL, cobertura_fiable, no_fiable, semaforo_costo, SIMBOLOS, SIN_DATO, SUBE, BAJA, VERDE, ROJO, UMBRAL_IGUAL, Variacion, variacion
 from .metricas import Comparacion, Metricas, como_comparacion
+from .scorecard import META_HISTORICA, POR_CLAVE, estado, meta_historica
 
 MONEDA, ENTERO, PORCENTAJE = "moneda", "entero", "porcentaje"
 DECIMAL = "decimal"  # a ratio shown with one decimal (e.g. guests per table)
@@ -42,6 +43,7 @@ class Indicador:
     usa_cierres: bool = True  # False: not built from cash closings (budget rows), no coverage rule
     usa_gasto_real: bool = False  # built from real Costo de Ventas spend: not comparable while preliminary
     semaforo: Callable[[Decimal | None], str | None] | None = None  # traffic light of the period's value
+    kpi: str | None = None  # key of the scorecard KPI whose target and light the row takes (scorecard.POR_CLAVE)
 
 
 def _pct_canal(canal):
@@ -54,13 +56,17 @@ def _pct_mix(grupo):
 
 SECCION_PRODUCTOS = "Alimentos y bebidas: unidades y precio"
 
+# Owner, 2026-10-29: sales, guests, check, ticket and the drinks mix carry the
+# Semáforos scorecard's lights (kpi=...); the app's definitions are kept.
 INDICADORES = [
-    Indicador("venta_bruta", "Venta bruta (con IVA)", "Ventas", MONEDA, lambda m: m.venta_bruta, True),
+    Indicador("venta_bruta", "Venta bruta (con IVA)", "Ventas", MONEDA, lambda m: m.venta_bruta, True, kpi="ventas"),
     Indicador("venta_neta", "Venta neta (sin IVA)", "Ventas", MONEDA, lambda m: m.venta_neta, True),
     Indicador("tickets", "Tickets", "Ventas", ENTERO, lambda m: m.tickets, True),
-    Indicador("clientes", "Clientes", "Ventas", ENTERO, lambda m: m.clientes, True),
-    Indicador("cheque_promedio", "Cheque promedio (venta / cliente)", "Ventas", MONEDA, lambda m: m.cheque_promedio, True),
-    Indicador("ticket_promedio", "Ticket promedio (venta / ticket)", "Ventas", MONEDA, lambda m: m.ticket_promedio, True),
+    Indicador("clientes", "Clientes", "Ventas", ENTERO, lambda m: m.clientes, True, kpi="clientes"),
+    Indicador("cheque_promedio", "Cheque promedio (venta / cliente)", "Ventas", MONEDA, lambda m: m.cheque_promedio, True,
+              kpi="cheque"),
+    Indicador("ticket_promedio", "Ticket promedio (venta / ticket)", "Ventas", MONEDA, lambda m: m.ticket_promedio, True,
+              kpi="ticket"),
     # Owner, 2026-10-20: productivity of the waiters (dining room only).
     Indicador("meseros_activos", "Meseros activos", "Productividad", ENTERO, lambda m: m.meseros, None,
               requiere_detalle=True),
@@ -68,8 +74,12 @@ INDICADORES = [
               lambda m: m.venta_por_mesero, True, requiere_detalle=True),
     Indicador("venta_mesero_dia", "Venta por mesero por día trabajado", "Productividad", MONEDA,
               lambda m: m.venta_por_mesero_dia, True, requiere_detalle=True),
+    # Owner, 2026-10-29: the tip share, defined as in the waiters' report.
+    Indicador("propina_pct", "Propina (% de la venta de salón)", "Productividad", PORCENTAJE,
+              lambda m: m.pct_propina, True, requiere_detalle=True),
     Indicador("mix_alimentos", "Mix: Alimentos", "Mezcla", PORCENTAJE, _pct_mix("Alimentos"), None, requiere_detalle=True),
-    Indicador("mix_bebidas", "Mix: Bebidas", "Mezcla", PORCENTAJE, _pct_mix("Bebidas"), None, requiere_detalle=True),
+    Indicador("mix_bebidas", "Mix: Bebidas", "Mezcla", PORCENTAJE, _pct_mix("Bebidas"), None, requiere_detalle=True,
+              kpi="mix_bebidas"),
     Indicador("canal_salon", "Canal: Salón", "Mezcla", PORCENTAJE, _pct_canal("salon"), None, requiere_detalle=True),
     Indicador("canal_llevar", "Canal: Para llevar", "Mezcla", PORCENTAJE, _pct_canal("llevar"), None, requiere_detalle=True),
     Indicador("canal_plataformas", "Canal: Plataformas", "Mezcla", PORCENTAJE, _pct_canal("plataformas"), None, requiere_detalle=True),
@@ -92,14 +102,14 @@ INDICADORES = [
     Indicador("descuentos", "Descuentos", "Control (a precio de venta)", MONEDA, lambda m: m.descuentos, False),
     # Two costs, told apart by name (owner, 2026-09-30): the total cost of the
     # Wansoft/Odoo cost report (what the executive reports use), and the cost
-    # invoiced in Presupuestos AP (the cash flow). Both against the 38.0-39.9% target.
+    # invoiced in Presupuestos AP (the cash flow). Both against the scorecard's cost target (comparativos.semaforo_costo).
     Indicador("costo_total", "Costo total (Wansoft/Odoo)", "Costo", MONEDA,
               lambda m: m.costo_total, False, usa_cierres=False),
     Indicador("costo_total_pct", "Costo total / venta neta", "Costo", PORCENTAJE,
               lambda m: m.pct_costo_total, None, usa_cierres=False, semaforo=semaforo_costo),
     Indicador("costo_ventas_real", "Costo facturado (Presupuestos AP)", "Costo", MONEDA,
               lambda m: m.costo_ventas_real, False, usa_cierres=False, usa_gasto_real=True),
-    # Invoiced cost (the cash flow) over net sales; the business target is 38.0%-39.9%.
+    # Invoiced cost (the cash flow) over net sales, against the same cost target.
     Indicador("costo_ventas_pct", "Costo facturado / venta neta", "Costo", PORCENTAJE,
               lambda m: m.pct_costo_ventas, None, usa_cierres=False, usa_gasto_real=True, semaforo=semaforo_costo),
     Indicador("costo_ventas_ppto", "Costo de Ventas presupuestado", "Costo", MONEDA,
@@ -123,6 +133,8 @@ class Fila:
     var_anio: Variacion
     semaforo: str | None = None  # verde / naranja / rojo, for indicators with a target
     estimado: bool = False  # total cost estimated (Odoo invoicing still behind)
+    logro: Decimal | None = None  # historic-target rows: value as a share of the target (1 = 100%)
+    meta_contra: str | None = None  # historic-target rows: META_ANIO or META_ANTERIOR, the target's base
 
     @property
     def etiqueta(self) -> str:
@@ -182,6 +194,34 @@ def _columna(ind: Indicador, comp: Comparacion) -> tuple[Decimal | None, Variaci
     return b, _comparar(ind, a, b, ok)
 
 
+META_ANIO, META_ANTERIOR = "anio", "anterior"
+
+
+def semaforo_kpi(ind: Indicador, valor, anio: Comparacion, ant: Comparacion
+                 ) -> tuple[str | None, Decimal | None, str | None]:
+    """Light of a scorecard row: (colour, share of the target, target's base).
+
+    Fixed target (drinks mix): the period's value against the thresholds.
+    Historic target (sales, check, ticket, guests): the same period last year
+    +5% (scorecard.meta_historica); without last year (no data, or every branch
+    new), the previous period +5%. Both sides over the comparable branches
+    only, as the variation columns. A base that exists but is not reliable
+    (s/cf) gives no target, and without a target there is no light."""
+    kpi = POR_CLAVE[ind.kpi]
+    if kpi.tipo_meta != META_HISTORICA:
+        return estado(kpi, valor, kpi.meta), None, None
+    for comp, contra in ((anio, META_ANIO), (ant, META_ANTERIOR)):
+        base = _valor(ind, comp.base)
+        if not base:
+            continue  # no data in that period: the next base
+        a = _valor(ind, comp.actual)
+        if a is None or not (fiable(ind, comp.actual) and fiable(ind, comp.base)):
+            return None, None, None
+        meta = meta_historica(base, None)
+        return estado(kpi, a, meta), Decimal(a) / meta, contra
+    return None, None, None
+
+
 def construir_tabla(actual: Metricas, anterior: Comparacion | Metricas | None,
                     anio_anterior: Comparacion | Metricas | None) -> list[Fila]:
     ant, anio = como_comparacion(actual, anterior), como_comparacion(actual, anio_anterior)
@@ -191,7 +231,10 @@ def construir_tabla(actual: Metricas, anterior: Comparacion | Metricas | None,
         y, var_y = _columna(ind, anio)
         valor = _valor(ind, actual)
         estimado = ind.clave in ESTIMABLES and actual.costo_total_estimado and valor is not None
-        filas.append(Fila(ind, valor, p, var_p, y, var_y, ind.semaforo(valor) if ind.semaforo else None, estimado))
+        semaforo, logro, contra = ind.semaforo(valor) if ind.semaforo else None, None, None
+        if ind.kpi:
+            semaforo, logro, contra = semaforo_kpi(ind, valor, anio, ant)
+        filas.append(Fila(ind, valor, p, var_p, y, var_y, semaforo, estimado, logro, contra))
     return filas
 
 
