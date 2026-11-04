@@ -27,7 +27,7 @@ Pure logic (classification and assembly) is separated from the Odoo reads
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from .fuentes.odoo_flujo import codigo
@@ -100,9 +100,14 @@ GRUPOS_GASTO = [
     ("Insumos y mercancía", ("goods received", "carbon", "carbón", "hielo", "tortilla", "sin alcohol", "gastos de salon",
                              "gastos de salón", "empaque", "manteletas", "gas", "abarrote", "carne", "bebida", "cerveza",
                              "vino", "licor", "verdura", "pan", "inventario", "mercancía", "mercancia", "costo de venta")),
+    # Rodiva's brand royalties and administration are billed as "Management Administrativo".
+    ("Administración y regalías (Rodiva)", ("management", "regal", "administrativ")),
     ("Mantenimiento e instalaciones", ("mtto", "manten", "fumiga", "instalacion", "instalación", "remodel")),
     ("Servicios (luz, agua, teléfono, seguros, vigilancia)", ("energia", "energía", "agua", "telefono", "teléfono", "seguro",
-                                                              "vigilancia", "soporte", "licencia", "internet")),
+                                                              "vigilancia", "soporte", "licencia", "internet", "logistica",
+                                                              "logística")),
+    ("Limpieza y artículos de operación", ("limpieza", "botiquin", "botiquín", "utencilio", "utensilio", "papeleria",
+                                           "papelería")),
     ("Honorarios y asesorías", ("honorario", "asesor")),
     ("Publicidad", ("publicidad",)),
     ("Personal externo, uniformes y capacitación", ("suministro de personal", "uniforme", "curso", "vales", "capacita")),
@@ -139,7 +144,8 @@ def forma_de_pago(memo: str | None) -> str | None:
 def grupo_gasto(nombre_cuenta: str) -> str:
     n = (nombre_cuenta or "").lower()
     for grupo, claves in GRUPOS_GASTO:
-        if any(re.search(rf"\b{re.escape(k)}", n) for k in claves):
+        # short keys are whole words ("gas" must not catch "gastos"), longer ones are word starts ("manten...")
+        if any(re.search(rf"\b{re.escape(k)}\b" if len(k) <= 3 else rf"\b{re.escape(k)}", n) for k in claves):
             return grupo
     return OTROS_GASTOS
 
@@ -244,6 +250,7 @@ class FlujoEmpresa:
     movimientos: list[Movimiento] = field(default_factory=list)
     por_depositar_inicial: Decimal = CERO  # CxC bancos balance the day before
     por_depositar_final: Decimal = CERO
+    ultimo_movimiento: date | None = None  # last bank line up to the period's end (statements loaded until then)
 
     @property
     def saldo_inicial(self) -> Decimal:
@@ -464,10 +471,13 @@ def empresa(compania_id: int, nombre: str, grupo: str, periodo: Periodo, cuentas
     up to the end of the period, its classified movements and its CxC lines."""
     ce = {c["account_id"]: c for c in cuentas if c["company_id"] == compania_id and es_cuenta_de_efectivo(c["codigo"])}
     saldos = {aid: [CERO, CERO] for aid in ce}
+    ultimo = None
     for l in lineas:
         if l["company_id"][0] != compania_id or l["account_id"][0] not in saldos:
             continue
         d, v = date.fromisoformat(l["date"]), Decimal(str(l["balance"]))
+        if d <= periodo.hasta and (ultimo is None or d > ultimo):
+            ultimo = d
         if d < periodo.desde:
             saldos[l["account_id"][0]][0] += v
         if d <= periodo.hasta:
@@ -480,7 +490,52 @@ def empresa(compania_id: int, nombre: str, grupo: str, periodo: Periodo, cuentas
     cxc1 = sum((Decimal(str(l["balance"])) for l in lineas_cxc
                 if l["company_id"][0] == compania_id and date.fromisoformat(l["date"]) <= periodo.hasta), CERO)
     movs = [m for m in movimientos if m.compania_id == compania_id and periodo.desde <= m.fecha <= periodo.hasta]
-    return FlujoEmpresa(compania_id, nombre, grupo, periodo, lista, movs, cxc0, cxc1)
+    return FlujoEmpresa(compania_id, nombre, grupo, periodo, lista, movs, cxc0, cxc1, ultimo)
+
+
+REGLAS = [
+    "Fuente: Odoo, lectura en vivo (solo lectura). Saldo = cuentas de bancos e inversiones (códigos 102 y 103 del catálogo) al "
+    "cierre del día; la caja y la caja chica (101) no se incluyen. Cada cuenta se muestra con el nombre de su diario.",
+    "Entradas y salidas = cada movimiento de esas cuentas en el periodo, clasificado por lo que concilia: el pago (cliente, "
+    "proveedor, empresa del grupo), la cuenta del asiento (nómina 210/601, seguridad social 216.11-216.12 e Infonavit, "
+    "impuestos, comisiones 504.01.13/701.10, socios 301) o, si la línea del banco se registró directo contra 'pagos / recibos "
+    "pendientes', su texto (ej. 'ENTRECUENTAS' = traspaso). Saldo inicial + entradas − salidas ± traspasos = saldo final.",
+    "Depósitos de ventas = ventas de tickets de Wansoft (el pago de cada ticket que Odoo registra, por forma de pago) más el "
+    "cambio de las cuentas por cobrar bancos (106.01: ventas registradas que el banco aún no deposita). Las propinas no están en "
+    "la contabilidad y no se muestran.",
+    "Proveedores: por la cuenta contable de las facturas que pagan; las rentas y arrendamientos van en su renglón. Los pagos de "
+    "las sucursales a El Bodegón, Las Empanadas y Rodiva (insumos, arrendamiento de equipo, regalías) son proveedores; en el "
+    "consolidado cuentan como salida de una empresa y entrada de otra, no se eliminan.",
+    "Comparación: contra el periodo anterior (la contabilidad en Odoo empieza en septiembre de 2026; no hay año anterior).",
+]
+# A company whose last bank movement is more than this many days before the
+# period's end probably has its statements not loaded yet (reconciliation is
+# on Tuesdays, accountant 2026-11-04): the report says so.
+DIAS_ATRASO = 3
+NOTA_CIERRE = ("El periodo no termina en un cierre de mes: las comisiones bancarias y de plataformas y el ajuste de ventas "
+               "por depositar se registran al cierre del mes, así que aún pueden faltar.")
+
+
+def notas_de(r: ReporteFlujo) -> list[str]:
+    """The report's notes: what applies to this report, then the standing rules."""
+    notas = list(r.notas)
+    fin_de_mes = (r.periodo.hasta.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    if r.periodo.hasta != fin_de_mes:
+        notas.append(NOTA_CIERRE)
+    atrasadas = [e for e in r.empresas if e.ultimo_movimiento is None or (r.periodo.hasta - e.ultimo_movimiento).days > DIAS_ATRASO]
+    if atrasadas:
+        notas.append("Bancos posiblemente sin cargar al cierre del periodo (último movimiento bancario en Odoo): " + ", ".join(
+            f"{e.nombre} ({e.ultimo_movimiento:%d/%m/%Y})" if e.ultimo_movimiento else f"{e.nombre} (ninguno)" for e in atrasadas) + ".")
+    a = r.actual
+    if a["rubros"][SIN_IDENTIFICAR]:
+        notas.append(f"Movimientos bancarios sin identificar: líneas de banco registradas contra 'pagos / recibos pendientes' "
+                     f"que no concilian con nada y cuyo texto no dice qué son (neto {a['rubros'][SIN_IDENTIFICAR]:,.0f}).")
+    if a["por_depositar_final"]:
+        notas.append(f"Ventas por depositar al cierre (cuentas por cobrar bancos): ${a['por_depositar_final']:,.0f}; "
+                     f"al inicio ${a['por_depositar_inicial']:,.0f}.")
+    if r.anteriores is None:
+        notas.append("Sin periodo anterior comparable (antes del inicio de la contabilidad en Odoo).")
+    return notas + REGLAS
 
 
 def nombre_base(reportes: list[ReporteFlujo]) -> str:

@@ -66,6 +66,13 @@ class ReglasTests(SimpleTestCase):
         self.assertEqual(fe.por_cuenta("301.03.10", "AP FA SAI Estudios", D("500"))[0], fe.APORTACIONES)
         self.assertEqual(fe.por_cuenta("101.01.03", "Caja Chica", D("-20"))[1], "Caja y caja chica")
 
+    def test_grupos_de_gasto(self):
+        self.assertEqual(fe.grupo_gasto("Management Administrativo"), "Administración y regalías (Rodiva)")
+        self.assertEqual(fe.grupo_gasto("Gas"), "Insumos y mercancía")
+        self.assertEqual(fe.grupo_gasto("Gastos de Instalacion y/o remodelacion"), "Mantenimiento e instalaciones")  # not "gas"
+        self.assertEqual(fe.grupo_gasto("Arrendamiento PM"), fe.GRUPO_RENTAS)
+        self.assertEqual(fe.grupo_gasto("Cuenta rara"), fe.OTROS_GASTOS)
+
     def test_texto_de_lineas_sin_conciliar(self):
         self.assertEqual(fe.por_texto("REGISTRO ENTRECUENTAS SEP-26")[0], fe.TRASPASOS)
         self.assertEqual(fe.por_texto("REGISTRO DE COMISIONES BANCARIAS Y PLATAFORMAS SEP-26")[0], fe.COMISIONES)
@@ -172,6 +179,43 @@ class EmpresaTests(SimpleTestCase):
         cifras = fe.ReporteFlujo.cifras([e])
         self.assertEqual(cifras["depositos"], D("850"))
         self.assertEqual(cifras["entradas"], D("850"))
+
+
+def _reporte(periodo=SEP, consolidado=False, con_anterior=True):
+    def emp(p, ventas):
+        e = fe.FlujoEmpresa(ACOXPA, "Acoxpa", fe.SUCURSAL, p, cuentas=[fe.Cuenta(ACOXPA, "102.01.05", "BBVA 9168", D("1000"), D("1000") + ventas - 450)])
+        e.movimientos = [fe.Movimiento(ACOXPA, p.desde, "BBVA 9168", fe.VENTAS, "Tarjeta de crédito", "Público", ventas),
+                         fe.Movimiento(ACOXPA, p.desde, "BBVA 9168", fe.POR_DEPOSITAR, "CxC BBVA", "-", D("-50")),
+                         fe.Movimiento(ACOXPA, p.hasta, "BBVA 9168", fe.PROVEEDORES, "Insumos y mercancía", "SIGMA", D("-300")),
+                         fe.Movimiento(ACOXPA, p.hasta, "BBVA 9168", fe.RENTAS, fe.GRUPO_RENTAS, "FIDEICOMISO", D("-100"))]
+        return e
+    return fe.ReporteFlujo("Acoxpa", periodo, [emp(periodo, D("900"))], [emp(periodo.anterior(), D("800"))] if con_anterior else None,
+                           consolidado)
+
+
+class SalidasTests(SimpleTestCase):
+    def test_estado_con_depositos_y_rentas(self):
+        from .salidas import pdf_flujo
+        f = {etiqueta: (a, b) for etiqueta, a, b, _ in pdf_flujo.filas(_reporte())}
+        self.assertEqual(f["Depósitos de ventas"], (D("850"), D("750")))
+        self.assertEqual(f[fe.ETIQUETAS[fe.RENTAS]], (D("-100"), D("-100")))
+        self.assertEqual(f["Saldo final de bancos e inversiones"][0], D("1450"))
+        self.assertIn("Se depositaron $850 de ventas", " ".join(pdf_flujo.lectura(_reporte())))
+
+    def test_pdf_y_excel(self):
+        import io as _io
+        import openpyxl
+        from .salidas import excel_flujo, pdf_flujo
+        self.assertTrue(pdf_flujo.generar([_reporte(consolidado=True), _reporte(con_anterior=False)]).startswith(b"%PDF"))
+        libro = openpyxl.load_workbook(_io.BytesIO(excel_flujo.generar([_reporte()])))
+        self.assertEqual(libro.sheetnames, ["Flujo", "Cuentas", "Proveedores", "Movimientos", "Notas"])
+        self.assertEqual(libro["Movimientos"].max_row, 3 + 4)
+        self.assertEqual(pdf_flujo.nombre_archivo([_reporte()]), "Flujo_de_efectivo_Acoxpa_Septiembre_2026.pdf")
+
+    def test_nota_de_cierre_solo_si_no_termina_en_fin_de_mes(self):
+        semana = Periodo.semana_de(date(2026, 10, 28))
+        self.assertIn(fe.NOTA_CIERRE, fe.notas_de(_reporte(semana)))
+        self.assertNotIn(fe.NOTA_CIERRE, fe.notas_de(_reporte()))
 
 
 class ArmarTests(SimpleTestCase):

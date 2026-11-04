@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-11-04 — Cash-flow report: PDF and Excel
+
+- **PDF** (`pdf_flujo.py`, Fonda template): page 1 = Lectura + statement against the previous period (deposits of sales by payment method with the CxC bancos adjustment; invoices, group companies and contributions apart; suppliers by expense group, top 6 + rest; rentas, payroll, social security, taxes and commissions each on its row; other items top 2 + rest; transfers and unidentified only when not zero). Consolidated adds a per-company table (branches / CEDIS and administrator, with subtotals), every bank and investment account with its code, and the 25 largest suppliers; one company adds its accounts and its 15 largest suppliers. Notes at the end.
+- **Excel** (`excel_flujo.py`, asked by the accountant): Flujo, Por empresa (consolidated), Cuentas, Proveedores and **Movimientos** (every classified piece of a bank movement with date, journal, row, detail, counterparty and text, filterable) so Contabilidad can trace each figure; Notas.
+- **Expense groups added on real data:** "Administración y regalías (Rodiva)" (Rodiva bills its royalties as "Management Administrativo": $2.3M of the branches' payments in Aug-Sep had fallen in "Otros gastos") and "Limpieza y artículos de operación"; short keys match whole words ("gas" no longer catches "Gastos de instalación").
+- **Timeliness notes:** a period that does not end on a month close says commissions and the CxC bancos adjustment are booked at the close; companies whose last bank movement is more than 3 days before the period's end are listed (statements probably not loaded; week 44: CentroMyJ had none). Mid-month account balances can look odd (e.g. a bank account negative) because Odoo books ticket sales in the bank on the sale day and the reconciliation adjusts later -- question 3 pending with the accountant.
+
 ## 2026-11-04 — Cash-flow report (Odoo): engine and classification rules
 
 - **What:** new report `flujo-efectivo-odoo` (category Contabilidad), block 1 = engine: `central/motor/flujo_efectivo.py` + `central/motor/fuentes/odoo_flujo.py` (read-only). Designed with the owner on a September 2026 demo reviewed by the accountant (Tomás, answers 2026-11-04).
