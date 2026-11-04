@@ -14,9 +14,10 @@ import zipfile
 from dataclasses import dataclass
 from typing import Callable
 
-from .motor import reporte_cedis, reporte_comercial, reporte_meseros
+from .motor import flujo_efectivo, reporte_cedis, reporte_comercial, reporte_meseros
 from .motor.periodo import Periodo
 from .salidas import excel_cedis, excel_comercial, excel_meseros, pdf_comercial, pdf_meseros
+from .salidas import excel_flujo, pdf_flujo
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,28 @@ def _meseros(sucursales: list, periodo: Periodo, consolidado: bool, separados: b
     return _zip([(n, c) for n, c, _ in archivos], reporte_meseros.nombre_base(reportes) + ".zip")
 
 
+def _archivos_flujo(grupo: list, formatos: set[str]) -> list[tuple[str, bytes, str]]:
+    archivos = []
+    if PDF in formatos:
+        archivos.append((pdf_flujo.nombre_archivo(grupo), pdf_flujo.generar(grupo), "application/pdf"))
+    if EXCEL in formatos:
+        archivos.append((excel_flujo.nombre_archivo(grupo), excel_flujo.generar(grupo), XLSX))
+    return archivos
+
+
+def _flujo(sucursales: list, periodo: Periodo, consolidado: bool, separados: bool, formatos: set[str],
+           opciones: dict | None = None) -> Archivo:
+    """Cash flow: the selected branches with accounting in Odoo plus El Bodegón,
+    Las Empanadas and Rodiva (always: they are the report's other half)."""
+    reportes = flujo_efectivo.armar(sucursales, periodo, consolidado)
+    grupos = [[r] for r in reportes] if separados else [reportes]
+    archivos = [a for grupo in grupos for a in _archivos_flujo(grupo, formatos)]
+    if len(archivos) == 1:
+        nombre, contenido, tipo = archivos[0]
+        return Archivo(contenido, nombre, tipo)
+    return _zip([(n, c) for n, c, _ in archivos], flujo_efectivo.nombre_base(reportes) + ".zip")
+
+
 def _cedis(tipo: str, construir):
     """CEDIS workbooks: one workbook for the selected branches (the report's
     scope is consolidated), Excel only, reproducing the owner's originals."""
@@ -106,6 +129,7 @@ GENERADORES: dict[str, Callable[..., Archivo]] = {
     "meseros": _meseros,
     "oc-bodegon-empanadas-modificaciones": _cedis("modificaciones", excel_cedis.modificaciones),
     "oc-bodegon-empanadas-por-hora": _cedis("por_hora", excel_cedis.por_hora),
+    "flujo-efectivo-odoo": _flujo,
 }
 
 
@@ -135,6 +159,17 @@ def _grupos_meseros(sucursales, periodo, consolidado, formatos, opciones) -> lis
     return [GrupoArchivos(s, _archivos_meseros([r], formatos)) for s, r in zip(sucursales, reportes)]
 
 
+def _grupos_flujo(sucursales, periodo, consolidado, formatos, opciones) -> list[GrupoArchivos]:
+    reportes = flujo_efectivo.armar(sucursales, periodo, consolidado)
+    if consolidado:
+        return [GrupoArchivos(None, _archivos_flujo(reportes, formatos))]
+    # per branch: only the branches (El Bodegón, Las Empanadas and Rodiva are not
+    # a Sucursal; they travel in the consolidated file)
+    por_compania = {r.empresas[0].compania_id: r for r in reportes if r.empresas}
+    return [GrupoArchivos(s, _archivos_flujo([por_compania[s.odoo_company_id]], formatos))
+            for s in sucursales if s.odoo_company_id in por_compania]
+
+
 def _grupos_cedis(tipo, construir):
     def grupos(sucursales, periodo, consolidado, formatos, opciones) -> list[GrupoArchivos]:
         datos = reporte_cedis.leer(sucursales, periodo.desde, periodo.hasta)
@@ -148,4 +183,5 @@ GRUPOS: dict[str, Callable[..., list[GrupoArchivos]]] = {
     "meseros": _grupos_meseros,
     "oc-bodegon-empanadas-modificaciones": _grupos_cedis("modificaciones", excel_cedis.modificaciones),
     "oc-bodegon-empanadas-por-hora": _grupos_cedis("por_hora", excel_cedis.por_hora),
+    "flujo-efectivo-odoo": _grupos_flujo,
 }

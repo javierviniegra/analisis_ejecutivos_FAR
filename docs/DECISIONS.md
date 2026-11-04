@@ -2,6 +2,13 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-11-04 — Cash-flow report: web generation, automations and catalog
+
+- **Registered** `flujo-efectivo-odoo` in `GENERADORES` / `GRUPOS`: per company or consolidated, PDF, Excel or both. Catalog entry (category Contabilidad, scope both, weekly) with initial profiles **Contabilidad and Director** (recipients named by the accountant: Dirección general, Suhey, Adrián); `cargar_catalogo` in the daily update creates it in production. Help section 9b.
+- **El Bodegón, Las Empanadas and Rodiva are always included** (no option): they are half of the report and adding an option would touch the shared generation and automation forms. Branches selected without accounting in Odoo are named in the notes.
+- **Per-branch automation files only for branches:** the three corporate companies are not a `Sucursal`, so their figures travel in the consolidated file (an automation should send the consolidated).
+- **Speed:** reading a month and the previous one takes ~3 minutes (190 s measured through the web for September, under the 300 s proxy timeout); a quarter or longer may exceed it on the web -- use automations for long periods. Reads are cached 10 minutes (same companies and period) so an automation's consolidated and per-branch files read Odoo once.
+
 ## 2026-11-04 — Cash-flow report: PDF and Excel
 
 - **PDF** (`pdf_flujo.py`, Fonda template): page 1 = Lectura + statement against the previous period (deposits of sales by payment method with the CxC bancos adjustment; invoices, group companies and contributions apart; suppliers by expense group, top 6 + rest; rentas, payroll, social security, taxes and commissions each on its row; other items top 2 + rest; transfers and unidentified only when not zero). Consolidated adds a per-company table (branches / CEDIS and administrator, with subtotals), every bank and investment account with its code, and the 25 largest suppliers; one company adds its accounts and its 15 largest suppliers. Notes at the end.

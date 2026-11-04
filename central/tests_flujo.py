@@ -218,6 +218,33 @@ class SalidasTests(SimpleTestCase):
         self.assertNotIn(fe.NOTA_CIERRE, fe.notas_de(_reporte()))
 
 
+class RegistroTests(SimpleTestCase):
+    def _armar(self, sucursales, periodo, consolidado):
+        empresas, _ = fe.empresas_de(sucursales)
+        hechas = [fe.FlujoEmpresa(c, n, g, periodo) for c, n, g in empresas]
+        if consolidado:
+            return [fe.ReporteFlujo("Consolidado", periodo, hechas, None, True)]
+        return [fe.ReporteFlujo(e.nombre, periodo, [e], None) for e in hechas]
+
+    def test_envio_por_sucursal_sin_corporativo(self):
+        from . import generadores
+        acoxpa = SimpleNamespace(nombre="Acoxpa", odoo_company_id=7, pk=1)
+        with mock.patch.object(fe, "armar", side_effect=self._armar):
+            grupos = generadores.GRUPOS["flujo-efectivo-odoo"]([acoxpa], SEP, False, {"pdf"}, {})
+            consolidado = generadores.GRUPOS["flujo-efectivo-odoo"]([acoxpa], SEP, True, {"pdf"}, {})
+        self.assertEqual([g.sucursal for g in grupos], [acoxpa])  # Bodegón, Empanadas, Rodiva go in the consolidated
+        self.assertIsNone(consolidado[0].sucursal)
+        self.assertTrue(consolidado[0].archivos[0][0].endswith(".pdf"))
+
+    def test_lectura_de_odoo_se_reutiliza(self):
+        fe._cache.clear()
+        with mock.patch.object(fe, "_leer", return_value=([], [])) as leer:
+            fe.leer([(7, "Acoxpa", fe.SUCURSAL)], SEP)
+            fe.leer([(7, "Acoxpa", fe.SUCURSAL)], SEP)
+        self.assertEqual(leer.call_count, 1)
+        fe._cache.clear()
+
+
 class ArmarTests(SimpleTestCase):
     def test_alcance_y_notas(self):
         sucursales = [SimpleNamespace(nombre="Acoxpa", odoo_company_id=7), SimpleNamespace(nombre="Aeropuerto", odoo_company_id=None),

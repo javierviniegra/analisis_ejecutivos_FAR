@@ -25,6 +25,7 @@ Pure logic (classification and assembly) is separated from the Odoo reads
 """
 
 import re
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -560,7 +561,27 @@ def empresas_de(sucursales: list, incluir_corporativo: bool = True) -> tuple[lis
     return elegidas, fuera
 
 
+# An automation builds the consolidated and the per-company files of the same
+# period one after the other; reading Odoo takes minutes, so a read is reused
+# for a short while (same companies and period).
+CACHE_SEGUNDOS = 600
+_cache: dict[tuple, tuple[float, tuple]] = {}
+
+
 def leer(empresas: list[tuple[int, str, str]], periodo: Periodo) -> tuple[list[FlujoEmpresa], list[FlujoEmpresa]]:
+    """`_leer` with a short-lived cache."""
+    clave = (tuple(sorted(empresas)), periodo)
+    guardado = _cache.get(clave)
+    if guardado and time.monotonic() - guardado[0] < CACHE_SEGUNDOS:
+        return guardado[1]
+    for k in [k for k, (t, _) in _cache.items() if time.monotonic() - t >= CACHE_SEGUNDOS]:
+        del _cache[k]
+    resultado = _leer(empresas, periodo)
+    _cache[clave] = (time.monotonic(), resultado)
+    return resultado
+
+
+def _leer(empresas: list[tuple[int, str, str]], periodo: Periodo) -> tuple[list[FlujoEmpresa], list[FlujoEmpresa]]:
     """Read Odoo once for the period and the previous one; return each
     company's figures in both (previous = [] for companies without data)."""
     from .fuentes import odoo, odoo_flujo

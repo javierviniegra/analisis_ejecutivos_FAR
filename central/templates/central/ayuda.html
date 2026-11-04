@@ -208,6 +208,7 @@
     <a href="#costos">7. Los costos</a>
     <a href="#ejemplos">8. Ejemplos con números</a>
     <a href="#cedis">9. Reportes de CEDIS</a>
+    <a href="#flujo">9b. Flujo de efectivo</a>
     <a href="#correo">10. Enviar por correo</a>
     <a href="#automatizaciones" class="{% if automatiza %}destacado{% endif %}">11. Automatizaciones</a>
     <a href="#administracion">12. Administración</a>
@@ -467,6 +468,21 @@
         <li><strong>Hecho por:</strong> cada cambio dice si lo hizo la sucursal o el CEDIS (según la empresa del usuario de Odoo).</li>
         <li><strong>Modificada</strong> tiene dos definiciones, como en los reportes originales: en "modificaciones", cualquier cambio; en "por hora", cambio de monto o línea extra.</li>
         <li>Los clientes del CEDIS se asignan a una sucursal en la Administración (<em>Clientes de CEDIS</em>). Un cliente sin asignar aparece en las notas hasta que se le asigne.</li>
+      </ul>
+    </section>
+
+    <!-- 9b -->
+    <section id="flujo">
+      <h2>9b. Flujo de efectivo (Contabilidad)</h2>
+      <p>Cuánto dinero había en los bancos, qué entró, qué salió y con cuánto se cerró el periodo, contra el periodo anterior. Sale de Odoo, por empresa o consolidado, en PDF y Excel.</p>
+      <ul>
+        <li><strong>Empresas:</strong> las sucursales con contabilidad en Odoo (desde septiembre de 2026; Isabel La Católica, San Jerónimo y Vía Vallejo desde octubre) más <strong>El Bodegón, Las Empanadas y Rodiva</strong>, que siempre se incluyen y se muestran juntas. Las sucursales elegidas que no llevan su contabilidad en Odoo se mencionan en las notas.</li>
+        <li><strong>Saldo:</strong> solo bancos e inversiones. La caja y la caja chica no cuentan.</li>
+        <li><strong>Depósitos de ventas:</strong> las ventas de los tickets de Wansoft por forma de pago, ajustadas por lo que el banco aún no deposita (cuentas por cobrar bancos). Las propinas no están en la contabilidad.</li>
+        <li><strong>Salidas:</strong> proveedores por grupo de gasto (los pagos a El Bodegón, Las Empanadas y Rodiva cuentan como proveedores), rentas, nómina, seguridad social, impuestos, comisiones y otras.</li>
+        <li><strong>Cada movimiento se clasifica por lo que concilia en Odoo</strong> (el pago, la factura o la cuenta del asiento), así que el saldo inicial más las entradas menos las salidas da el saldo final al peso. El Excel trae la hoja <em>Movimientos</em> con cada movimiento clasificado.</li>
+        <li><strong>Semanal:</strong> las comisiones y el ajuste de ventas por depositar se registran al cierre del mes, y los bancos se concilian los martes; el reporte avisa cuando una empresa parece no tener sus bancos cargados.</li>
+        <li>Leer Odoo tarda unos minutos (el periodo y el anterior); espera a que termine la descarga.</li>
       </ul>
     </section>
 
