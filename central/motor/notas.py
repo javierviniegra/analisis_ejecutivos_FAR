@@ -193,8 +193,9 @@ def notas_reglas(periodo: Periodo | None = None, incluir_costos: bool = True) ->
         "facturas de Presupuestos AP (el flujo); la medición por mercancía recibida está pendiente.",
     ]
     reglas += _reglas_semaforos()
-    reglas.append("Propina: la registrada en los pagos de las cuentas de salón de los meseros activos, sobre su "
-                  "venta de salón (como en el reporte de meseros); se compara en puntos porcentuales.")
+    reglas.append("Propina: la de los pagos con tarjeta (crédito, débito, Amex y CLIP) de las cuentas de salón de los meseros "
+                  "activos, sobre lo pagado con tarjeta (la propina en efectivo casi no se registra; como en el "
+                  "reporte de meseros); se compara en puntos porcentuales.")
     if incluir_costos:
         reglas += costos
     if periodo is None or periodo.tipo == TipoPeriodo.SEMANA:

@@ -13,12 +13,14 @@ from .motor.periodo import Periodo
 SEM = Periodo.semana_de(date(2026, 10, 8))
 
 
-def _mesero(nombre, venta, personas, cuentas=20, dias=5, bebidas=None, propina=0, cortesias=0, descuentos=0):
+def _mesero(nombre, venta, personas, cuentas=20, dias=5, bebidas=None, propina=0, cortesias=0, descuentos=0,
+            tarjeta=None):
     bebidas = D(venta) * D("0.25") if bebidas is None else D(bebidas)
+    tarjeta = D(venta) * D("0.8") if tarjeta is None else D(tarjeta)
     return Mesero(nombre, cuentas=D(cuentas), personas=D(personas), venta_bruta=D(venta), venta_neta=D(venta) / D("1.16"),
                   dias=D(dias), minutos_mesa=D(cuentas * 100), mesas_con_tiempo=D(cuentas),
                   alimentos=D(venta) - bebidas, bebidas=bebidas, propina=D(propina), cortesias=D(cortesias),
-                  descuentos=D(descuentos))
+                  descuentos=D(descuentos), tarjeta=tarjeta)
 
 
 def _datos(periodo=SEM, dias=7, **meseros):
@@ -35,7 +37,8 @@ class MeseroTests(SimpleTestCase):
         self.assertEqual(m.venta_por_dia, D(20000))
         self.assertEqual(m.personas_por_mesa, D("2.5"))
         self.assertEqual(m.pct_bebidas, D("0.25"))
-        self.assertEqual(m.pct_propina, D("0.1"))
+        self.assertEqual(m.pct_propina, D("0.125"))  # over the $80,000 paid by card, not the $100,000 sold
+        self.assertIsNone(_mesero("Luis", 1000, 2, propina=0, tarjeta=0).pct_propina)  # all cash: no share
         self.assertEqual(m.tiempo_mesa, D(100))
 
     def test_cortesias_y_descuentos(self):

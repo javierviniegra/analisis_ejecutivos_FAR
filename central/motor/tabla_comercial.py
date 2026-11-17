@@ -75,7 +75,7 @@ INDICADORES = [
     Indicador("venta_mesero_dia", "Venta por mesero por día trabajado", "Productividad", MONEDA,
               lambda m: m.venta_por_mesero_dia, True, requiere_detalle=True),
     # Owner, 2026-10-29: the tip share, defined as in the waiters' report.
-    Indicador("propina_pct", "Propina (% de la venta de salón)", "Productividad", PORCENTAJE,
+    Indicador("propina_pct", "Propina (% del pago con tarjeta)", "Productividad", PORCENTAJE,
               lambda m: m.pct_propina, True, requiere_detalle=True),
     Indicador("mix_alimentos", "Mix: Alimentos", "Mezcla", PORCENTAJE, _pct_mix("Alimentos"), None, requiere_detalle=True),
     Indicador("mix_bebidas", "Mix: Bebidas", "Mezcla", PORCENTAJE, _pct_mix("Bebidas"), None, requiere_detalle=True,

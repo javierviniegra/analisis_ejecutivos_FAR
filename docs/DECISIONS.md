@@ -2,6 +2,14 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-11-17 — Waiters: platform / take-away users out of the dining room; tips over card payments
+
+From the meeting minutes (owner): two distortions of the waiters' report.
+
+- **Platform and take-away users are not waiters.** Six Wansoft users also capture platform and take-away orders as "Restaurant" tickets: `Apps Llevar`, `APLICACIONES`, `DELIVERY`, `UBER/RAPPI` (to plataformas) and `Llevar`, `CUENTAS PARA LLEVAR` (to llevar); 2025-01 to 2026-11, $1.49 M at ~1 guest per ticket. They counted as one more waiter (headcount, ranking, sales per waiter). Now a dining-room ticket is "Restaurant" **and** not captured by one of them (`wansoft.USUARIOS_FUERA_DE_SALON`, `_salon()`); their tickets go to the apps / take-away section, so the branch's total does not change. The list was confirmed by the owner from every user with dining-room tickets since 2025 (541). `Prueba` / `PRUEBAS` (Taquería Parroquia Jan-Jul 2026, $771 k) and the `Apoyo` users (Tepeyac, Nápoles, Playa, Aeropuerto, Oceanía) **stay waiters** (owner). October 2026: dining room $62.64 M -> $62.57 M; 10 branches lose one "waiter".
+- **Tip % = tips of the card payments ÷ amount paid by card** (`METODOS_TARJETA`: Tarjeta de crédito, Tarjeta de débito, Amex and CLIP, a card terminal -- owner; transfers, cash and platforms out). Cash tips are hardly ever captured (Oct 2026: $203 on $11.7 M paid in cash), so dividing by all the sales diluted the share: October all branches 8.8% -> **10.9%** (per branch 9.7%-12.1%). Same rule per waiter, in the waiters' totals and in the commercial report's Productividad row (renamed "Propina (% del pago con tarjeta)"), so both reports say the same number. Comparisons are recomputed with the same rule (the payments history is in Wansoft from 2025-01), so the variations stay fair.
+- The commercial report's sales-composition channels (salón / llevar / plataformas by order type) are not changed: only its Productividad rows, which read the waiters.
+
 ## 2026-11-04 — Cash-flow report: web generation, automations and catalog
 
 - **Registered** `flujo-efectivo-odoo` in `GENERADORES` / `GRUPOS`: per company or consolidated, PDF, Excel or both. Catalog entry (category Contabilidad, scope both, weekly) with initial profiles **Contabilidad and Director** (recipients named by the accountant: Dirección general, Suhey, Adrián); `cargar_catalogo` in the daily update creates it in production. Help section 9b.

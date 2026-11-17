@@ -86,7 +86,9 @@ class Metricas:
     venta_salon: Decimal = CERO
     meseros: int = 0
     dias_mesero: Decimal = CERO
-    propina_salon: Decimal = CERO  # owner, 2026-10-29: tips of those same waiters (payments of dining-room tickets)
+    # owner, 2026-10-29: tips of those same waiters; 2026-11-17: of their CARD payments, over what was paid by card
+    propina_salon: Decimal = CERO
+    tarjeta_salon: Decimal = CERO
     por_hora: dict[int, dict[str, Decimal]] = field(default_factory=dict)  # hour -> venta / tickets / clientes
     venta_dia_hora: dict[date, dict[int, Decimal]] = field(default_factory=dict)  # day -> hour -> gross sales
     pagos: dict[str, Decimal] = field(default_factory=dict)  # Wansoft payment method -> amount
@@ -102,8 +104,8 @@ class Metricas:
 
     @property
     def pct_propina(self) -> Decimal | None:
-        """Tips as a share of dining-room sales (the waiters' report's "Propina %")."""
-        return _razon(self.propina_salon, self.venta_salon)
+        """Tips as a share of the dining-room card payments (the waiters' report's "Propina %")."""
+        return _razon(self.propina_salon, self.tarjeta_salon)
 
     @property
     def costo_estimado_wansoft(self) -> bool:
@@ -333,7 +335,9 @@ def recolectar(cur_wansoft, cur_presupuestos, sucursales: list, periodo: Periodo
             m.venta_salon = sum((x["venta_bruta"] for x in activos.values()), CERO)
             m.meseros = len(activos)  # same rule as the waiters' report's plantilla
             m.dias_mesero = sum((x["dias"] for x in activos.values()), CERO)
-            m.propina_salon = sum((propinas.get(nombre, {}).get(k, CERO) for k in activos), CERO)
+            pagos_tarjeta = [propinas.get(nombre, {}).get(k, {}) for k in activos]
+            m.propina_salon = sum((p.get("propina", CERO) for p in pagos_tarjeta), CERO)
+            m.tarjeta_salon = sum((p.get("tarjeta", CERO) for p in pagos_tarjeta), CERO)
             for dia, horas in por_hora.get(nombre, {}).items():  # (never `h`: the period's end)
                 m.venta_dia_hora[dia] = {hora: v["venta"] for hora, v in horas.items()}
                 for hora, v in horas.items():
@@ -395,6 +399,7 @@ def consolidar(lista: list[Metricas], periodo: Periodo) -> Metricas:
         total.meseros += m.meseros
         total.dias_mesero += m.dias_mesero
         total.propina_salon += m.propina_salon
+        total.tarjeta_salon += m.tarjeta_salon
         for hora, v in m.por_hora.items():
             suma = total.por_hora.setdefault(hora, {k: CERO for k in v})
             for k, x in v.items():
