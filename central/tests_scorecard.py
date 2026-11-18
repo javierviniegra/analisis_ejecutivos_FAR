@@ -71,6 +71,12 @@ class ScorecardTests(SimpleTestCase):
             if k.tipo_meta == sc.META_FIJA:
                 self.assertIsNotNone(k.meta, k.clave)
 
+    def test_meta_historica_de_dos_valores(self):
+        # the commercial report's table uses it (tabla_comercial)
+        self.assertEqual(sc.meta_historica(D("100"), D("80")), D("105.00"))
+        self.assertEqual(sc.meta_historica(D("0"), D("80")), D("84.00"))
+        self.assertIsNone(sc.meta_historica(None, None))
+
     def test_meta_desde_base(self):
         self.assertEqual(sc.meta_desde_base(D("100")), D("105.00"))
         self.assertIsNone(sc.meta_desde_base(None))
@@ -265,3 +271,86 @@ class CostoGastosScorecardTests(SimpleTestCase):
         self.assertEqual((f["hielo"].actual, f["hielo"].actual_comparado, f["hielo"].meta), (D("154"), D("104"), D("100")))
         self.assertEqual(f["hielo"].estado, NARANJA)  # 4% above the previous month
         self.assertEqual((b.sin_costo, b.sin_meta), (["B"], ["B"]))
+
+
+class SalidasScorecardTests(SimpleTestCase):
+    def _leido(self):
+        from types import SimpleNamespace
+        from .motor.reporte_scorecard import _Leido
+        lineas = {("Gastos de venta", "Hielo", sc.ODOO, False, "HIELERA"): D("50"),
+                  ("Costo operativo", "Costo de alimentos", sc.WANSOFT, True, "BODEGON"): D("370")}
+        g = sc.gastos_de(lineas, {(sc.PAN, sc.WANSOFT): D("8")})
+        ventas = [_v(1000), _v(500)]
+        for v in ventas:
+            v.venta_neta = v.venta
+        sucursales = [SimpleNamespace(nombre="Acoxpa", wansoft_ticket_nombre="Acoxpa"),
+                      SimpleNamespace(nombre="Puebla", wansoft_ticket_nombre="Puebla")]
+        leido = _Leido(sc.periodos(date(2026, 10, 25)), [ventas, ventas, ventas], [[g, g], [g, g]],
+                       [("Puebla", sc.PAN, date(2026, 10, 3))])
+        return leido, sucursales
+
+    def test_una_lectura_arma_cada_sucursal_y_el_consolidado(self):
+        from .motor.reporte_scorecard import _construir, notas
+        leido, sucursales = self._leido()
+        acoxpa = _construir(leido, sucursales, [0], "Acoxpa")
+        cons = _construir(leido, sucursales, [0, 1], "Consolidado")
+        venta = lambda r: next(f for f in r.filas if f.kpi.clave == "ventas").actual
+        self.assertEqual((venta(acoxpa), venta(cons)), (D("1000"), D("1500")))
+        self.assertEqual(len(acoxpa.filas), len(sc.KPIS))
+        self.assertEqual((acoxpa.pan_dobles, acoxpa.pan_parcial), ([], []))  # Puebla's are not Acoxpa's
+        self.assertEqual(cons.pan_parcial, ["Puebla"])
+        self.assertTrue(any("Revisar" in n for n in notas(cons)))
+
+    def test_excel_hojas_y_nombre(self):
+        from openpyxl import load_workbook
+        import io
+        from .motor.reporte_scorecard import _construir
+        from .salidas import excel_scorecard
+        leido, sucursales = self._leido()
+        rs = [_construir(leido, sucursales, [i], s.nombre) for i, s in enumerate(sucursales)]
+        wb = load_workbook(io.BytesIO(excel_scorecard.generar(rs[:1])))
+        self.assertEqual(wb.sheetnames, ["Scorecard", "Desglose", "Reglas"])
+        valores = [c.value for fila in wb["Desglose"].iter_rows() for c in fila]
+        self.assertIn("HIELERA", valores)
+        self.assertEqual(len(load_workbook(io.BytesIO(excel_scorecard.generar(rs))).sheetnames), 6)
+        self.assertEqual(excel_scorecard.nombre_archivo(rs[:1]), "Semaforos_Scorecard_Acoxpa_20261001_20261025.xlsx")
+
+    def test_registrado_para_la_web_y_los_envios(self):
+        from . import generadores
+        self.assertTrue(generadores.tiene_generador("semaforos-scorecard-semanal"))
+        self.assertIn("semaforos-scorecard-semanal", generadores.GRUPOS)
+
+
+class AuditoriaCgiTests(SimpleTestCase):
+    def test_nombres_del_excel_como_power_bi(self):
+        from .motor.fuentes.excel_kpis import clave_sucursal
+        self.assertEqual(clave_sucursal("Fonda Argentina Acoxpa"), "acoxpa")
+        self.assertEqual(clave_sucursal("Taqueria Viaducto"), "taqueria-viaducto")  # before the fonda Viaducto
+        self.assertEqual(clave_sucursal("Fonda Argentina Viaducto"), "viaducto")
+        self.assertEqual(clave_sucursal("Taqueria Exhibimex"), "versalles")
+        self.assertEqual(clave_sucursal("Fonda Argentina Coyoacán"), "la-esquina-coyoacan")
+        self.assertEqual(clave_sucursal("Fonda Argentina Tollocan"), "metepec")
+        self.assertEqual(clave_sucursal("Fonda Argentina Playa"), "playa-del-carmen")
+        self.assertIsNone(clave_sucursal("Fonda Argentina Perisur"))  # not a branch of this app
+
+    def test_valores_invalidos_son_sin_dato(self):
+        from .motor.fuentes.excel_kpis import _porcentaje
+        self.assertEqual(_porcentaje(0.8530000000000001), D("0.853"))
+        self.assertEqual(_porcentaje(93), D("0.93"))  # Power BI divides values above 1 by 100
+        self.assertIsNone(_porcentaje(-1.18))  # Oceanía, March 2026
+        self.assertIsNone(_porcentaje("N/A"))
+
+    def test_ultima_auditoria_hasta_la_fecha_y_la_anterior(self):
+        a = [{"mes": date(2026, 3, 1), "clave": "acoxpa", "resultado": D("0.80"), "marca": D("0.94")},
+             {"mes": date(2026, 6, 1), "clave": "acoxpa", "resultado": D("0.86"), "marca": None},
+             {"mes": date(2026, 6, 1), "clave": "cancun", "resultado": D("0.32"), "marca": D("0.73")},
+             {"mes": date(2026, 12, 1), "clave": "acoxpa", "resultado": D("0.10"), "marca": D("0.10")}]  # after the cut
+        b = sc.filas_auditoria(["acoxpa"], a, date(2026, 10, 25))
+        f = {r.kpi.clave: r for r in b.filas}
+        self.assertEqual((f["auditoria_cgi"].actual, f["auditoria_cgi"].mes_anterior), (D("0.86"), D("0.80")))
+        self.assertEqual(f["auditoria_cgi"].estado, VERDE)  # >= 85%
+        self.assertEqual(f["estandares_marca"].actual, D("0.94"))  # June has no brand score: March's
+        self.assertEqual(b.meses, [date(2026, 3, 1), date(2026, 6, 1)])
+        cons = {r.kpi.clave: r for r in sc.filas_auditoria(["acoxpa", "cancun"], a, date(2026, 10, 25)).filas}
+        self.assertEqual(cons["auditoria_cgi"].actual, D("0.59"))  # average of 0.86 and 0.32
+        self.assertEqual(cons["auditoria_cgi"].estado, ROJO)

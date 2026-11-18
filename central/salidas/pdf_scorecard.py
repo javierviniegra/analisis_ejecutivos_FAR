@@ -15,7 +15,7 @@ from reportlab.pdfgen import canvas
 from ..motor import formato
 from ..motor import scorecard as sc
 from ..motor.periodo import TipoPeriodo, _MESES_ES
-from ..motor.reporte_scorecard import ReporteScorecard
+from ..motor.reporte_scorecard import ReporteScorecard, nombre_base, notas
 from ..motor.tabla_comercial import ENTERO, MONEDA, PORCENTAJE
 from .pdf_comercial import (COLOR_SEMAFORO, F, FB, FI, FONDO_CAJA, LINEA, MARGEN, ANCHO_UTIL, TEXTO, TEXTO_SUAVE,
                             VERDE_MARCA, Y_INICIO, _aviso, _columnas, _encabezado_tabla, _pagina, _registrar_fuentes,
@@ -64,12 +64,12 @@ def _titulo(c, r: ReporteScorecard, y: float) -> float:
     return y
 
 
-def _estado(c, x: float, base: float, fila: sc.Fila):
+def _estado(c, x: float, base: float, fila: sc.Fila, sin_fuente: set):
     clave = fila.kpi.clave
-    if clave in sc.KPIS_SIN_FUENTE or fila.estado is None:
+    if clave in sin_fuente or fila.estado is None:
         c.setFillColor(GRIS)
         c.setFont(FI, 7.2)
-        texto = "sin fuente" if clave in sc.KPIS_SIN_FUENTE else "sin dato"
+        texto = "sin fuente" if clave in sin_fuente else "sin dato"
         c.drawString(x + 14, base, texto)
         return
     c.setFillColor(COLOR_SEMAFORO[fila.estado])
@@ -95,7 +95,7 @@ def _tabla(c, r: ReporteScorecard, y: float) -> float:
         y -= ALTO_FILA
         for fila in [f for f in r.filas if f.kpi.categoria == categoria]:
             base = y - 6.5
-            leida = fila.kpi.clave in sc.KPIS_LEIDOS
+            leida = r.leida(fila.kpi.clave)
             fmt = FORMATOS[fila.kpi.tipo]
             c.setFillColor(TEXTO if leida else GRIS)
             c.setFont(F, 7.6)
@@ -107,7 +107,7 @@ def _tabla(c, r: ReporteScorecard, y: float) -> float:
                 else:
                     texto = formato.valor(v, fmt)
                 c.drawRightString(x[i + 1] - 5, base, texto)
-            _estado(c, x[4], base, fila)
+            _estado(c, x[4], base, fila, r.sin_fuente)
             c.setStrokeColor(LINEA)
             c.setLineWidth(0.3)
             c.line(MARGEN, y - ALTO_FILA + 3, MARGEN + ANCHO_UTIL, y - ALTO_FILA + 3)
@@ -116,30 +116,7 @@ def _tabla(c, r: ReporteScorecard, y: float) -> float:
 
 
 def _notas(c, r: ReporteScorecard, y: float) -> float:
-    notas = [
-        "Ventas y cheque con IVA, de las cuentas de Wansoft. Cheque = venta / personas de todos los canales; "
-        "ticket = venta / cuentas; clientes = personas de las órdenes de restaurante (sin delivery ni para llevar); "
-        "mix = venta de bebidas / venta de alimentos y bebidas.",
-        "Costo de venta y gastos: facturas de proveedor de Wansoft y Odoo, por fecha de factura, sin IVA. Costo de "
-        "venta = facturas de Costo Operativo / venta neta (sin IVA) de las mismas sucursales. Pan y tortillas: "
-        "entradas de inventario por factura de Wansoft, más las compras en Odoo de las sucursales que compran en "
-        "Odoo. Las facturas de los últimos días pueden no estar capturadas todavía.",
-        "Sin fuente: KPIs cuya fuente (Zenput, Excel de SharePoint, Google) aún no lee la Central de Reportes.",
-    ]
-    if r.nombre == "Consolidado":
-        notas.append("Consolidado: el semáforo de ventas, cheque, ticket y clientes compara solo las sucursales con "
-                     "meta (año anterior o, si son nuevas, mes anterior); el de los gastos, las que operaron el mes "
-                     "anterior.")
-    if r.sin_costo:
-        notas.append("Sin facturas de costo en el periodo (fuera del costo de venta): " + ", ".join(r.sin_costo) + ".")
-    if r.pan_parcial:
-        notas.append("Pan y tortillas parciales: " + ", ".join(r.pan_parcial) + " compran en Odoo productos que el "
-                     "catálogo aún no clasifica como Pan o Tortillas (por ejemplo Bolillo, Tortilla de Harina).")
-    if r.pan_dobles:
-        dias = sorted({f"{dia:%d/%m}" for _, _, dia in r.pan_dobles})
-        notas.append("Revisar: pan o tortillas capturados en Wansoft y en Odoo el mismo día (pueden contarse dos "
-                     "veces): " + ", ".join(sorted({n for n, _, _ in r.pan_dobles})) + " (" + ", ".join(dias) + ").")
-    return _lista(c, "Notas", notas, y, 6.8, 8.4)
+    return _lista(c, "Notas", notas(r), y, 6.8, 8.4)
 
 
 Y_FIN = 40  # below this a list continues on a new page
@@ -213,7 +190,7 @@ def _reglas(c, r: ReporteScorecard) -> float:
         c.drawString(MARGEN, y, categoria)
         y -= 11
         for k in [k for k in sc.KPIS if k.categoria == categoria]:
-            texto = sc.regla_texto(k) + (" (Sin fuente por ahora.)" if k.clave in sc.KPIS_SIN_FUENTE else "")
+            texto = sc.regla_texto(k) + (" (Sin fuente por ahora.)" if k.clave in r.sin_fuente else "")
             renglones = _renglones(c, texto, F, 7, ANCHO_UTIL - 230)
             c.setFillColor(TEXTO)
             c.setFont(FB, 7)
@@ -245,3 +222,7 @@ def generar(reportes: list[ReporteScorecard]) -> bytes:
         c.showPage()
     c.save()
     return salida.getvalue()
+
+
+def nombre_archivo(reportes: list[ReporteScorecard]) -> str:
+    return nombre_base(reportes) + ".pdf"

@@ -14,9 +14,10 @@ import zipfile
 from dataclasses import dataclass
 from typing import Callable
 
-from .motor import reporte_cedis, reporte_comercial, reporte_meseros
+from .motor import reporte_cedis, reporte_comercial, reporte_meseros, reporte_scorecard
 from .motor.periodo import Periodo
-from .salidas import excel_cedis, excel_comercial, excel_meseros, pdf_comercial, pdf_meseros
+from .salidas import (excel_cedis, excel_comercial, excel_meseros, excel_scorecard, pdf_comercial, pdf_meseros,
+                      pdf_scorecard)
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,28 @@ def _meseros(sucursales: list, periodo: Periodo, consolidado: bool, separados: b
     return _zip([(n, c) for n, c, _ in archivos], reporte_meseros.nombre_base(reportes) + ".zip")
 
 
+def _archivos_scorecard(grupo: list, formatos: set[str]) -> list[tuple[str, bytes, str]]:
+    archivos = []
+    if PDF in formatos:
+        archivos.append((pdf_scorecard.nombre_archivo(grupo), pdf_scorecard.generar(grupo), "application/pdf"))
+    if EXCEL in formatos:
+        archivos.append((excel_scorecard.nombre_archivo(grupo), excel_scorecard.generar(grupo), XLSX))
+    return archivos
+
+
+def _scorecard(sucursales: list, periodo: Periodo, consolidado: bool, separados: bool, formatos: set[str],
+               opciones: dict | None = None) -> Archivo:
+    """Semáforos scorecard: the cut is the period's last day (a week -> the
+    month to date up to its Sunday, as the weekly send; a month -> that month)."""
+    reportes = reporte_scorecard.armar_varios(sucursales, periodo, consolidado)
+    grupos = [[r] for r in reportes] if separados else [reportes]
+    archivos = [a for grupo in grupos for a in _archivos_scorecard(grupo, formatos)]
+    if len(archivos) == 1:
+        nombre, contenido, tipo = archivos[0]
+        return Archivo(contenido, nombre, tipo)
+    return _zip([(n, c) for n, c, _ in archivos], reporte_scorecard.nombre_base(reportes) + ".zip")
+
+
 def _cedis(tipo: str, construir):
     """CEDIS workbooks: one workbook for the selected branches (the report's
     scope is consolidated), Excel only, reproducing the owner's originals."""
@@ -104,6 +127,7 @@ def _cedis(tipo: str, construir):
 GENERADORES: dict[str, Callable[..., Archivo]] = {
     "comercial-semanal-gerentes": _comercial,
     "meseros": _meseros,
+    "semaforos-scorecard-semanal": _scorecard,
     "oc-bodegon-empanadas-modificaciones": _cedis("modificaciones", excel_cedis.modificaciones),
     "oc-bodegon-empanadas-por-hora": _cedis("por_hora", excel_cedis.por_hora),
 }
@@ -135,6 +159,13 @@ def _grupos_meseros(sucursales, periodo, consolidado, formatos, opciones) -> lis
     return [GrupoArchivos(s, _archivos_meseros([r], formatos)) for s, r in zip(sucursales, reportes)]
 
 
+def _grupos_scorecard(sucursales, periodo, consolidado, formatos, opciones) -> list[GrupoArchivos]:
+    reportes = reporte_scorecard.armar_varios(sucursales, periodo, consolidado)
+    if consolidado:
+        return [GrupoArchivos(None, _archivos_scorecard(reportes, formatos))]
+    return [GrupoArchivos(s, _archivos_scorecard([r], formatos)) for s, r in zip(sucursales, reportes)]
+
+
 def _grupos_cedis(tipo, construir):
     def grupos(sucursales, periodo, consolidado, formatos, opciones) -> list[GrupoArchivos]:
         datos = reporte_cedis.leer(sucursales, periodo.desde, periodo.hasta)
@@ -146,6 +177,7 @@ def _grupos_cedis(tipo, construir):
 GRUPOS: dict[str, Callable[..., list[GrupoArchivos]]] = {
     "comercial-semanal-gerentes": _grupos_comercial,
     "meseros": _grupos_meseros,
+    "semaforos-scorecard-semanal": _grupos_scorecard,
     "oc-bodegon-empanadas-modificaciones": _grupos_cedis("modificaciones", excel_cedis.modificaciones),
     "oc-bodegon-empanadas-por-hora": _grupos_cedis("por_hora", excel_cedis.por_hora),
 }

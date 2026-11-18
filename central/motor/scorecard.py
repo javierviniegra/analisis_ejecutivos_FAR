@@ -235,6 +235,17 @@ def meta_desde_base(base: Decimal | None) -> Decimal | None:
     return None if not base else base * CRECIMIENTO_META
 
 
+def meta_historica(anio_anterior, mes_anterior) -> Decimal | None:
+    """Historic target from two plain values: last year +5%, or (no last year,
+    or zero) the previous period +5%; neither -> no target. Used by the
+    commercial report's table (`tabla_comercial`); the scorecard itself picks
+    the base by data coverage (`elegir_base`)."""
+    for base in (anio_anterior, mes_anterior):
+        if base is not None and Decimal(base) != 0:
+            return meta_desde_base(Decimal(base))
+    return None
+
+
 @dataclass(frozen=True)
 class Fila:
     kpi: Kpi
@@ -433,6 +444,43 @@ def filas_gastos(nombres: list[str], ventas: list[Ventas], ventas_previo: list[V
     return BloqueGastos(filas, [nombres[i] for i, g in enumerate(gastos) if g.costo_operativo <= 0],
                         [nombres[i] for i in range(len(nombres)) if i not in con_base], total.detalle,
                         total.proveedores)
+
+
+# -- CGI audit (hand-filled Excel) -----------------------------------------
+KPIS_AUDITORIA = {"auditoria_cgi": "resultado", "estandares_marca": "marca"}  # KPI -> the audit's column
+
+
+@dataclass(frozen=True)
+class BloqueAuditoria:
+    filas: list[Fila]
+    meses: list[date]  # months of the latest audits used (normally one)
+    meses_previos: list[date]
+
+
+def filas_auditoria(claves: list[str], auditorias: list[dict], hasta: date) -> BloqueAuditoria:
+    """CGI audit and brand standards (Power BI: AVERAGE of the audit rows). The
+    audit is done every few months (March and June 2026), so each branch takes
+    its LATEST audit up to `hasta` (Power BI would show nothing in a month
+    without one) and the previous one as "Mes anterior" (Power BI's `KPI Mes
+    Anterior`: the last audit before the current one). Several branches: the
+    average of their scores."""
+    filas, meses, previos = [], set(), set()
+    for kpi_clave, columna in KPIS_AUDITORIA.items():
+        k = POR_CLAVE[kpi_clave]
+        ultimos, anteriores = [], []
+        for clave in claves:
+            propias = sorted((a for a in auditorias if a["clave"] == clave and a["mes"] <= hasta
+                              and a[columna] is not None), key=lambda a: a["mes"])
+            if propias:
+                ultimos.append(propias[-1][columna])
+                meses.add(propias[-1]["mes"])
+            if len(propias) > 1:
+                anteriores.append(propias[-2][columna])
+                previos.add(propias[-2]["mes"])
+        actual = sum(ultimos, CERO) / len(ultimos) if ultimos else None
+        previo = sum(anteriores, CERO) / len(anteriores) if anteriores else None
+        filas.append(Fila(k, actual, previo, k.meta, estado(k, actual, k.meta), actual))
+    return BloqueAuditoria(filas, sorted(meses), sorted(previos))
 
 
 PROVEEDORES_EN_DESGLOSE = 3
