@@ -129,6 +129,19 @@ CATALOGO = [
         "mensual), fuentes fuera de Wansoft (Zenput, Excel de SharePoint: auditoria CGI, inventarios, carne, "
         "Mystery Shopper, NPS, Delivery) y la meta de costo (37% en Power BI vs 38.0-39.9% de la app).",
     ),
+    dict(
+        clave="flujo-efectivo-odoo",
+        nombre="Flujo de efectivo (Odoo)",
+        descripcion="Saldo de bancos e inversiones, entradas y salidas del periodo contra el periodo anterior, por "
+        "empresa o consolidado: depósitos de ventas por forma de pago, ventas con factura, cobros del grupo, "
+        "aportaciones, proveedores por grupo de gasto, rentas, nómina, seguridad social, impuestos y comisiones. "
+        "Sucursales con contabilidad en Odoo más El Bodegón, Las Empanadas y Rodiva.",
+        categoria=C.CONTABILIDAD, periodicidad=P.SEMANAL, plantilla=F.EJECUTIVA, fuente=S.ODOO,
+        alcance=A.AMBOS, admite_pdf=True, admite_excel=True, estado=E.IMPLEMENTADO,
+        notas="Definido 2026-11-04 con Contabilidad (Tomás) sobre el demo de septiembre. Semanal (miércoles, la "
+        "conciliación es el martes) y mensual. Destinatarios: Dirección general, Suhey y Adrián.",
+        perfiles_iniciales=["Contabilidad", "Director"],
+    ),
 ]
 
 

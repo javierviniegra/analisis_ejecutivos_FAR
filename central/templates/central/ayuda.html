@@ -208,6 +208,7 @@
     <a href="#costos">7. Los costos</a>
     <a href="#ejemplos">8. Ejemplos con números</a>
     <a href="#cedis">9. Reportes de CEDIS</a>
+    <a href="#flujo">9b. Flujo de efectivo</a>
     <a href="#correo">10. Enviar por correo</a>
     <a href="#automatizaciones" class="{% if automatiza %}destacado{% endif %}">11. Automatizaciones</a>
     <a href="#administracion">12. Administración</a>
@@ -319,7 +320,7 @@
       <ul>
         <li><strong>Addendum de inflación (periodos de un mes o más):</strong> cuánto se creció contra el mismo mes del año anterior y cuánto de eso fue inflación: venta, ticket y cheque con su variación nominal y real (descontando la inflación anual del INPC de INEGI); clientes y tickets como volumen. En el consolidado, también cada sucursal. Mes, bimestre, trimestre, semestre o año (nunca semanas). La inflación es la anual porque se compara contra el mismo periodo del año anterior; de varios meses, con el promedio del INPC. Como INEGI publica la inflación de un mes alrededor del día 9 del mes siguiente, el addendum cubre los meses ya publicados (el reporte de octubre que sale el 1 de noviembre analiza septiembre) y siempre lo dice. La inflación se trae sola de Banxico; si falla, se puede capturar en Admin &gt; Inflación (INPC).</li>
         <li><strong>Alimentos y bebidas: unidades y precio:</strong> la venta, las unidades vendidas y el precio promedio por unidad de cada grupo contra el año anterior, para saber si una caída es por vender menos productos o por venderlos a menor precio. Las unidades son las de los productos con precio (sin cortesías). La Lectura lo resume en una línea. Si la tabla ya no cabe en la primera hoja, continúa en la siguiente.</li>
-        <li><strong>Productividad:</strong> meseros activos (con al menos una cuenta y venta), venta de salón por mesero y por mesero por día trabajado, y la propina como % de la venta de salón (la registrada en los pagos de las cuentas de salón, como en el reporte de meseros; se compara en puntos), contra el año anterior.</li>
+        <li><strong>Productividad:</strong> meseros activos (con al menos una cuenta y venta), venta de salón por mesero y por mesero por día trabajado, y la propina como % de lo pagado con tarjeta en el salón (crédito, débito, Amex y CLIP: la propina en efectivo casi no se registra; como en el reporte de meseros; se compara en puntos), contra el año anterior.</li>
         <li><strong>Composición de la venta (página 3):</strong> venta por horario según la hora de cierre del ticket (mañana: antes de 13:00; tarde: 13:00 a 18:00; noche: desde 18:00), con su % de la venta, tickets, clientes, cheque y ticket contra el año anterior; donas por horario, forma de pago y plataforma; barras por día de la semana y por hora de cierre contra el año anterior. Si las gráficas de la página 1 ya no caben, pasan al inicio de esta página. En el reporte de <em>sucursal</em>, además, la venta de un día promedio de cada día de la semana (lunes a domingo) en mañana, tarde y noche, contra el mismo día del periodo anterior y del año anterior. En el <em>consolidado</em>, quién vende mejor en las tardes: las sucursales ordenadas por la proporción de su venta que cierran de 13:00 a 18:00, contra su propio % del mes (o semana) anterior y del año anterior.</li>
         <li><strong>Tablajería (página 2):</strong> cuánto se merma al tablajear. El <em>consolidado</em> ordena las sucursales de mayor a menor % de merma, con su % del año anterior (si subió o bajó), los puntos arriba o abajo del grupo, los kilos de merma y su costo. El de <em>sucursal</em> trae cada producto base contra el mismo producto en todas las sucursales y contra el año anterior, y la merma por día de la semana. Back Rib (Costillar) y los porcionados (chorizo, salmón…) no se incluyen. Cada pieza se cuenta una sola vez (Wansoft la repite en cada producto que genera) y el costo de la merma es por kilo de la pieza; por eso no cuadra con el Power BI de Tablajería.</li>
         <li><strong>Aviso de sucursales comparables (solo consolidado):</strong> arriba, una franja ámbar recuerda que todo lo que se compara contra el año anterior es solo con sucursales comparables y dice cuáles quedan fuera.</li>
@@ -353,10 +354,10 @@
       <p>Mismas características que el comercial (cualquier periodo, por sucursal o consolidado, comparativos, Lectura, gráficas, notas, PDF/Excel, envío y automatizaciones), sobre el desempeño de los meseros.</p>
       <ul>
         <li><strong>Panel de arriba:</strong> venta total, cheque promedio, personas, cortesías, descuentos, cancelaciones y anulaciones (estas dos, del corte de caja diario) de la sucursal, en tarjetas con su flecha contra el periodo anterior. Venta, cortesías y descuentos son de toda la sucursal; cheque y personas, de salón.</li>
-        <li><strong>Venta de meseros:</strong> solo cuentas de <em>salón</em>. Aplicaciones (plataformas) y para llevar tienen su propio apartado, con sus descuentos y cortesías.</li>
+        <li><strong>Venta de meseros:</strong> solo cuentas de <em>salón</em>. Aplicaciones (plataformas) y para llevar tienen su propio apartado, con sus descuentos y cortesías. Las cuentas de salón capturadas por los usuarios de plataformas y para llevar (Apps Llevar, APLICACIONES, DELIVERY, UBER/RAPPI, Llevar, CUENTAS PARA LLEVAR) no cuentan como mesero: van a ese apartado.</li>
         <li><strong>Cortesías y descuentos:</strong> las cortesías se valúan al precio de venta del platillo (no al costo); los descuentos son los de las líneas que no son cortesía.</li>
         <li><strong>Plantilla:</strong> meseros con al menos una cuenta en el periodo. <strong>Venta por día trabajado</strong> = venta ÷ días en que el mesero tuvo cuentas: la comparación justa entre quien trabajó 3 días y quien trabajó 6.</li>
-        <li><strong>Por mesero:</strong> mesas, personas, venta, cheque promedio (con semáforo contra el promedio de la sucursal: verde igual o arriba, naranja abajo, rojo más de 10% abajo), % de bebidas, propina, cortesías y tiempo promedio de mesa.</li>
+        <li><strong>Por mesero:</strong> mesas, personas, venta, cheque promedio (con semáforo contra el promedio de la sucursal: verde igual o arriba, naranja abajo, rojo más de 10% abajo), % de bebidas, propina (como % de lo que sus mesas pagaron con tarjeta), cortesías y tiempo promedio de mesa.</li>
         <li><strong>Cancelaciones y anulaciones:</strong> solo por sucursal; Wansoft las quita del ticket y no trae el mesero.</li>
         <li><strong>Consolidado:</strong> compara sucursales (venta por mesero por día, cheque), nunca meseros de sucursales distintas; trae el mejor mesero de cada una.</li>
       </ul>
@@ -467,6 +468,21 @@
         <li><strong>Hecho por:</strong> cada cambio dice si lo hizo la sucursal o el CEDIS (según la empresa del usuario de Odoo).</li>
         <li><strong>Modificada</strong> tiene dos definiciones, como en los reportes originales: en "modificaciones", cualquier cambio; en "por hora", cambio de monto o línea extra.</li>
         <li>Los clientes del CEDIS se asignan a una sucursal en la Administración (<em>Clientes de CEDIS</em>). Un cliente sin asignar aparece en las notas hasta que se le asigne.</li>
+      </ul>
+    </section>
+
+    <!-- 9b -->
+    <section id="flujo">
+      <h2>9b. Flujo de efectivo (Contabilidad)</h2>
+      <p>Cuánto dinero había en los bancos, qué entró, qué salió y con cuánto se cerró el periodo, contra el periodo anterior. Sale de Odoo, por empresa o consolidado, en PDF y Excel.</p>
+      <ul>
+        <li><strong>Empresas:</strong> las sucursales con contabilidad en Odoo (desde septiembre de 2026; Isabel La Católica, San Jerónimo y Vía Vallejo desde octubre) más <strong>El Bodegón, Las Empanadas y Rodiva</strong>, que siempre se incluyen y se muestran juntas. Las sucursales elegidas que no llevan su contabilidad en Odoo se mencionan en las notas.</li>
+        <li><strong>Saldo:</strong> solo bancos e inversiones. La caja y la caja chica no cuentan.</li>
+        <li><strong>Depósitos de ventas:</strong> las ventas de los tickets de Wansoft por forma de pago, ajustadas por lo que el banco aún no deposita (cuentas por cobrar bancos). Las propinas no están en la contabilidad.</li>
+        <li><strong>Salidas:</strong> proveedores por grupo de gasto (los pagos a El Bodegón, Las Empanadas y Rodiva cuentan como proveedores), rentas, nómina, seguridad social, impuestos, comisiones y otras.</li>
+        <li><strong>Cada movimiento se clasifica por lo que concilia en Odoo</strong> (el pago, la factura o la cuenta del asiento), así que el saldo inicial más las entradas menos las salidas da el saldo final al peso. El Excel trae la hoja <em>Movimientos</em> con cada movimiento clasificado.</li>
+        <li><strong>Semanal:</strong> las comisiones y el ajuste de ventas por depositar se registran al cierre del mes, y los bancos se concilian los martes; el reporte avisa cuando una empresa parece no tener sus bancos cargados.</li>
+        <li>Leer Odoo tarda unos minutos (el periodo y el anterior); espera a que termine la descarga.</li>
       </ul>
     </section>
 

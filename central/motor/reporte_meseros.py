@@ -59,7 +59,7 @@ INDICADORES = [
               requiere_detalle=True),
     Indicador("mix_bebidas", "Mix: Bebidas", "Mezcla", PORCENTAJE, lambda m: _t(m).pct_bebidas, None,
               requiere_detalle=True),
-    Indicador("propina", "Propina (% de la venta)", "Servicio", PORCENTAJE, lambda m: _t(m).pct_propina, True),
+    Indicador("propina", "Propina (% del pago con tarjeta)", "Servicio", PORCENTAJE, lambda m: _t(m).pct_propina, True),
     Indicador("tiempo_mesa", "Tiempo promedio de mesa (min)", "Servicio", ENTERO, lambda m: _t(m).tiempo_mesa, None),
     Indicador("cortesias", "Cortesías (a precio de venta)", "Control", MONEDA, lambda m: _t(m).cortesias, False),
     Indicador("descuentos", "Descuentos", "Control", MONEDA, lambda m: _t(m).descuentos, False),
@@ -241,7 +241,7 @@ def _lectura_control(periodo: Periodo, por: dict) -> list[Observacion]:
     # cancellations and voids: in the panel's cards (owner, 2026-10-14), not repeated here
     p = por["propina"]
     if p.actual is not None:
-        obs.append(Observacion(f"Propina: {p.actual * 100:.1f}% de la venta ({_var_texto_pp(p.var_anterior)} vs "
+        obs.append(Observacion(f"Propina: {p.actual * 100:.1f}% del pago con tarjeta ({_var_texto_pp(p.var_anterior)} vs "
                                f"{vs_anterior(periodo)}).", NEUTRO))
     return obs
 
@@ -324,7 +324,9 @@ def notas_cobertura(actual: DatosMeseros, anterior: DatosMeseros | None,
 def notas_reglas(periodo: Periodo) -> list[str]:
     reglas = [
         "Venta de meseros = cuentas de salón (tipo de orden «Restaurant»); aplicaciones (plataformas) y para llevar "
-        "van en su propio apartado, con sus descuentos y cortesías.",
+        "van en su propio apartado, con sus descuentos y cortesías. Las cuentas de salón capturadas por los usuarios "
+        "de plataformas y para llevar (Apps Llevar, APLICACIONES, DELIVERY, UBER/RAPPI, Llevar, CUENTAS PARA "
+        "LLEVAR) no son de un mesero: van a ese apartado.",
         "Panel: venta, cortesías y descuentos de toda la sucursal (salón + aplicaciones + para llevar); cheque y "
         "personas, de salón; cancelaciones y anulaciones, del corte de caja diario. Flecha contra el periodo anterior.",
         "Plantilla = meseros con al menos una cuenta en el periodo. Venta por día trabajado = venta ÷ días en que "
@@ -335,7 +337,8 @@ def notas_reglas(periodo: Periodo) -> list[str]:
         f"si los 3 primeros suman {UMBRAL_CONCENTRACION * 100:.0f}% o más de la venta.",
         f"Tiempo de mesa = de la apertura al cierre de la cuenta; se excluyen tiempos fuera de {MINUTOS_MESA_MIN} a "
         f"{MINUTOS_MESA_MAX} minutos (cuentas olvidadas abiertas).",
-        "Propina: la registrada en los pagos de las cuentas de salón. Cortesías: cantidad x precio de venta del "
+        "Propina: la de los pagos con tarjeta (crédito, débito, Amex y CLIP) de las cuentas de salón, sobre lo pagado con "
+        "tarjeta (la propina en efectivo casi no se registra). Cortesías: cantidad x precio de venta del "
         "platillo (la línea de cortesía conserva su precio; no se usa el costo). Descuentos: los de las líneas que no "
         "son cortesía. % control = (cortesías + descuentos) ÷ (venta + cortesías + descuentos).",
         "Cancelaciones y anulaciones: totales de la sucursal del corte de caja; Wansoft las quita del ticket y no "

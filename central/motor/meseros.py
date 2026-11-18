@@ -37,10 +37,11 @@ class Mesero:
     bebidas: Decimal = CERO
     cortesias: Decimal = CERO  # at sale price
     descuentos: Decimal = CERO  # discounts on the lines that are not courtesies
-    propina: Decimal = CERO
+    propina: Decimal = CERO  # tips of the card payments (owner, 2026-11-17)
+    tarjeta: Decimal = CERO  # amount paid by card, tips excluded
 
     CAMPOS = ("cuentas", "personas", "venta_bruta", "venta_neta", "dias", "minutos_mesa", "mesas_con_tiempo",
-              "alimentos", "bebidas", "cortesias", "descuentos", "propina")
+              "alimentos", "bebidas", "cortesias", "descuentos", "propina", "tarjeta")
 
     def sumar(self, otro: "Mesero") -> None:
         for c in self.CAMPOS:
@@ -82,7 +83,8 @@ class Mesero:
 
     @property
     def pct_propina(self) -> Decimal | None:
-        return _razon(self.propina, self.venta_bruta)
+        """Tips as a share of what was paid by card (cash tips are hardly ever captured)."""
+        return _razon(self.propina, self.tarjeta)
 
     @property
     def tiempo_mesa(self) -> Decimal | None:
@@ -193,7 +195,8 @@ def recolectar(cur, sucursales: list, periodo: Periodo) -> list[DatosMeseros]:
             m.alimentos, m.bebidas = extra.get("alimentos", CERO), extra.get("bebidas", CERO)
             m.cortesias = extra.get("cortesias", CERO)
             m.descuentos = extra.get("descuentos", CERO)
-            m.propina = propinas.get(nombre, {}).get(mesero, CERO)
+            p = propinas.get(nombre, {}).get(mesero, {})
+            m.propina, m.tarjeta = p.get("propina", CERO), p.get("tarjeta", CERO)
             datos.meseros[mesero] = m
         datos.fuera = {c: dict(v) for c, v in fuera.get(nombre, {}).items()}
         dias = cierres.get(s.wansoft_subsidiary_id, {})
