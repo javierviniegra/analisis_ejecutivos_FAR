@@ -2,6 +2,11 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-11-19 — Waiters: gross sales column in the consolidated detail
+
+- The consolidated waiters' report's "Por sucursal" table (PDF and Excel) adds **Venta bruta** next to **Venta salón** (owner): the branch's whole gross sales (dining room + apps + take-away, `DatosMeseros.venta_total`, the panel's "Venta total"), so the dining room's weight is read against the branch. October 2026: dining room $62.57 M of $66.67 M.
+- In the PDF the table's amounts are whole pesos (as the per-waiter table) so the ten columns fit.
+
 ## 2026-11-19 — CEDIS metrics in the engine: fill rate and top-20 input inflation
 
 - **Where (owner, 2026-11-18):** new CEDIS metric code lives in Central's engine (`central/motor`), pure functions plus read functions, so Dashboards Fonda (git submodule) and later Central's own reports use the same numbers. No report or screen uses them yet.

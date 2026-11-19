@@ -18,20 +18,22 @@ def _detalle(ws, r: ReporteMeseros):
     if r.por_sucursal:
         ws["A1"] = "Detalle por sucursal"
         ws["A1"].font = SECCION_F
-        _encabezado(ws, 3, ["Sucursal", "Meseros", "Mesas", "Personas", "Venta salón", "Venta por mesero por día",
-                            "Cheque prom.", "% Bebidas", "Propina %", "Cortesías", "Mejor mesero", "Descuentos"])
+        # Owner, 2026-11-19: the branch's gross sales (dining room + apps + take-away) next to the dining room's.
+        _encabezado(ws, 3, ["Sucursal", "Meseros", "Mesas", "Personas", "Venta salón", "Venta bruta",
+                            "Venta por mesero por día", "Cheque prom.", "% Bebidas", "Propina %", "Cortesías",
+                            "Mejor mesero", "Descuentos"])
         for i, f in enumerate(r.por_sucursal, start=4):
             t = f.d.total
             ws.cell(i, 1, f.nombre)
             ws.cell(i, 2, f.d.plantilla)
             for col, v, fmt in ((3, t.cuentas, ENTERO), (4, t.personas, ENTERO), (5, t.venta_bruta, MONEDA),
-                                (6, f.d.venta_por_mesero_dia, MONEDA), (7, t.cheque_promedio, MONEDA),
-                                (8, t.pct_bebidas, PORCENTAJE), (9, t.pct_propina, PORCENTAJE),
-                                (10, t.cortesias, MONEDA)):
+                                (6, f.d.venta_total, MONEDA), (7, f.d.venta_por_mesero_dia, MONEDA),
+                                (8, t.cheque_promedio, MONEDA), (9, t.pct_bebidas, PORCENTAJE),
+                                (10, t.pct_propina, PORCENTAJE), (11, t.cortesias, MONEDA)):
                 _numero(ws, i, col, v, fmt)
-            ws.cell(i, 11, f.mejor or "—")
-            _numero(ws, i, 12, t.descuentos, MONEDA)
-        anchos = (30, 10, 10, 10, 16, 16, 14, 11, 11, 13, 30, 13)
+            ws.cell(i, 12, f.mejor or "—")
+            _numero(ws, i, 13, t.descuentos, MONEDA)
+        anchos = (30, 10, 10, 10, 16, 16, 16, 14, 11, 11, 13, 30, 13)
     else:
         ws["A1"] = "Detalle por mesero (de mayor a menor venta)"
         ws["A1"].font = SECCION_F

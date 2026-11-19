@@ -119,9 +119,11 @@ def _detalle_meseros(c, r: ReporteMeseros, y: float) -> float:
 
 def _detalle_sucursales(c, r: ReporteMeseros, y: float) -> float:
     alto = 10.6
-    x = _columnas([104, 40, 38, 72, 66, 52, 40, 36, 68])  # = ANCHO_UTIL (516)
-    y = _encabezado_tabla(c, x, y, ["Sucursal", "Meseros", "Mesas", "Venta salón", "Venta/mes./día", "Cheque",
-                                    "% Beb.", "Prop.", "Mejor mesero"], alto)
+    # Owner, 2026-11-19: the branch's gross sales (dining room + apps + take-away) next to the dining room's;
+    # amounts in whole pesos so the ten columns fit.
+    x = _columnas([96, 38, 30, 58, 58, 66, 40, 34, 30, 66])  # = ANCHO_UTIL (516)
+    y = _encabezado_tabla(c, x, y, ["Sucursal", "Meseros", "Mesas", "Venta salón", "Venta bruta", "Venta/mes./día",
+                                    "Cheque", "% Beb.", "Prop.", "Mejor mesero"], alto)
     for i, f in enumerate(r.por_sucursal):
         if i % 2:
             c.setFillColor(FONDO_CAJA)
@@ -129,16 +131,16 @@ def _detalle_sucursales(c, r: ReporteMeseros, y: float) -> float:
         t = f.d.total
         mejor = nombre_corto(f.mejor) if f.mejor else "—"
         _fila(c, x, y - 6.6, [f.nombre[:26], str(f.d.plantilla), formato.valor(t.cuentas, ENTERO),
-                              formato.valor(t.venta_bruta, MONEDA), formato.valor(f.d.venta_por_mesero_dia, MONEDA),
-                              formato.valor(t.cheque_promedio, MONEDA), formato.valor(t.pct_bebidas, PORCENTAJE),
+                              _pesos(t.venta_bruta), _pesos(f.d.venta_total), _pesos(f.d.venta_por_mesero_dia),
+                              _pesos(t.cheque_promedio), formato.valor(t.pct_bebidas, PORCENTAJE),
                               formato.valor(t.pct_propina, PORCENTAJE), mejor])
         y -= alto
     t = r.actual.total
     c.setStrokeColor(LINEA)
     c.line(MARGEN, y + 2.5, MARGEN + ANCHO_UTIL, y + 2.5)
     _fila(c, x, y - 6.6, ["Total", str(r.actual.plantilla), formato.valor(t.cuentas, ENTERO),
-                          formato.valor(t.venta_bruta, MONEDA), formato.valor(r.actual.venta_por_mesero_dia, MONEDA),
-                          formato.valor(t.cheque_promedio, MONEDA), formato.valor(t.pct_bebidas, PORCENTAJE),
+                          _pesos(t.venta_bruta), _pesos(r.actual.venta_total), _pesos(r.actual.venta_por_mesero_dia),
+                          _pesos(t.cheque_promedio), formato.valor(t.pct_bebidas, PORCENTAJE),
                           formato.valor(t.pct_propina, PORCENTAJE), ""], negrita=True)
     return y - alto - 8
 
