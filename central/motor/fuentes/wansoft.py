@@ -61,7 +61,8 @@ COLUMNAS_REQUERIDAS = {
     "getinputinventory_entrada": ["subsidiary_name", "TipoEntrada", "CodigoDepartamento", "CostoUnitario", "Cantidad",
                                   "FechaEntrada"],
     "analytics_purchase_order_lines": ["company_source_key", "source_system", "include_in_business_views",
-                                       "product_analytical_key", "order_date", "price_subtotal"],
+                                       "product_analytical_key", "order_date", "price_subtotal", "product_qty",
+                                       "product_name", "wansoft_product_name"],
     "dim_product": ["product_analytical_key", "wansoft_department"],
 }
 
@@ -331,6 +332,24 @@ def compras_odoo_pan_tortillas_por_dia(cur, claves: list[str], desde: date, hast
     for clave, depto, dia, subtotal in cur.fetchall():
         resultado.setdefault(clave, {})[(depto, dia)] = Decimal(str(subtotal or 0))
     return resultado
+
+
+def compras_por_producto(cur, claves: list[str], desde: date, hasta: date) -> list[tuple]:
+    """Spend (subtotal, without IVA) and quantity per product of these branches
+    (short keys) ordered in [desde, hasta], every supplier, from the unified
+    purchase lines (Wansoft + Odoo, business view): [(product_analytical_key,
+    name, spend, quantity)]. For the top-20 input inflation (`inflacion_insumos`)."""
+    claves = [c for c in claves if c]
+    if not claves:
+        return []
+    cur.execute(
+        f"SELECT product_analytical_key, MAX(COALESCE(wansoft_product_name, product_name)), SUM(price_subtotal), "
+        f"SUM(product_qty) FROM analytics_purchase_order_lines "
+        f"WHERE include_in_business_views = 1 AND company_source_key IN ({_marcadores(claves)}) "
+        f"AND order_date >= %s AND order_date < %s AND product_analytical_key IS NOT NULL GROUP BY 1",
+        (*claves, desde, hasta + timedelta(days=1)),
+    )
+    return list(cur.fetchall())
 
 
 def _tramos_mensuales(desde: date, hasta: date) -> list[tuple[date, date]]:

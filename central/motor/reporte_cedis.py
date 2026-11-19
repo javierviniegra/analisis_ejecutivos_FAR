@@ -92,6 +92,17 @@ class CambioMonto:
         return self.nuevo - self.anterior
 
 
+@dataclass(frozen=True)
+class LineaPedido:
+    """One product of an order as it stands when read: the quantity ordered now
+    (after every change), and what the provider delivered (its sales order's
+    `qty_delivered`). Used by the fill rate (`fill_rate.py`)."""
+    producto: str  # as the order (and its change history) names it
+    pedida: Decimal
+    entregada: Decimal
+    base: str = ""  # `producto_base`: the same product whatever its variant ("X Ind" = "X")
+
+
 @dataclass
 class Orden:
     nombre: str
@@ -105,6 +116,7 @@ class Orden:
     extras: list[LineaExtra] = field(default_factory=list)
     montos: list[CambioMonto] = field(default_factory=list)
     origen: str = DE_OC  # the branch's purchase order, or captured directly by the CEDIS
+    lineas: list[LineaPedido] = field(default_factory=list)
 
     def cambios(self):
         return [*self.cantidades, *self.extras, *self.montos]
@@ -395,6 +407,68 @@ def _destino(cliente: FilaCliente, por_clave: dict, todas: bool) -> str | None:
     return cliente.etiqueta if todas else None
 
 
+def _producto(linea: dict) -> tuple:
+    """(key, name) of an Odoo order line's product: the product id when there is
+    one (the branch's purchase line and the provider's sales line share it),
+    else its description."""
+    if linea["product_id"]:
+        return linea["product_id"][0], linea["product_id"][1].strip()
+    nombre = (linea["name"] or "").strip()
+    return nombre, nombre
+
+
+_CODIGO = re.compile(r"^\[[^\]]*\]\s*")
+_KIT = re.compile(r"\s+(ind|copia|\(copia\))$")
+
+
+def producto_base(nombre: str) -> str:
+    """The product a line stands for, whatever its variant (pure): without the
+    internal code "[...]" and the suffixes " Ind" / " copia" / " (copia)", case and spaces
+    ignored. Owner, 2026-11-19: "X Ind" is the branch's indirect (not
+    inventoried) kit of the CEDIS's own product "X", which the inter-company
+    sales order delivers under the CEDIS's name, so both are the same product
+    for the fill rate."""
+    texto = _CODIGO.sub("", " ".join((nombre or "").lower().split()))
+    return _KIT.sub("", texto)
+
+
+def lineas_pedido(lineas_oc: list[dict], lineas_so: list[dict], venta_de_oc: dict[int, int]) -> dict[tuple, list]:
+    """Ordered and delivered quantity per product of every order (pure):
+    {("oc", purchase order id) | ("so", sales order id): [LineaPedido]}. An order
+    from a branch's purchase order takes the quantity ordered from that purchase
+    order (its product names, as its change history writes them) and the
+    delivered one from the provider's sales order it generated (`venta_de_oc`:
+    purchase order id -> sales order id), matched by `producto_base`; an order
+    captured by the CEDIS takes both from its sales order. Several lines of one
+    product are added up."""
+    entregado = defaultdict(lambda: defaultdict(lambda: Decimal("0")))  # so id -> base product -> delivered
+    pedido_so = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
+    nombre_so = defaultdict(dict)
+    for ln in lineas_so:
+        nombre = _producto(ln)[1]
+        base = producto_base(nombre)
+        so = ln["order_id"][0]
+        nombre_so[so].setdefault(base, nombre)
+        entregado[so][base] += Decimal(str(ln["qty_delivered"]))
+        pedido_so[so][base] += Decimal(str(ln["product_uom_qty"]))
+    pedido_oc = defaultdict(lambda: defaultdict(lambda: Decimal("0")))
+    nombre_oc = defaultdict(dict)
+    for ln in lineas_oc:
+        nombre = _producto(ln)[1]
+        base = producto_base(nombre)
+        nombre_oc[ln["order_id"][0]].setdefault(base, nombre)
+        pedido_oc[ln["order_id"][0]][base] += Decimal(str(ln["product_qty"]))
+    salida = {}
+    for oc, productos in pedido_oc.items():
+        so = entregado.get(venta_de_oc.get(oc), {})
+        salida[("oc", oc)] = [LineaPedido(nombre_oc[oc][b], q, so.get(b, Decimal("0")), b) for b, q in productos.items()]
+    de_oc = set(venta_de_oc.values())
+    for so, productos in pedido_so.items():
+        if so not in de_oc:
+            salida[("so", so)] = [LineaPedido(nombre_so[so][b], q, entregado[so][b], b) for b, q in productos.items()]
+    return salida
+
+
 def leer(sucursales: list, desde: date, hasta: date, clientes: list[FilaCliente] | None = None,
          activas: set[str] | None = None) -> DatosCedis:
     """Read, from the provider side, every order to El Bodegón / Las Empanadas
@@ -485,8 +559,13 @@ def leer(sucursales: list, desde: date, hasta: date, clientes: list[FilaCliente]
                                                      recibida=Decimal(str(ln[recibida])))
         return salida
 
-    lineas_oc = por_producto(odoo.lineas(cli, [o["id"] for o in validas]), "product_qty", "qty_received")
-    lineas_so = por_producto(odoo.lineas_venta(cli, [p["id"] for p, _, _ in asignados]), "product_uom_qty", "qty_delivered")
+    crudas_oc = odoo.lineas(cli, [o["id"] for o in validas])
+    venta_de_oc = {p["auto_purchase_order_id"][0]: p["id"] for p in de_oc}
+    crudas_so = odoo.lineas_venta(cli, [p["id"] for p, _, _ in asignados]
+                                  + [venta_de_oc[o["id"]] for o in validas if o["id"] in venta_de_oc])
+    lineas_oc = por_producto(crudas_oc, "product_qty", "qty_received")
+    lineas_so = por_producto(crudas_so, "product_uom_qty", "qty_delivered")
+    entregas = lineas_pedido(crudas_oc, crudas_so, venta_de_oc)
     agrupar = defaultdict(list)
     for m in msgs_oc:
         agrupar[("oc", m["res_id"])].append(m)
@@ -497,11 +576,12 @@ def leer(sucursales: list, desde: date, hasta: date, clientes: list[FilaCliente]
         orden = Orden(o["name"], por_compania[o["company_id"][0]].nombre, proveedores[o["partner_id"][0]], o["state"],
                       odoo.a_cdmx(o["create_date"]), odoo.a_cdmx(o["date_approve"]), Decimal(str(o["amount_untaxed"])),
                       origen=DE_OC)
+        orden.lineas = entregas.get(("oc", o["id"]), [])
         datos.ordenes.append(interpretar(orden, agrupar[("oc", o["id"])], montos, lineas_oc[o["id"]], odoo.a_cdmx, quien))
     for p, _, destino in asignados:
         orden = Orden(p["name"], destino, nombre_compania[p["company_id"][0]], p["state"],
                       odoo.a_cdmx(p["create_date"]), odoo.a_cdmx(p["date_order"]), Decimal(str(p["amount_untaxed"])),
-                      origen=DIRECTO)
+                      origen=DIRECTO, lineas=entregas.get(("so", p["id"]), []))
         datos.ordenes.append(interpretar(orden, agrupar[("so", p["id"])], montos, lineas_so[p["id"]], odoo.a_cdmx, quien))
     datos.ordenes.sort(key=lambda o: (o.creada, o.nombre))
     datos.sucursales = sorted({o.sucursal for o in datos.ordenes})
