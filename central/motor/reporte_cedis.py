@@ -326,21 +326,89 @@ def notas(datos: DatosCedis, libro: str) -> list[str]:
 
 
 # -- reading (read-only) -----------------------------------------------------------
-def _cliente_de(pedido: dict, clientes: dict):
+@dataclass(frozen=True)
+class FilaCliente:
+    """One row of the customer -> branch mapping of the CEDIS (Central's
+    `ClienteCedis` table), as plain data, so the engine can be used without
+    Central's Django apps. The branch is named by its stable key
+    (`Sucursal.clave`), never by a database id."""
+    odoo_partner_id: int
+    sucursal_clave: str | None = None  # the branch it delivers to (None: not one of our branches)
+    etiqueta: str = ""  # name shown when it is not one of our branches (e.g. Perisur)
+    excluir: bool = False  # left out of the reports (Público general, CEDIS to CEDIS)
+    nota: str = ""  # shown in the report's notes
+
+    @property
+    def asignado(self) -> bool:
+        """Decides the order: excluded, or mapped to a branch or a label."""
+        return self.excluir or bool(self.sucursal_clave) or bool(self.etiqueta)
+
+
+# The mapping as stored in Central's database, for a consumer that reads it
+# directly (read-only) instead of through Central's Django models; each row
+# goes through `fila_cliente`.
+CONSULTA_CLIENTES = (
+    "SELECT c.odoo_partner_id, s.clave AS sucursal_clave, c.etiqueta, c.excluir, c.nota "
+    "FROM central_clientecedis c LEFT JOIN cuentas_sucursal s ON s.id = c.sucursal_id"
+)
+CONSULTA_ACTIVAS = "SELECT clave FROM cuentas_sucursal WHERE activa = 1"
+
+
+def fila_cliente(fila: dict) -> FilaCliente:
+    """A row of `CONSULTA_CLIENTES` (column -> value) as a `FilaCliente`."""
+    return FilaCliente(int(fila["odoo_partner_id"]), fila.get("sucursal_clave") or None, fila.get("etiqueta") or "",
+                       bool(fila.get("excluir")), fila.get("nota") or "")
+
+
+def clientes_de_central() -> list[FilaCliente]:
+    """The mapping from Central's own `ClienteCedis` model (inside Central)."""
+    from central.models import ClienteCedis
+    return [FilaCliente(c.odoo_partner_id, c.sucursal.clave if c.sucursal else None, c.etiqueta, c.excluir, c.nota)
+            for c in ClienteCedis.objects.select_related("sucursal")]
+
+
+def activas_de_central() -> set[str]:
+    """`clave` of every active branch, from Central's `cuentas.Sucursal`."""
+    from cuentas.models import Sucursal
+    return set(Sucursal.objects.filter(activa=True).values_list("clave", flat=True))
+
+
+def _cliente_de(pedido: dict, clientes: dict[int, FilaCliente]) -> FilaCliente | None:
     """The mapping row that decides the order: the delivery address wins over
     the customer; None when neither is mapped (nor excluded)."""
     for campo in ("partner_shipping_id", "partner_id"):
         pid = pedido[campo][0] if pedido[campo] else None
         fila = clientes.get(pid)
-        if fila is not None and (fila.excluir or fila.nombre_reporte):
+        if fila is not None and fila.asignado:
             return fila
     return None
 
 
-def leer(sucursales: list, desde: date, hasta: date) -> DatosCedis:
+def _destino(cliente: FilaCliente, por_clave: dict, todas: bool) -> str | None:
+    """The report name of a CEDIS-captured order of this customer, or None when
+    it is outside the selection: our branch only if selected (its name as the
+    caller's branch object says); a customer that is not one of our branches
+    only when every active branch is selected."""
+    if cliente.sucursal_clave:
+        s = por_clave.get(cliente.sucursal_clave)
+        return s.nombre if s is not None else None
+    return cliente.etiqueta if todas else None
+
+
+def leer(sucursales: list, desde: date, hasta: date, clientes: list[FilaCliente] | None = None,
+         activas: set[str] | None = None) -> DatosCedis:
     """Read, from the provider side, every order to El Bodegón / Las Empanadas
-    created in [desde, hasta] for these branches (`cuentas.Sucursal`), and
-    their change history (read-only on Odoo and Wansoft).
+    created in [desde, hasta] for these branches, and their change history
+    (read-only on Odoo and Wansoft).
+
+    `sucursales`: objects with `clave`, `nombre`, `odoo_company_id` and
+    `wansoft_ticket_nombre` (Central's `cuentas.Sucursal`, or any object with
+    those attributes). `clientes`: the customer -> branch mapping rows
+    (`FilaCliente`); `activas`: the `clave` of every active branch, which says
+    whether "every branch" is selected. Both default to Central's own tables
+    (`clientes_de_central`, `activas_de_central`), so inside Central nothing
+    changes; a consumer without Central's apps reads them (read-only) with
+    `CONSULTA_CLIENTES` / `CONSULTA_ACTIVAS` and passes them in.
 
     - A sales order generated from a branch's purchase order (branches on Odoo)
       is read from that purchase order, as the owner's original report; the
@@ -350,16 +418,17 @@ def leer(sucursales: list, desde: date, hasta: date) -> DatosCedis:
       one of our branches (e.g. Perisur, León) appear only when every active
       branch is selected.
     """
-    from central.models import ClienteCedis
-    from cuentas.models import Sucursal
-
     from .fuentes import conexiones, odoo, wansoft
 
+    if clientes is None:
+        clientes = clientes_de_central()
+    if activas is None:
+        activas = activas_de_central()
     with conexiones.abrir_wansoft() as cur:
         inicios = wansoft.inicio_compras_odoo(cur)
         inicio_proveedor = wansoft.inicio_proveedores_internos(cur)
-    elegidas = {s.pk for s in sucursales}
-    todas = elegidas >= set(Sucursal.objects.filter(activa=True).values_list("pk", flat=True))
+    por_clave = {s.clave: s for s in sucursales}
+    todas = set(por_clave) >= set(activas)
     por_compania = {s.odoo_company_id: s for s in sucursales if s.odoo_company_id and s.wansoft_ticket_nombre in inicios}
     datos = DatosCedis(desde, hasta, [], [], {s.nombre: inicios[s.wansoft_ticket_nombre] for s in por_compania.values()}, 0)
 
@@ -368,7 +437,7 @@ def leer(sucursales: list, desde: date, hasta: date) -> DatosCedis:
     proveedores = odoo.proveedores_internos(cli)
     companias = odoo.companias_de(cli, list(proveedores))
     nombre_compania = {c["id"]: c["name"] for c in cli.llamar("res.company", "read", companias, fields=["name"])}
-    clientes = {c.odoo_partner_id: c for c in ClienteCedis.objects.select_related("sucursal")}
+    clientes = {c.odoo_partner_id: c for c in clientes}
 
     de_oc, directos = [], []
     for p in odoo.pedidos_venta(cli, companias, desde, hasta):
@@ -393,14 +462,14 @@ def leer(sucursales: list, desde: date, hasta: date) -> DatosCedis:
             datos.sin_asignar[nombre] = datos.sin_asignar.get(nombre, 0) + 1
         elif cliente.excluir:
             datos.excluidas_cliente += 1
-        elif (cliente.sucursal and cliente.sucursal.pk in elegidas) or (not cliente.sucursal and todas):
-            asignados.append((p, cliente))
+        elif (destino := _destino(cliente, por_clave, todas)) is not None:
+            asignados.append((p, cliente, destino))
             if cliente.nota and cliente.nota not in datos.notas_clientes:
                 datos.notas_clientes.append(cliente.nota)
 
     # history, amounts, lines and authors
     msgs_oc = odoo.mensajes_de(cli, "purchase.order", [o["id"] for o in validas])
-    msgs_so = odoo.mensajes_de(cli, "sale.order", [p["id"] for p, _ in asignados])
+    msgs_so = odoo.mensajes_de(cli, "sale.order", [p["id"] for p, _, _ in asignados])
     montos = {t["mail_message_id"][0]: (Decimal(str(t["old_value_float"])), Decimal(str(t["new_value_float"])))
               for t in odoo.cambios_de_monto(cli, [m["id"] for m in msgs_oc + msgs_so if m["tracking_value_ids"]])}
     autores = odoo.compania_de_autores(cli, list({m["author_id"][0] for m in msgs_oc + msgs_so if m.get("author_id")}))
@@ -417,7 +486,7 @@ def leer(sucursales: list, desde: date, hasta: date) -> DatosCedis:
         return salida
 
     lineas_oc = por_producto(odoo.lineas(cli, [o["id"] for o in validas]), "product_qty", "qty_received")
-    lineas_so = por_producto(odoo.lineas_venta(cli, [p["id"] for p, _ in asignados]), "product_uom_qty", "qty_delivered")
+    lineas_so = por_producto(odoo.lineas_venta(cli, [p["id"] for p, _, _ in asignados]), "product_uom_qty", "qty_delivered")
     agrupar = defaultdict(list)
     for m in msgs_oc:
         agrupar[("oc", m["res_id"])].append(m)
@@ -429,8 +498,8 @@ def leer(sucursales: list, desde: date, hasta: date) -> DatosCedis:
                       odoo.a_cdmx(o["create_date"]), odoo.a_cdmx(o["date_approve"]), Decimal(str(o["amount_untaxed"])),
                       origen=DE_OC)
         datos.ordenes.append(interpretar(orden, agrupar[("oc", o["id"])], montos, lineas_oc[o["id"]], odoo.a_cdmx, quien))
-    for p, cliente in asignados:
-        orden = Orden(p["name"], cliente.nombre_reporte, nombre_compania[p["company_id"][0]], p["state"],
+    for p, _, destino in asignados:
+        orden = Orden(p["name"], destino, nombre_compania[p["company_id"][0]], p["state"],
                       odoo.a_cdmx(p["create_date"]), odoo.a_cdmx(p["date_order"]), Decimal(str(p["amount_untaxed"])),
                       origen=DIRECTO)
         datos.ordenes.append(interpretar(orden, agrupar[("so", p["id"])], montos, lineas_so[p["id"]], odoo.a_cdmx, quien))

@@ -3,7 +3,8 @@ from datetime import date, datetime
 from decimal import Decimal as D
 
 import openpyxl
-from django.test import SimpleTestCase
+from django.db import connection
+from django.test import SimpleTestCase, TestCase
 
 from .motor import reporte_cedis as rc
 from .motor.fuentes import odoo
@@ -108,12 +109,104 @@ class QuienYClientesTests(SimpleTestCase):
         self.assertTrue(o.modificada_por(rc.CEDIS) and o.modificada_por(rc.SUCURSAL))
 
     def test_la_direccion_de_entrega_manda_sobre_el_cliente(self):
-        class Fila:
-            def __init__(self, nombre=None, excluir=False):
-                self.nombre_reporte, self.excluir = nombre, excluir
-        clientes = {1: Fila("Aeropuerto"), 2: Fila("Taquería Viaducto"), 3: Fila(excluir=True), 4: Fila()}
+        F = rc.FilaCliente
+        clientes = {1: F(1, "aeropuerto"), 2: F(2, "taqueria-viaducto"), 3: F(3, excluir=True), 4: F(4)}
         pedido = lambda cliente, entrega: {"partner_id": [cliente, "x"], "partner_shipping_id": [entrega, "y"] if entrega else False}  # noqa: E731
-        self.assertEqual(rc._cliente_de(pedido(1, 2), clientes).nombre_reporte, "Taquería Viaducto")
-        self.assertEqual(rc._cliente_de(pedido(1, 1), clientes).nombre_reporte, "Aeropuerto")
+        self.assertEqual(rc._cliente_de(pedido(1, 2), clientes).sucursal_clave, "taqueria-viaducto")
+        self.assertEqual(rc._cliente_de(pedido(1, 1), clientes).sucursal_clave, "aeropuerto")
         self.assertTrue(rc._cliente_de(pedido(3, None), clientes).excluir)
         self.assertIsNone(rc._cliente_de(pedido(4, 5), clientes))  # unassigned: reported in the notes
+
+
+class _Suc:
+    """A branch as a consumer without Central's models passes it."""
+
+    def __init__(self, clave, nombre, odoo_company_id=None, ticket=None):
+        self.clave, self.nombre, self.odoo_company_id, self.wansoft_ticket_nombre = clave, nombre, odoo_company_id, ticket
+
+
+def _pedido(id, cliente, entrega=None, nombre=None):
+    return {"id": id, "name": nombre or f"S{id:05d}", "company_id": [50, "El Bodegón"], "state": "sale",
+            "create_date": "2026-11-10 15:00:00", "date_order": "2026-11-10 15:05:00", "amount_untaxed": 1000.0,
+            "auto_purchase_order_id": False, "partner_id": [cliente, f"Cliente {cliente}"],
+            "partner_shipping_id": [entrega, f"Entrega {entrega}"] if entrega else False}
+
+
+class LeerConMapeoTests(SimpleTestCase):
+    """`leer` with the mapping and the active branches passed in (no Central
+    models): the CEDIS-captured orders go to the selected branches by `clave`."""
+
+    PEDIDOS = [_pedido(1, 10), _pedido(2, 11, entrega=12), _pedido(3, 13), _pedido(4, 14), _pedido(5, 15)]
+    CLIENTES = [rc.FilaCliente(10, "acoxpa", nota="Entrega interna"), rc.FilaCliente(11, "aeropuerto"),
+                rc.FilaCliente(12, "taqueria-viaducto"), rc.FilaCliente(13, etiqueta="Perisur"),
+                rc.FilaCliente(14, excluir=True)]  # 15: not mapped
+    ACTIVAS = {"acoxpa", "aeropuerto", "taqueria-viaducto"}
+
+    def _leer(self, sucursales, activas=ACTIVAS):
+        from contextlib import nullcontext
+        from unittest import mock
+        cli = mock.Mock()
+        cli.llamar.return_value = [{"id": 50, "name": "El Bodegón"}]
+        with mock.patch("central.motor.fuentes.conexiones.abrir_wansoft", return_value=nullcontext(None)), \
+                mock.patch.multiple("central.motor.fuentes.wansoft", inicio_compras_odoo=lambda cur: {},
+                                    inicio_proveedores_internos=lambda cur: {}), \
+                mock.patch.multiple("central.motor.fuentes.odoo", abrir_odoo=lambda: cli,
+                                    proveedores_internos=lambda c: {900: "El Bodegón"},
+                                    companias_de=lambda c, ids: [50],
+                                    pedidos_venta=lambda c, comp, d, h: self.PEDIDOS,
+                                    ordenes_por_id=lambda c, ids: [], mensajes_de=lambda c, m, ids: [],
+                                    cambios_de_monto=lambda c, ids: [], compania_de_autores=lambda c, ids: {},
+                                    lineas=lambda c, ids: [], lineas_venta=lambda c, ids: []):
+            return rc.leer(sucursales, date(2026, 11, 9), date(2026, 11, 15), clientes=self.CLIENTES, activas=activas)
+
+    def test_solo_las_sucursales_elegidas_por_clave(self):
+        d = self._leer([_Suc("acoxpa", "Acoxpa"), _Suc("taqueria-viaducto", "Taquería Viaducto")])
+        # order 2: the delivery address (Taquería Viaducto) wins over the customer (Aeropuerto)
+        self.assertEqual([(o.nombre, o.sucursal) for o in d.ordenes], [("S00001", "Acoxpa"), ("S00002", "Taquería Viaducto")])
+        self.assertEqual(d.sucursales, ["Acoxpa", "Taquería Viaducto"])
+        self.assertEqual((d.excluidas_cliente, d.sin_asignar), (1, {"Cliente 15": 1}))
+        self.assertEqual(d.notas_clientes, ["Entrega interna"])
+
+    def test_el_nombre_es_el_de_la_sucursal_que_pasa_quien_llama(self):
+        d = self._leer([_Suc("acoxpa", "FA Acoxpa")])
+        self.assertEqual([o.sucursal for o in d.ordenes], ["FA Acoxpa"])
+
+    def test_clientes_que_no_son_sucursal_solo_con_todas(self):
+        todas = [_Suc("acoxpa", "Acoxpa"), _Suc("aeropuerto", "Aeropuerto"), _Suc("taqueria-viaducto", "Taquería Viaducto")]
+        self.assertIn("Perisur", self._leer(todas).sucursales)
+        self.assertNotIn("Perisur", self._leer(todas[:2]).sucursales)
+        self.assertNotIn("Perisur", self._leer(todas, activas=self.ACTIVAS | {"napoles"}).sucursales)
+
+    def test_fila_de_la_consulta(self):
+        f = rc.fila_cliente({"odoo_partner_id": "7", "sucursal_clave": None, "etiqueta": "León", "excluir": 0,
+                             "nota": None})
+        self.assertEqual(f, rc.FilaCliente(7, None, "León", False, ""))
+        self.assertTrue(f.asignado)
+        self.assertFalse(rc.FilaCliente(8).asignado)
+        self.assertIn("central_clientecedis", rc.CONSULTA_CLIENTES)
+
+
+class LeerDesdeCentralTests(TestCase):
+    """Inside Central, the defaults read the `ClienteCedis` table and the active
+    branches, as before the mapping could be passed in."""
+
+    def test_mapeo_y_activas_de_las_tablas_de_central(self):
+        from cuentas.models import Sucursal
+
+        from .models import ClienteCedis
+        acoxpa = Sucursal.objects.create(clave="acoxpa", nombre="Acoxpa")
+        Sucursal.objects.create(clave="vieja", nombre="Vieja", activa=False)
+        ClienteCedis.objects.create(odoo_partner_id=10, nombre_odoo="FA ACOXPA", sucursal=acoxpa, nota="n")
+        ClienteCedis.objects.create(odoo_partner_id=13, nombre_odoo="PERISUR", etiqueta="Perisur")
+        self.assertEqual(sorted(rc.clientes_de_central(), key=lambda f: f.odoo_partner_id),
+                         [rc.FilaCliente(10, "acoxpa", "", False, "n"), rc.FilaCliente(13, None, "Perisur", False, "")])
+        self.assertEqual(rc.activas_de_central(), {"acoxpa"})
+        with connection.cursor() as cur:  # the documented query reads the same table
+            cur.execute(rc.CONSULTA_CLIENTES)
+            columnas = [c[0] for c in cur.description]
+            filas = sorted((rc.fila_cliente(dict(zip(columnas, f))) for f in cur.fetchall()),
+                           key=lambda f: f.odoo_partner_id)
+            cur.execute(rc.CONSULTA_ACTIVAS)
+            activas = {f[0] for f in cur.fetchall()}
+        self.assertEqual(filas, [rc.FilaCliente(10, "acoxpa", "", False, "n"), rc.FilaCliente(13, None, "Perisur", False, "")])
+        self.assertEqual(activas, {"acoxpa"})

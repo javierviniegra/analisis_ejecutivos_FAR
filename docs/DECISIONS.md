@@ -2,6 +2,12 @@
 
 Newest first. Each entry: what, why, and where it applies.
 
+## 2026-11-18 — CEDIS reading usable outside Central's Django apps
+
+- **What (owner, 2026-11-18):** `central/motor/reporte_cedis.leer(sucursales, desde, hasta, clientes=None, activas=None)`. The customer -> branch mapping comes in as plain rows (`FilaCliente`: Odoo partner id, the branch's `clave`, label, excluded, note) and the active branches as a set of `clave`; both default to Central's own tables (`clientes_de_central`, `activas_de_central`), so Central's reports and automations are unchanged. Branches are matched by `Sucursal.clave` (the stable key), no longer by database `pk`; the report name of a CEDIS-captured order is the `nombre` of the caller's branch object.
+- **Why:** Dashboards Fonda (separate project, pins Central as a git submodule and imports only `central.motor`) shows the CEDIS figures without Central's Django apps. It reads the mapping read-only from Central's database with `CONSULTA_CLIENTES` / `CONSULTA_ACTIVAS` (tables `central_clientecedis`, `cuentas_sucursal`), turns each row into a `FilaCliente` with `fila_cliente`, and passes them in; its branch objects need `clave`, `nombre`, `odoo_company_id` and `wansoft_ticket_nombre` with Central's values. The mapping stays edited only in Central's admin.
+- **Checked on real data:** the old and the new `leer` give the same orders, branches, changes and counts for 9-15 November 2026 (every branch: 122 orders; Acoxpa, Aeropuerto and Taquería Viaducto: 24).
+
 ## 2026-11-17 — Waiters: platform / take-away users out of the dining room; tips over card payments
 
 From the meeting minutes (owner): two distortions of the waiters' report.
